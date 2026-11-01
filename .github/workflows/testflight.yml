@@ -1,0 +1,94 @@
+name: TestFlight
+
+# Uploads a signed build to TestFlight on every push to main,
+# or on demand from the Actions tab ("Run workflow").
+#
+# Required repository secrets (Settings -> Secrets and variables -> Actions):
+#   ASC_KEY_ID     App Store Connect API key ID
+#   ASC_ISSUER_ID  App Store Connect issuer ID
+#   ASC_KEY_P8     Full contents of the AuthKey_XXXX.p8 file
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: testflight
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    name: Archive, sign, upload
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ARCHIVE_PATH: ${{ runner.temp }}/RetroCam.xcarchive
+      # Offset so builds never collide with ones uploaded by hand from Xcode.
+      BUILD_NUMBER_OFFSET: 100
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check secrets
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          missing=0
+          for v in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8; do
+            if [ -z "${!v}" ]; then echo "::error::Missing repository secret $v"; missing=1; fi
+          done
+          exit $missing
+
+      - name: Select Xcode 26
+        run: ci/select-xcode.sh
+
+      - name: Install API key
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          KEY_PATH="$RUNNER_TEMP/AuthKey_${ASC_KEY_ID}.p8"
+          printf '%s\n' "$ASC_KEY_P8" > "$KEY_PATH"
+          chmod 600 "$KEY_PATH"
+          echo "KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
+
+      - name: Archive (unsigned)
+        run: |
+          set -o pipefail
+          BUILD_NUMBER=$(( ${{ github.run_number }} + BUILD_NUMBER_OFFSET ))
+          echo "Build number: $BUILD_NUMBER"
+          xcodebuild archive \
+            -project RetroCam.xcodeproj \
+            -scheme RetroCam \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$ARCHIVE_PATH" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            CODE_SIGNING_ALLOWED=NO \
+            | tee archive.log
+
+      - name: Sign with cloud-managed certificate and upload
+        run: |
+          set -o pipefail
+          xcodebuild -exportArchive \
+            -archivePath "$ARCHIVE_PATH" \
+            -exportOptionsPlist ci/ExportOptions.plist \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            | tee export.log
+
+      - name: Remove API key
+        if: always()
+        run: rm -f "$RUNNER_TEMP"/AuthKey_*.p8
+
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: testflight-logs
+          path: |
+            archive.log
+            export.log

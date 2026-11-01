@@ -175,6 +175,7 @@
 				DEVELOPMENT_TEAM = RN599658F9;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = RetroCam;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSCameraUsageDescription = "RetroCam uses the camera to shoot black and white photos.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "RetroCam saves your developed shots to your photo library.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -206,6 +207,7 @@
 				DEVELOPMENT_TEAM = RN599658F9;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = RetroCam;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSCameraUsageDescription = "RetroCam uses the camera to shoot black and white photos.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "RetroCam saves your developed shots to your photo library.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

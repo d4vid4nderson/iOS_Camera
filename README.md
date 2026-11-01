@@ -29,3 +29,15 @@ Requires Xcode 16+ and iOS 17+ on a real iPhone (the simulator has no camera).
 - `RetroCam/FilmLook.swift` — the emulation pipeline (channel mix → tone curve → paper tone → grain → vignette).
 - `RetroCam/CameraModel.swift` — capture session, exposure, focus, roll counter.
 - `RetroCam/ContentView.swift` — the UI.
+
+## TestFlight (automatic)
+Every push to `main` builds with Xcode 26, signs with a cloud-managed distribution certificate, and uploads to TestFlight (`.github/workflows/testflight.yml`). You can also run it by hand from the Actions tab.
+
+One-time setup:
+1. App Store Connect → Users and Access → Integrations → App Store Connect API → generate a **Team key** with the **Admin** role. Download the `.p8` (you only get one chance).
+2. GitHub repo → Settings → Secrets and variables → Actions → add:
+   - `ASC_KEY_ID` — the key's ID
+   - `ASC_ISSUER_ID` — the Issuer ID shown above the keys list
+   - `ASC_KEY_P8` — the entire contents of the `.p8` file, including the BEGIN/END lines
+
+Build numbers are `run number + 100`, so they always increase and never clash with manual uploads.
