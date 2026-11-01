@@ -2,7 +2,7 @@
 
 | File | Use |
 |---|---|
-| `mark-M.png` | The **M** mark: app icon, shutter engraving, small spaces |
+| `mark-M.png` | The **M** mark. Not used on the shutter or app icon (too close to the engraved logo on a well-known camera's shutter); kept for reference |
 | `wordmark-M36.png` | The **M36** wordmark: App Store page, launch screen, large spaces |
 
 Both are white on transparent; tint as needed (UI copper: sRGB 0.92 / 0.45 / 0.13).
