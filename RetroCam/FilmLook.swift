@@ -10,10 +10,22 @@ enum FilmLook {
     static func apply(_ stock: FilmStock, to input: CIImage) -> CIImage {
         let extent = input.extent
 
+        // 0. Lens + exposure, in linear light before the film sees it.
+        var lens = input
+        if stock.exposure != 0 {
+            let push = CIFilter.exposureAdjust()
+            push.inputImage = lens
+            push.ev = Float(stock.exposure)
+            lens = push.outputImage ?? lens
+        }
+        if stock.edgeSoftness > 0 {
+            lens = softenEdges(lens, amount: stock.edgeSoftness)
+        }
+
         // 1. Spectral response -> monochrome (in Core Image's linear working space).
         let mix = CIVector(x: stock.red, y: stock.green, z: stock.blue, w: 0)
         let mono = CIFilter.colorMatrix()
-        mono.inputImage = input
+        mono.inputImage = lens
         mono.rVector = mix
         mono.gVector = mix
         mono.bVector = mix
@@ -25,6 +37,11 @@ enum FilmLook {
 
         // 3. Characteristic curve: S-curve for contrast, lifted blacks, dimmed whites.
         image = toneCurve(image, stock: stock)
+
+        // 3b. Highlight glow (diffusion / halation-like bloom around bright areas).
+        if stock.bloom > 0 {
+            image = bloom(image, amount: stock.bloom)
+        }
 
         // 4. Paper toning.
         image = tone(image, paper: stock.paper)
@@ -47,6 +64,60 @@ enum FilmLook {
 
         // 7. Back to linear for the renderer.
         return image.applyingFilter("CISRGBToneCurveToLinear").cropped(to: extent)
+    }
+
+    /// Lens that gets softer toward the corners: a radial mask (sharp centre, soft edges)
+    /// drives a variable blur. Blur size scales with the image so preview and print match.
+    private static func softenEdges(_ image: CIImage, amount: CGFloat) -> CIImage {
+        let extent = image.extent
+        let longSide = max(extent.width, extent.height)
+
+        let gradient = CIFilter.radialGradient()
+        gradient.center = CGPoint(x: extent.midX, y: extent.midY)
+        gradient.radius0 = Float(longSide * 0.30)
+        gradient.radius1 = Float(longSide * 0.75)
+        gradient.color0 = CIColor(red: 0, green: 0, blue: 0)
+        gradient.color1 = CIColor(red: 1, green: 1, blue: 1)
+
+        let blur = CIFilter.maskedVariableBlur()
+        blur.inputImage = image.clampedToExtent()
+        blur.mask = gradient.outputImage?.cropped(to: extent)
+        blur.radius = Float(amount * longSide * 0.008)
+        return blur.outputImage?.cropped(to: extent) ?? image
+    }
+
+    /// Soft glow around highlights: keep what's above 70% grey, blur it wide, screen it back on.
+    private static func bloom(_ image: CIImage, amount: CGFloat) -> CIImage {
+        let extent = image.extent
+        let longSide = max(extent.width, extent.height)
+        let threshold: CGFloat = 0.7
+        let gain = 1 / (1 - threshold)
+
+        let highlights = CIFilter.colorMatrix()
+        highlights.inputImage = image
+        highlights.rVector = CIVector(x: gain, y: 0, z: 0, w: 0)
+        highlights.gVector = CIVector(x: 0, y: gain, z: 0, w: 0)
+        highlights.bVector = CIVector(x: 0, y: 0, z: gain, w: 0)
+        highlights.aVector = CIVector(x: 0, y: 0, z: 0, w: 1)
+        highlights.biasVector = CIVector(x: -threshold * gain, y: -threshold * gain, z: -threshold * gain, w: 0)
+        guard let bright = highlights.outputImage?.applyingFilter("CIColorClamp") else { return image }
+
+        let glow = bright
+            .clampedToExtent()
+            .applyingGaussianBlur(sigma: Double(longSide * 0.015))
+            .cropped(to: extent)
+
+        let strength = CIFilter.colorMatrix()
+        strength.inputImage = glow
+        strength.rVector = CIVector(x: amount, y: 0, z: 0, w: 0)
+        strength.gVector = CIVector(x: 0, y: amount, z: 0, w: 0)
+        strength.bVector = CIVector(x: 0, y: 0, z: amount, w: 0)
+        strength.aVector = CIVector(x: 0, y: 0, z: 0, w: 1)
+
+        let screen = CIFilter.screenBlendMode()
+        screen.inputImage = strength.outputImage
+        screen.backgroundImage = image
+        return screen.outputImage?.cropped(to: extent) ?? image
     }
 
     private static func toneCurve(_ image: CIImage, stock: FilmStock) -> CIImage {
