@@ -332,9 +332,10 @@ struct ContentView: View {
     }
 }
 
-/// Copper shutter release recessed in a dark machined collar. Modelled on anodised
-/// metal rather than glossy plastic: matte flat face, fine grain, a bevel that catches
-/// light at the top edge, and faint lathe rings in the collar.
+/// Copper shutter release sunk into the body. Lit from above like the rest of the app,
+/// so the hole is dark under its top lip and light on its bottom lip, and the lip's
+/// shadow falls across the top of the button. Anodised, not glossy: matte flat face,
+/// fine grain, a small bevel, faint lathe rings in the bore.
 private struct ShutterButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
 
@@ -358,25 +359,12 @@ private struct ShutterButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         let pressed = configuration.isPressed
         return ZStack {
-            collar.frame(width: 88, height: 88)
+            bore.frame(width: 88, height: 88)
 
-            // Well the button sits in, with a soft contact shadow.
-            Circle()
-                .fill(Color(white: 0.02))
-                .overlay(
-                    Circle()
-                        .stroke(Color.black, lineWidth: 4)
-                        .blur(radius: 2.5)
-                        .offset(y: 1)
-                        .clipShape(Circle())
-                )
-                .frame(width: 69, height: 69)
-
-            button
+            button(pressed: pressed)
                 .frame(width: 60, height: 60)
-                .shadow(color: .black.opacity(pressed ? 0.35 : 0.6), radius: pressed ? 0.8 : 2, y: pressed ? 0.3 : 1.2)
-                .brightness(pressed ? -0.06 : 0)
-                .scaleEffect(pressed ? 0.96 : 1)
+                .brightness(pressed ? -0.05 : 0)
+                .scaleEffect(pressed ? 0.97 : 1)
         }
         .saturation(isEnabled ? 1 : 0.2)
         .opacity(isEnabled ? 1 : 0.6)
@@ -384,10 +372,10 @@ private struct ShutterButtonStyle: ButtonStyle {
         .animation(.easeOut(duration: 0.08), value: pressed)
     }
 
-    /// Matte black anodised collar: faint lathe rings, chamfered outer edge.
-    private var collar: some View {
+    /// The hole cut into the body: concave, so darker at the top and lighter at the bottom.
+    private var bore: some View {
         Circle()
-            .fill(LinearGradient(colors: [Color(white: 0.105), Color(white: 0.045)],
+            .fill(LinearGradient(colors: [Color(white: 0.03), Color(white: 0.09)],
                                  startPoint: .top, endPoint: .bottom))
             .overlay(
                 Canvas { ctx, size in
@@ -397,22 +385,32 @@ private struct ShutterButtonStyle: ButtonStyle {
                     while radius < size.width / 2 - 1 {
                         let ring = Path(ellipseIn: CGRect(x: centre.x - radius, y: centre.y - radius,
                                                           width: radius * 2, height: radius * 2))
-                        ctx.stroke(ring, with: .color(.white.opacity(i % 3 == 0 ? 0.045 : 0.02)), lineWidth: 0.5)
+                        ctx.stroke(ring, with: .color(.white.opacity(i % 3 == 0 ? 0.03 : 0.015)), lineWidth: 0.5)
                         radius += 0.9
                         i += 1
                     }
                 }
             )
+            // Shadow thrown into the hole by the upper lip.
+            .overlay(
+                Circle()
+                    .stroke(Color.black.opacity(0.8), lineWidth: 8)
+                    .blur(radius: 4)
+                    .offset(y: 3)
+                    .clipShape(Circle())
+            )
+            // Only the lower lip faces the light.
             .overlay(
                 Circle().strokeBorder(
-                    LinearGradient(colors: [Color(white: 0.30), Color(white: 0.12), Color(white: 0.02)],
+                    LinearGradient(colors: [.clear, .clear, Color.white.opacity(0.16)],
                                    startPoint: .top, endPoint: .bottom),
-                    lineWidth: 1.2)
+                    lineWidth: 0.8)
             )
     }
 
-    /// Flat matte copper face with fine grain and a bevelled edge.
-    private var button: some View {
+    /// Flat matte copper face with fine grain, a small bevel, and the lip's shadow across
+    /// its top (deeper while pressed, as it sinks further).
+    private func button(pressed: Bool) -> some View {
         Circle()
             .fill(LinearGradient(colors: [Self.copperTop, Self.copperBottom],
                                  startPoint: .top, endPoint: .bottom))
@@ -428,9 +426,14 @@ private struct ShutterButtonStyle: ButtonStyle {
             )
             .overlay(
                 Circle().strokeBorder(
-                    LinearGradient(colors: [Self.bevelLight.opacity(0.9), .clear, Self.bevelDark.opacity(0.9)],
+                    LinearGradient(colors: [Self.bevelLight.opacity(0.6), .clear, Self.bevelDark.opacity(0.9)],
                                    startPoint: .top, endPoint: .bottom),
-                    lineWidth: 1.4)
+                    lineWidth: 1.2)
+            )
+            .overlay(
+                Circle().fill(
+                    LinearGradient(colors: [Color.black.opacity(pressed ? 0.6 : 0.45), .clear],
+                                   startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.45)))
             )
     }
 }
