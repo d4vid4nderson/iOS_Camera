@@ -38,13 +38,25 @@ final class CameraModel: NSObject, ObservableObject {
     private static let stampKey = "stamp"
     private static let borderKey = "border"
     private static let borderWidthKey = "borderWidth"
+    private static let filmKey = "film.selected"
     private static func lensKey(_ position: AVCaptureDevice.Position) -> String {
         position == .front ? "lensFocal.front" : "lensFocal.back"
     }
 
     @Published private(set) var status: Status = .starting
-    @Published var stock: FilmStock = .classic400 {
-        didSet { renderer.stock = developedStock }
+    /// Built-in and saved films, plus per-film adjustments. Persisted on every change.
+    @Published private(set) var library = FilmLibrary.load() {
+        didSet { library.save() }
+    }
+    /// The film loaded right now, including any adjustments.
+    @Published private(set) var stock: FilmStock = {
+        let id = UserDefaults.standard.string(forKey: CameraModel.filmKey) ?? FilmStock.classic400.id
+        return FilmLibrary.load().current(id: id) ?? .classic400
+    }() {
+        didSet {
+            renderer.stock = developedStock
+            if stock.id != oldValue.id { UserDefaults.standard.set(stock.id, forKey: Self.filmKey) }
+        }
     }
     @Published private(set) var grainLevel: Double = {
         let saved = UserDefaults.standard.object(forKey: CameraModel.grainLevelKey) as? Double
@@ -272,6 +284,55 @@ final class CameraModel: NSObject, ObservableObject {
             device.videoZoomFactor = zoom
             device.unlockForConfiguration()
         } catch {}
+    }
+
+    // MARK: - Films
+
+    /// Load a film (with the adjustments last made to it, if any).
+    func selectFilm(id: String) {
+        guard let film = library.current(id: id) else { return }
+        stock = film
+    }
+
+    var isFilmEdited: Bool { library.isEdited(id: stock.id) }
+
+    /// Adjust the loaded film. The change is remembered for this film until reset or saved.
+    func adjustFilm(_ change: (inout FilmStock) -> Void) {
+        var film = stock
+        change(&film)
+        guard film != stock else { return }
+        stock = film
+        library.setEdit(film)
+    }
+
+    /// Back to the film as shipped (or as last saved).
+    func resetFilm() {
+        library.reset(id: stock.id)
+        if let original = library.original(id: stock.id) { stock = original }
+    }
+
+    /// Save the loaded film, adjustments and all, as a new film of the user's own and load it.
+    func saveFilm(named name: String) {
+        let sourceID = stock.id
+        let film = library.saveNew(from: stock, named: name)
+        library.reset(id: sourceID)   // the source film goes back to how it was
+        stock = film
+    }
+
+    /// Write the adjustments into the loaded film (only for the user's own films).
+    func updateSavedFilm() {
+        guard stock.isCustom else { return }
+        library.update(stock)
+    }
+
+    func renameFilm(id: String, to name: String) {
+        library.rename(id: id, to: name)
+        if stock.id == id, let film = library.current(id: id) { stock = film }
+    }
+
+    func deleteFilm(id: String) {
+        library.delete(id: id)
+        if stock.id == id { stock = library.current(id: FilmStock.classic400.id) ?? .classic400 }
     }
 
     func cycleFlash() { flash = flash.next }
