@@ -13,6 +13,7 @@ final class PreviewRenderer: NSObject, MTKViewDelegate {
 
     /// Read on the main thread (where MTKView draws), written from the main thread.
     var stock: FilmStock = .classic400
+    var stampMode: StampMode = .off
 
     override init() {
         guard let device = MTLCreateSystemDefaultDevice(),
@@ -53,6 +54,9 @@ final class PreviewRenderer: NSObject, MTKViewDelegate {
             y: (target.height - image.extent.height) / 2 - image.extent.minY))
         let bounds = CGRect(origin: .zero, size: target)
         image = FilmLook.apply(stock, to: image.cropped(to: bounds))
+        if let text = stampMode.text(for: Date()) {
+            image = DateStamp.overlay(text, on: image)
+        }
 
         let destination = CIRenderDestination(
             width: Int(target.width),

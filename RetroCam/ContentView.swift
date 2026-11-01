@@ -61,6 +61,7 @@ struct ContentView: View {
                     .font(.mono(20, .bold)).foregroundStyle(amber)
                     .contentTransition(.numericText())
             }
+            .frame(width: 100, alignment: .leading)
 
             Spacer()
 
@@ -71,9 +72,33 @@ struct ContentView: View {
 
             Spacer()
 
-            // Balances the FRAME counter so the film name stays centred.
-            Color.clear.frame(width: 70, height: 1)
+            HStack(spacing: 14) {
+                if camera.flashAvailable {
+                    plateToggle(title: "FLASH", value: camera.flash.label, active: camera.flash != .off) {
+                        camera.cycleFlash()
+                    }
+                }
+                plateToggle(title: "STAMP", value: camera.stampMode.label, active: camera.stampMode != .off) {
+                    camera.cycleStamp()
+                }
+            }
+            .frame(width: 100, alignment: .trailing)
         }
+    }
+
+    /// Small tap-to-cycle control in the top plate (FLASH, STAMP).
+    private func plateToggle(title: String, value: String, active: Bool,
+                             action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 2) {
+                Text(title).font(.mono(9)).foregroundStyle(.secondary)
+                Text(value)
+                    .font(.mono(12, .bold))
+                    .foregroundStyle(active ? amber : Color(white: 0.6))
+            }
+        }
+        .buttonStyle(.plain)
+        .sensoryFeedback(.selection, trigger: value)
     }
 
     // MARK: Dials: exposure and grain
