@@ -108,6 +108,12 @@ else:
             else:
                 err(f"Team ID mismatch: {bundle_id} is registered to team {seed}, but the project and "
                     f"ExportOptions use {team_id}. Update DEVELOPMENT_TEAM and ci/ExportOptions.plist to {seed}.")
+    elif status == 403:
+        # Seen on this account: App Store Connect access works, the provisioning API doesn't.
+        # The workflow signs with the uploaded distribution certificate + profile instead,
+        # so this is informational only.
+        print(f"Note: this key can't use Apple's provisioning API (403: {apple_errors(body)}). "
+              "Fine: this workflow signs with the DIST_CERT_P12 certificate and PROVISIONING_PROFILE.")
     else:
         err(f"Couldn't read bundle IDs ({status}): {apple_errors(body)}")
 

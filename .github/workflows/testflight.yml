@@ -1,12 +1,15 @@
 name: TestFlight
 
-# Uploads a signed build to TestFlight on every push to main,
-# or on demand from the Actions tab ("Run workflow").
+# Builds, signs with your Apple Distribution certificate, and uploads to
+# TestFlight on every push to main, or on demand ("Run workflow").
 #
-# Required repository secrets (Settings -> Secrets and variables -> Actions):
-#   ASC_KEY_ID     App Store Connect API key ID
-#   ASC_ISSUER_ID  App Store Connect issuer ID
-#   ASC_KEY_P8     Full contents of the AuthKey_XXXX.p8 file
+# Repository secrets (Settings -> Secrets and variables -> Actions):
+#   ASC_KEY_ID           App Store Connect API key ID          (upload)
+#   ASC_ISSUER_ID        App Store Connect issuer ID           (upload)
+#   ASC_KEY_P8           Contents of AuthKey_XXXX.p8           (upload)
+#   DIST_CERT_P12        base64 of the exported Apple Distribution .p12   (signing)
+#   DIST_CERT_PASSWORD   password chosen when exporting the .p12          (signing)
+#   PROVISIONING_PROFILE base64 of the App Store .mobileprovision         (signing)
 on:
   push:
     branches: [main]
@@ -24,6 +27,8 @@ jobs:
     env:
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      TEAM_ID: RN599658F9
+      BUNDLE_ID: com.davidanderson.retrocam
       # Offset so builds never collide with ones uploaded by hand from Xcode.
       BUILD_NUMBER_OFFSET: 100
     steps:
@@ -32,9 +37,12 @@ jobs:
       - name: Check secrets
         env:
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          DIST_CERT_P12: ${{ secrets.DIST_CERT_P12 }}
+          DIST_CERT_PASSWORD: ${{ secrets.DIST_CERT_PASSWORD }}
+          PROVISIONING_PROFILE: ${{ secrets.PROVISIONING_PROFILE }}
         run: |
           missing=0
-          for v in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8; do
+          for v in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8 DIST_CERT_P12 DIST_CERT_PASSWORD PROVISIONING_PROFILE; do
             if [ -z "${!v}" ]; then echo "::error::Missing repository secret $v"; missing=1; fi
           done
           exit $missing
@@ -46,20 +54,32 @@ jobs:
         env:
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
         run: |
-          KEY_PATH="$RUNNER_TEMP/AuthKey_${ASC_KEY_ID}.p8"
+          KEY_ID=$(printf '%s' "$ASC_KEY_ID" | tr -d '[:space:]')
+          ISSUER_ID=$(printf '%s' "$ASC_ISSUER_ID" | tr -d '[:space:]')
+          # altool looks for the key in ~/private_keys/AuthKey_<KEY_ID>.p8
+          mkdir -p "$HOME/private_keys"
+          KEY_PATH="$HOME/private_keys/AuthKey_${KEY_ID}.p8"
           ci/install-asc-key.sh "$KEY_PATH"
-          echo "KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
+          {
+            echo "KEY_PATH=$KEY_PATH"
+            echo "KEY_ID=$KEY_ID"
+            echo "ISSUER_ID=$ISSUER_ID"
+          } >> "$GITHUB_ENV"
 
       - name: Check credentials with Apple
-        env:
-          TEAM_ID: RN599658F9
-          BUNDLE_ID: com.davidanderson.retrocam
         run: |
           python3 -m venv "$RUNNER_TEMP/venv"
           "$RUNNER_TEMP/venv/bin/pip" install --quiet pyjwt cryptography
           "$RUNNER_TEMP/venv/bin/python" ci/asc-preflight.py
 
-      - name: Archive (unsigned)
+      - name: Install signing certificate and profile
+        env:
+          DIST_CERT_P12: ${{ secrets.DIST_CERT_P12 }}
+          DIST_CERT_PASSWORD: ${{ secrets.DIST_CERT_PASSWORD }}
+          PROVISIONING_PROFILE: ${{ secrets.PROVISIONING_PROFILE }}
+        run: ci/install-signing.sh
+
+      - name: Archive (signed)
         run: |
           set -o pipefail
           BUILD_NUMBER=$(( ${{ github.run_number }} + BUILD_NUMBER_OFFSET ))
@@ -71,33 +91,65 @@ jobs:
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/RetroCam.xcarchive" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
-            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_UUID" \
+            OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN" \
             | tee archive.log
 
-      - name: Sign with cloud-managed certificate and upload
+      - name: Export .ipa
         run: |
           set -o pipefail
-          KEY_ID=$(printf '%s' "$ASC_KEY_ID" | tr -d '[:space:]')
-          ISSUER_ID=$(printf '%s' "$ASC_ISSUER_ID" | tr -d '[:space:]')
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>export</string>
+            <key>teamID</key><string>${TEAM_ID}</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>signingCertificate</key><string>Apple Distribution</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>${BUNDLE_ID}</key><string>${PROFILE_UUID}</string>
+            </dict>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+            <key>uploadSymbols</key><true/>
+          </dict>
+          </plist>
+          PLIST
+          plutil -lint "$RUNNER_TEMP/ExportOptions.plist"
           xcodebuild -exportArchive \
             -archivePath "$RUNNER_TEMP/RetroCam.xcarchive" \
-            -exportOptionsPlist ci/ExportOptions.plist \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
             -exportPath "$RUNNER_TEMP/export" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$KEY_PATH" \
-            -authenticationKeyID "$KEY_ID" \
-            -authenticationKeyIssuerID "$ISSUER_ID" \
             | tee export.log
+          ls -la "$RUNNER_TEMP/export"
 
-      - name: Remove API key
+      - name: Upload to TestFlight
+        run: |
+          set -o pipefail
+          IPA=$(ls "$RUNNER_TEMP"/export/*.ipa | head -1)
+          echo "Uploading $IPA"
+          xcrun altool --upload-app -f "$IPA" -t ios \
+            --apiKey "$KEY_ID" --apiIssuer "$ISSUER_ID" \
+            | tee upload.log
+
+      - name: Clean up keys
         if: always()
-        run: rm -f "$RUNNER_TEMP"/AuthKey_*.p8
+        run: |
+          rm -rf "$HOME/private_keys"
+          if [ -n "${KEYCHAIN:-}" ]; then security delete-keychain "$KEYCHAIN" || true; fi
 
       - name: Upload logs
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: testflight-logs
+          if-no-files-found: ignore
           path: |
             archive.log
             export.log
+            upload.log
