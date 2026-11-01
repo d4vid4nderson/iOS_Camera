@@ -23,6 +23,7 @@ struct ContentView: View {
                 topPlate
                 viewfinder
                 dials
+                lensPicker
                 stockPicker
                 controls
             }
@@ -170,6 +171,32 @@ struct ContentView: View {
             .padding()
         case .failed(let reason):
             Text(reason).font(.mono(12)).multilineTextAlignment(.center).padding()
+        }
+    }
+
+    // MARK: Lens picker (only lenses this phone can do well; hidden if there's just one)
+
+    @ViewBuilder
+    private var lensPicker: some View {
+        if camera.lenses.count > 1 {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(camera.lenses) { option in
+                        let selected = option == camera.lens
+                        Button { camera.selectLens(option) } label: {
+                            Text(option.name)
+                                .font(.mono(12, .bold))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 7)
+                                .background(Capsule().fill(selected ? amber.opacity(0.18) : Color(white: 0.14)))
+                                .overlay(Capsule().stroke(selected ? amber : .clear, lineWidth: 1.2))
+                                .foregroundStyle(selected ? amber : .white)
+                        }
+                    }
+                }
+                .padding(.horizontal, 2)
+            }
+            .sensoryFeedback(.selection, trigger: camera.lens)
         }
     }
 
