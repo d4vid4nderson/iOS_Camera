@@ -281,7 +281,7 @@ struct ContentView: View {
         case .lens: return camera.lens.map { $0.isNative ? $0.name : "\($0.name) CROP" } ?? ""
         case .exposure: return exposureText + " EV"
         case .grain: return grainText
-        case .border: return camera.border.label
+        case .border: return camera.border == .none ? camera.border.label : "\(camera.border.label) · \(borderWidthText)"
         }
     }
 
@@ -385,14 +385,30 @@ struct ContentView: View {
         .sensoryFeedback(.selection, trigger: camera.lens)
     }
 
+    private var borderWidthText: String { "\(Int((camera.borderWidth * 100).rounded()))%" }
+
+    /// Style chips, then the width dial (only when there is a border to size).
     private var borderPicker: some View {
-        HStack(spacing: 8) {
-            ForEach(BorderStyle.allCases, id: \.self) { style in
-                chip(style.label, selected: style == camera.border) { camera.selectBorder(style) }
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                ForEach(BorderStyle.allCases, id: \.self) { style in
+                    chip(style.label, selected: style == camera.border) { camera.selectBorder(style) }
+                }
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
+            .sensoryFeedback(.selection, trigger: camera.border)
+
+            if camera.border != .none {
+                ScrubDial(value: camera.borderWidth * 100,
+                          range: PrintBorder.widthRange.lowerBound * 100...PrintBorder.widthRange.upperBound * 100,
+                          step: 1, majorEvery: 2, accent: accent,
+                          label: { v in "\(Int(v.rounded()))" },
+                          spoken: { v in "Border width \(Int(v.rounded())) percent" },
+                          onChange: { camera.setBorderWidth($0 / 100) })
+                    .transition(.opacity)
+            }
         }
-        .sensoryFeedback(.selection, trigger: camera.border)
+        .animation(.snappy(duration: 0.2), value: camera.border == .none)
     }
 
     private var stockPicker: some View {

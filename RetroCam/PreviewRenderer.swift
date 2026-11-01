@@ -15,6 +15,7 @@ final class PreviewRenderer: NSObject, MTKViewDelegate {
     var stock: FilmStock = .classic400
     var stampMode: StampMode = .off
     var border: BorderStyle = .none
+    var borderWidth: Double = PrintBorder.defaultWidth
     /// Fixed per-session seed for textured borders, so the live view does not flicker.
     private let borderSeed = UInt32.random(in: 0...UInt32.max)
 
@@ -64,7 +65,7 @@ final class PreviewRenderer: NSObject, MTKViewDelegate {
             y: (target.height - image.extent.height) / 2 - image.extent.minY))
         let bounds = CGRect(origin: .zero, size: target)
         image = FilmLook.apply(stock, to: image.cropped(to: bounds), stamp: stampMode.text(for: Date()))
-        image = PrintBorder.apply(border, to: image, seed: borderSeed)
+        image = PrintBorder.apply(border, to: image, seed: borderSeed, width: borderWidth)
 
         let destination = CIRenderDestination(
             width: Int(target.width),
