@@ -297,13 +297,8 @@ struct ContentView: View {
                         .background(Circle().fill(amber))
                 }
             } else {
-                Button { camera.shoot() } label: {
-                    ZStack {
-                        Circle().stroke(Color(white: 0.85), lineWidth: 4).frame(width: 84, height: 84)
-                        Circle().fill(Color(white: 0.92)).frame(width: 70, height: 70)
-                    }
-                }
-                .buttonStyle(ShutterButtonStyle())
+                Button { camera.shoot() } label: { EmptyView() }
+                    .buttonStyle(ShutterButtonStyle())
                 .disabled(camera.status != .running)
             }
 
@@ -337,11 +332,51 @@ struct ContentView: View {
     }
 }
 
+/// Copper shutter release recessed in a dark machined collar.
 private struct ShutterButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    private static let copperHighlight = Color(red: 1.00, green: 0.66, blue: 0.36)
+    private static let copper = Color(red: 0.92, green: 0.45, blue: 0.13)
+    private static let copperShadow = Color(red: 0.58, green: 0.24, blue: 0.05)
+
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.92 : 1)
-            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+        let pressed = configuration.isPressed
+        return ZStack {
+            // Collar: dark graphite, lit from above, thin bright rim.
+            Circle()
+                .fill(LinearGradient(colors: [Color(white: 0.17), Color(white: 0.04)],
+                                     startPoint: .top, endPoint: .bottom))
+                .overlay(Circle().stroke(Color(white: 0.24), lineWidth: 1))
+                .frame(width: 88, height: 88)
+
+            // Recess the button sits in, with an inner shadow.
+            Circle()
+                .fill(Color.black)
+                .overlay(
+                    Circle()
+                        .stroke(Color.black, lineWidth: 4)
+                        .blur(radius: 3)
+                        .offset(y: 1.5)
+                        .clipShape(Circle())
+                )
+                .frame(width: 70, height: 70)
+
+            // The button: satin copper, light from the upper left.
+            Circle()
+                .fill(RadialGradient(colors: [Self.copperHighlight, Self.copper, Self.copperShadow],
+                                     center: UnitPoint(x: 0.35, y: 0.28),
+                                     startRadius: 2, endRadius: 42))
+                .overlay(Circle().stroke(Color.white.opacity(0.22), lineWidth: 0.8).blendMode(.overlay))
+                .frame(width: 60, height: 60)
+                .shadow(color: .black.opacity(pressed ? 0.3 : 0.7), radius: pressed ? 1 : 3, y: pressed ? 0.5 : 2)
+                .brightness(pressed ? -0.08 : 0)
+                .scaleEffect(pressed ? 0.94 : 1)
+        }
+        .saturation(isEnabled ? 1 : 0.2)
+        .opacity(isEnabled ? 1 : 0.6)
+        .contentShape(Circle())
+        .animation(.easeOut(duration: 0.08), value: pressed)
     }
 }
 
