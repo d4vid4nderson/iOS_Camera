@@ -249,6 +249,13 @@ final class CameraModel: NSObject, ObservableObject {
     func cycleFlash() { flash = flash.next }
     func cycleStamp() { stampMode = stampMode.next }
     func cycleBorder() { border = border.next }
+    func selectBorder(_ style: BorderStyle) { border = style }
+
+    /// Set the GRAIN multiplier, snapped to the nearest 25% click.
+    func setGrainLevel(_ level: Double) {
+        let snapped = Self.grainLevels.min { abs($0 - level) < abs($1 - level) } ?? 1
+        if snapped != grainLevel { grainLevel = snapped }
+    }
 
     func selectLens(_ option: LensOption) {
         guard option != lens else { return }
@@ -308,8 +315,13 @@ final class CameraModel: NSObject, ObservableObject {
     }
 
     func nudgeExposure(by stops: Float) {
-        let value = (exposureBias + stops).clamped(to: -2...2)
-        let snapped = (value * 3).rounded() / 3   // 1/3-stop clicks, like a real dial
+        setExposure(exposureBias + stops)
+    }
+
+    /// Set exposure compensation, snapped to 1/3-stop clicks within ±2 EV.
+    func setExposure(_ stops: Float) {
+        let snapped = (stops.clamped(to: -2...2) * 3).rounded() / 3   // 1/3-stop clicks, like a real dial
+        guard snapped != exposureBias else { return }
         exposureBias = snapped
         sessionQueue.async {
             self.sessionExposureBias = snapped
