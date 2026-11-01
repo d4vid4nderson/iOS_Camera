@@ -344,6 +344,7 @@ private struct ShutterButtonStyle: ButtonStyle {
     private static let copperBottom = Color(red: 0.80, green: 0.37, blue: 0.11)
     private static let bevelLight = Color(red: 1.00, green: 0.72, blue: 0.48)
     private static let bevelDark = Color(red: 0.42, green: 0.17, blue: 0.04)
+    private static let engravedFloor = Color(red: 0.74, green: 0.33, blue: 0.09)
 
     /// Fixed speckle pattern for the anodised face (same every launch, so it never shimmers).
     private static let grain: [(x: CGFloat, y: CGFloat, r: CGFloat, light: Bool, alpha: Double)] = {
@@ -409,6 +410,23 @@ private struct ShutterButtonStyle: ButtonStyle {
             )
     }
 
+    /// The M mark cut into the face, lit from above like everything else: a darker floor,
+    /// the lower wall of the cut catching light, the upper wall in shadow.
+    private var engravedMark: some View {
+        let mark = Image("ShutterMark")
+            .renderingMode(.template)
+            .resizable()
+            .scaledToFit()
+            .frame(width: 26)
+        return ZStack {
+            mark.foregroundStyle(Self.bevelLight.opacity(0.55)).offset(y: 0.7)
+            mark.foregroundStyle(Color.black.opacity(0.45)).offset(y: -0.6)
+            mark.foregroundStyle(Self.engravedFloor)
+        }
+        .offset(y: 0.5)
+        .accessibilityHidden(true)
+    }
+
     /// Flat matte copper face with fine grain, a small bevel, and the lip's shadow across
     /// its top (deeper while pressed, as it sinks further).
     private func button(pressed: Bool) -> some View {
@@ -425,6 +443,7 @@ private struct ShutterButtonStyle: ButtonStyle {
                 }
                 .clipShape(Circle())
             )
+            .overlay(engravedMark)
             .overlay(
                 Circle().strokeBorder(
                     LinearGradient(colors: [Self.bevelLight.opacity(0.6), .clear, Self.bevelDark.opacity(0.9)],
