@@ -289,8 +289,8 @@ struct ContentView: View {
                           spoken: { v in String(format: "%+.1f stops", v) },
                           onChange: { camera.setExposure(Float($0)) })
             case .grain:
-                ScrubDial(value: camera.grainLevel, range: 0...2, step: 0.25,
-                          majorEvery: 4, accent: accent,
+                ScrubDial(value: camera.grainLevel, range: 0...2, step: 0.1,
+                          majorEvery: 5, accent: accent,
                           label: { v in v < 0.01 ? "OFF" : "\(Int((v * 100).rounded()))" },
                           spoken: { v in v == 0 ? "Off" : "\(Int(v * 100)) percent" },
                           onChange: { camera.setGrainLevel($0) })
