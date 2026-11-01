@@ -6,7 +6,8 @@ private extension Font {
     }
 }
 
-private let amber = Color(red: 1.0, green: 0.69, blue: 0.0)
+/// The app's one accent: the same copper as the shutter (and the AccentColor asset).
+private let accent = Color(red: 0.92, green: 0.45, blue: 0.13)
 private let cameraBody = Color(white: 0.09)
 
 struct ContentView: View {
@@ -58,7 +59,7 @@ struct ContentView: View {
                 Text("FRAME")
                     .font(.mono(9)).foregroundStyle(.secondary)
                 Text(String(format: "%02d", camera.framesShot) + "/\(CameraModel.rollLength)")
-                    .font(.mono(20, .bold)).foregroundStyle(amber)
+                    .font(.mono(20, .bold)).foregroundStyle(accent)
                     .contentTransition(.numericText())
             }
             .frame(width: 100, alignment: .leading)
@@ -94,7 +95,7 @@ struct ContentView: View {
                 Text(title).font(.mono(9)).foregroundStyle(.secondary)
                 Text(value)
                     .font(.mono(12, .bold))
-                    .foregroundStyle(active ? amber : Color(white: 0.6))
+                    .foregroundStyle(active ? accent : Color(white: 0.6))
             }
         }
         .buttonStyle(.plain)
@@ -124,7 +125,7 @@ struct ContentView: View {
             VStack(spacing: 2) {
                 Text(label).font(.mono(9)).foregroundStyle(.secondary)
                 Text(value)
-                    .font(.mono(14, .bold)).foregroundStyle(amber)
+                    .font(.mono(14, .bold)).foregroundStyle(accent)
                     .contentTransition(.numericText())
             }
             .frame(width: 52)
@@ -151,7 +152,7 @@ struct ContentView: View {
 
                 if let focusPoint {
                     RoundedRectangle(cornerRadius: 2)
-                        .stroke(amber, lineWidth: 1.5)
+                        .stroke(accent, lineWidth: 1.5)
                         .frame(width: 64, height: 64)
                         .position(focusPoint)
                         .transition(.opacity)
@@ -191,7 +192,7 @@ struct ContentView: View {
                         UIApplication.shared.open(url)
                     }
                 }
-                .font(.mono(13, .bold)).foregroundStyle(amber)
+                .font(.mono(13, .bold)).foregroundStyle(accent)
             }
             .padding()
         case .failed(let reason):
@@ -213,9 +214,9 @@ struct ContentView: View {
                                 .font(.mono(12, .bold))
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 7)
-                                .background(Capsule().fill(selected ? amber.opacity(0.18) : Color(white: 0.14)))
-                                .overlay(Capsule().stroke(selected ? amber : .clear, lineWidth: 1.2))
-                                .foregroundStyle(selected ? amber : .white)
+                                .background(Capsule().fill(selected ? accent.opacity(0.18) : Color(white: 0.14)))
+                                .overlay(Capsule().stroke(selected ? accent : .clear, lineWidth: 1.2))
+                                .foregroundStyle(selected ? accent : .white)
                         }
                     }
                 }
@@ -258,13 +259,13 @@ struct ContentView: View {
         .frame(width: 170, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(selected ? amber.opacity(0.15) : Color(white: 0.14))
+                .fill(selected ? accent.opacity(0.15) : Color(white: 0.14))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 6)
-                .stroke(selected ? amber : .clear, lineWidth: 1.2)
+                .stroke(selected ? accent : .clear, lineWidth: 1.2)
         )
-        .foregroundStyle(selected ? amber : .white)
+        .foregroundStyle(selected ? accent : .white)
     }
 
     // MARK: Shutter row
@@ -278,7 +279,7 @@ struct ContentView: View {
                         Image(uiImage: print).resizable().scaledToFill()
                     }
                     if camera.developing > 0 {
-                        ProgressView().tint(amber)
+                        ProgressView().tint(accent)
                     }
                 }
                 .frame(width: 56, height: 56)
@@ -294,7 +295,7 @@ struct ContentView: View {
                         .font(.mono(15, .bold))
                         .foregroundStyle(.black)
                         .frame(width: 84, height: 84)
-                        .background(Circle().fill(amber))
+                        .background(Circle().fill(accent))
                 }
             } else {
                 Button { camera.shoot() } label: { EmptyView() }
@@ -359,7 +360,7 @@ private struct ShutterButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         let pressed = configuration.isPressed
         return ZStack {
-            bore.frame(width: 88, height: 88)
+            bore.frame(width: 67, height: 67)
 
             button(pressed: pressed)
                 .frame(width: 60, height: 60)
@@ -380,7 +381,7 @@ private struct ShutterButtonStyle: ButtonStyle {
             .overlay(
                 Canvas { ctx, size in
                     let centre = CGPoint(x: size.width / 2, y: size.height / 2)
-                    var radius: CGFloat = 35
+                    var radius: CGFloat = 30.5
                     var i = 0
                     while radius < size.width / 2 - 1 {
                         let ring = Path(ellipseIn: CGRect(x: centre.x - radius, y: centre.y - radius,
@@ -394,17 +395,17 @@ private struct ShutterButtonStyle: ButtonStyle {
             // Shadow thrown into the hole by the upper lip.
             .overlay(
                 Circle()
-                    .stroke(Color.black.opacity(0.8), lineWidth: 8)
-                    .blur(radius: 4)
-                    .offset(y: 3)
+                    .stroke(Color.black.opacity(0.85), lineWidth: 3)
+                    .blur(radius: 1.5)
+                    .offset(y: 1.5)
                     .clipShape(Circle())
             )
             // Only the lower lip faces the light.
             .overlay(
                 Circle().strokeBorder(
-                    LinearGradient(colors: [.clear, .clear, Color.white.opacity(0.16)],
+                    LinearGradient(colors: [.clear, .clear, Color.white.opacity(0.18)],
                                    startPoint: .top, endPoint: .bottom),
-                    lineWidth: 0.8)
+                    lineWidth: 0.6)
             )
     }
 
