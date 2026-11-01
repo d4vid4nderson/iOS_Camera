@@ -400,6 +400,73 @@ struct ContentView: View {
         .accessibilityAddTraits(.isButton)
     }
 
+    // MARK: Shutter row
+
+    private var controls: some View {
+        HStack {
+            Button { showingPrint = true } label: {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 4).fill(Color(white: 0.15))
+                    if let print = camera.lastPrint {
+                        Image(uiImage: print).resizable().scaledToFill()
+                    }
+                    if camera.developing > 0 {
+                        ProgressView().tint(accent)
+                    }
+                }
+                .frame(width: 56, height: 56)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+            }
+            .disabled(camera.lastPrint == nil)
+
+            Spacer()
+
+            if camera.rollFinished {
+                Button { withAnimation { camera.rewindRoll() } } label: {
+                    Text("REWIND")
+                        .font(.mono(15, .bold))
+                        .foregroundStyle(.black)
+                        .frame(width: 84, height: 84)
+                        .background(Circle().fill(accent))
+                }
+            } else {
+                Button { camera.shoot() } label: { EmptyView() }
+                    .buttonStyle(ShutterButtonStyle(finish: finish))
+                    .disabled(camera.status != .running)
+                    // Long-press the shutter to change its finish (and the app's accent).
+                    .contextMenu {
+                        // Inline picker: iOS draws the checkmark on the current finish;
+                        // each row shows a swatch of that finish's shutter face.
+                        Picker("Shutter finish", selection: $finishRaw) {
+                            ForEach(ShutterFinish.allCases) { option in
+                                Label {
+                                    Text(option.name)
+                                } icon: {
+                                    Image(uiImage: option.swatch)
+                                }
+                                .tag(option.rawValue)
+                            }
+                        }
+                        .pickerStyle(.inline)
+                    }
+                    .sensoryFeedback(.selection, trigger: finishRaw)
+                    .accessibilityLabel("Shutter")
+                    .accessibilityHint("Long press to change the shutter finish")
+            }
+
+            Spacer()
+
+            Button { camera.flipCamera() } label: {
+                Image(systemName: "arrow.triangle.2.circlepath.camera")
+                    .font(.system(size: 20))
+                    .frame(width: 56, height: 56)
+                    .background(Circle().fill(Color(white: 0.15)))
+            }
+            .foregroundStyle(.white)
+        }
+        .padding(.horizontal, 8)
+    }
+
     private func toast(_ text: String) -> some View {
         VStack {
             Spacer()
