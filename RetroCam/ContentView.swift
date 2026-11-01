@@ -114,6 +114,10 @@ struct ContentView: View {
                  minus: { camera.nudgeExposure(by: -1 / 3) },
                  plus: { camera.nudgeExposure(by: 1 / 3) })
             Spacer()
+            plateToggle(title: "BORDER", value: camera.border.label, active: camera.border != .none) {
+                camera.cycleBorder()
+            }
+            Spacer()
             dial(label: "GRAIN",
                  value: camera.grainLevel == 0 ? "OFF" : "\(Int((camera.grainLevel * 100).rounded()))%",
                  minus: { camera.nudgeGrain(by: -1) },

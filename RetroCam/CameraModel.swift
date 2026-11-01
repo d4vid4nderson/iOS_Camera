@@ -36,6 +36,7 @@ final class CameraModel: NSObject, ObservableObject {
     private static let grainLevelKey = "grainLevel"
     private static let flashKey = "flash"
     private static let stampKey = "stamp"
+    private static let borderKey = "border"
     private static func lensKey(_ position: AVCaptureDevice.Position) -> String {
         position == .front ? "lensFocal.front" : "lensFocal.back"
     }
@@ -60,6 +61,13 @@ final class CameraModel: NSObject, ObservableObject {
     }
     /// Whether the current camera has a flash (asked from the phone, per side).
     @Published private(set) var flashAvailable = false
+    @Published private(set) var border: BorderStyle =
+        BorderStyle(rawValue: UserDefaults.standard.string(forKey: CameraModel.borderKey) ?? "") ?? .none {
+        didSet {
+            UserDefaults.standard.set(border.rawValue, forKey: Self.borderKey)
+            renderer.border = border
+        }
+    }
     @Published private(set) var stampMode: StampMode =
         StampMode(rawValue: UserDefaults.standard.string(forKey: CameraModel.stampKey) ?? "") ?? .date {
         didSet {
@@ -101,6 +109,7 @@ final class CameraModel: NSObject, ObservableObject {
         super.init()
         renderer.stock = developedStock
         renderer.stampMode = stampMode
+        renderer.border = border
     }
 
     // MARK: - Lifecycle
@@ -238,6 +247,7 @@ final class CameraModel: NSObject, ObservableObject {
 
     func cycleFlash() { flash = flash.next }
     func cycleStamp() { stampMode = stampMode.next }
+    func cycleBorder() { border = border.next }
 
     func selectLens(_ option: LensOption) {
         guard option != lens else { return }
@@ -348,6 +358,7 @@ final class CameraModel: NSObject, ObservableObject {
         let stock = self.developedStock
         let flashMode = flashAvailable ? flash.mode : .off
         let stampText = stampMode.text(for: Date())
+        let finish = PrintFinish(border: border, seed: UInt32.random(in: 0...UInt32.max))
 
         framesShot += 1
         developing += 1
@@ -376,7 +387,7 @@ final class CameraModel: NSObject, ObservableObject {
             }
             let id = settings.uniqueID
 
-            let processor = PhotoCaptureProcessor(stock: stock, stampText: stampText) { [weak self] result in
+            let processor = PhotoCaptureProcessor(stock: stock, stampText: stampText, finish: finish) { [weak self] result in
                 guard let self else { return }
                 self.sessionQueue.async { self.inFlight[id] = nil }
                 DispatchQueue.main.async { self.finish(result) }
@@ -420,12 +431,15 @@ extension CameraModel: AVCaptureVideoDataOutputSampleBufferDelegate {
 private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelegate {
     private let stock: FilmStock
     private let stampText: String?
+    private let finish: PrintFinish
     private let completion: (Result<Darkroom.Print, Error>) -> Void
     private var photoData: Data?
 
-    init(stock: FilmStock, stampText: String?, completion: @escaping (Result<Darkroom.Print, Error>) -> Void) {
+    init(stock: FilmStock, stampText: String?, finish: PrintFinish,
+         completion: @escaping (Result<Darkroom.Print, Error>) -> Void) {
         self.stock = stock
         self.stampText = stampText
+        self.finish = finish
         self.completion = completion
     }
 
@@ -444,9 +458,10 @@ private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelega
         }
         let stock = self.stock
         let stampText = self.stampText
+        let finish = self.finish
         let completion = self.completion
         DispatchQueue.global(qos: .userInitiated).async {
-            completion(Result { try Darkroom.develop(data, stock: stock, stampText: stampText) })
+            completion(Result { try Darkroom.develop(data, stock: stock, stampText: stampText, finish: finish) })
         }
     }
 }
