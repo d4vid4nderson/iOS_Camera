@@ -83,6 +83,14 @@ final class CameraModel: NSObject, ObservableObject {
     @Published private(set) var shutterBlink = false
     @Published private(set) var developing = 0
     @Published var message: String?
+    /// How far to turn on-screen icons (degrees, clockwise) so they stay level when the
+    /// phone is turned. The screen itself stays portrait.
+    @Published private(set) var uiRotation: Double = 0
+    /// Camera orientation readout for troubleshooting (long-press the frame counter).
+    @Published private(set) var diagnostics: String?
+    var showDiagnostics = false {
+        didSet { if !showDiagnostics { diagnostics = nil } }
+    }
 
     var rollFinished: Bool { framesShot >= Self.rollLength }
 
@@ -102,6 +110,12 @@ final class CameraModel: NSObject, ObservableObject {
     private var input: AVCaptureDeviceInput?
     private var position: AVCaptureDevice.Position = .back
     private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
+    /// Follows the back camera, whatever camera is active, to tell how the phone is turned.
+    private var levelCoordinator: AVCaptureDevice.RotationCoordinator?
+    private var levelObservation: NSKeyValueObservation?
+    /// The angle the live-frame connection should use with the phone upright.
+    private var previewAngle: CGFloat = 90
+    private var frameCount = 0
     private var sessionExposureBias: Float = 0
     private var inFlight: [Int64: PhotoCaptureProcessor] = [:]
 
@@ -159,6 +173,7 @@ final class CameraModel: NSObject, ObservableObject {
 
         session.sessionPreset = .photo   // 4:3, matches the viewfinder
         try attachCamera(at: .back)
+        if let back = input?.device { trackPhoneRotation(with: back) }
 
         guard session.canAddOutput(videoOutput) else { throw CameraError.setupFailed("video output") }
         videoOutput.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
@@ -278,11 +293,56 @@ final class CameraModel: NSObject, ObservableObject {
         let hasFlash = photoOutput.supportedFlashModes.contains(.on)
         DispatchQueue.main.async { self.flashAvailable = hasFlash }
         guard let connection = videoOutput.connection(with: .video) else { return }
-        if connection.isVideoRotationAngleSupported(90) { connection.videoRotationAngle = 90 }
         if connection.isVideoMirroringSupported {
             connection.automaticallyAdjustsVideoMirroring = false
             connection.isVideoMirrored = (position == .front)
         }
+        levelPreview()
+    }
+
+    /// Session queue only. Point the live frames upright for a portrait screen.
+    ///
+    /// Not a fixed 90°: cameras are mounted differently (Apple notes the default angle
+    /// differs between devices), so ask the camera's rotation coordinator. Its capture
+    /// angle is level with gravity; take off however far the phone is turned from
+    /// upright (measured on the back camera, which is the same for both sides) to get
+    /// the angle for an upright, portrait screen.
+    private func levelPreview() {
+        guard let coordinator = rotationCoordinator,
+              let connection = videoOutput.connection(with: .video) else { return }
+        let turned = (levelCoordinator?.videoRotationAngleForHorizonLevelCapture ?? 90) - 90
+        let angle = Self.normalized(coordinator.videoRotationAngleForHorizonLevelCapture - turned)
+        previewAngle = angle
+        if connection.videoRotationAngle != angle, connection.isVideoRotationAngleSupported(angle) {
+            connection.videoRotationAngle = angle
+        }
+    }
+
+    /// Session queue only. Watch how the phone is turned, to keep icons level and to
+    /// re-level the preview whenever the phone is back upright.
+    private func trackPhoneRotation(with backCamera: AVCaptureDevice) {
+        let coordinator = AVCaptureDevice.RotationCoordinator(device: backCamera, previewLayer: nil)
+        levelCoordinator = coordinator
+        levelObservation = coordinator.observe(\.videoRotationAngleForHorizonLevelCapture,
+                                               options: [.initial, .new]) { [weak self] coordinator, _ in
+            // The back camera is level at 90° with the phone upright.
+            let turned = CameraModel.normalized(coordinator.videoRotationAngleForHorizonLevelCapture - 90)
+            DispatchQueue.main.async {
+                guard let self else { return }
+                // Turn icons the opposite way to the phone (signed, so they take the short way round).
+                let icons = turned == 180 ? 180 : -Double(turned > 180 ? turned - 360 : turned)
+                if icons != self.uiRotation { self.uiRotation = icons }
+            }
+            if turned == 0 {
+                self?.sessionQueue.async { self?.levelPreview() }
+            }
+        }
+    }
+
+    /// An angle in 0..<360.
+    private static func normalized(_ degrees: CGFloat) -> CGFloat {
+        let r = degrees.truncatingRemainder(dividingBy: 360)
+        return r < 0 ? r + 360 : r
     }
 
     // MARK: - Controls
@@ -439,6 +499,15 @@ extension CameraModel: AVCaptureVideoDataOutputSampleBufferDelegate {
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         renderer.push(CIImage(cvPixelBuffer: pixelBuffer))
+        if showDiagnostics {
+            frameCount += 1
+            if frameCount % 15 == 0 {
+                let side = connection.isVideoMirrored ? "FRONT" : "BACK"
+                let text = "\(side)  conn \(Int(connection.videoRotationAngle))°  want \(Int(previewAngle))°  "
+                    + "\(CVPixelBufferGetWidth(pixelBuffer))×\(CVPixelBufferGetHeight(pixelBuffer))"
+                DispatchQueue.main.async { if self.showDiagnostics { self.diagnostics = text } }
+            }
+        }
     }
 }
 
