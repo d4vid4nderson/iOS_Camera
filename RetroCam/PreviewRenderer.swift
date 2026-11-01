@@ -15,7 +15,7 @@ final class PreviewRenderer: NSObject, MTKViewDelegate {
     var stock: FilmStock = .classic400
     var stampMode: StampMode = .off
     var border: BorderStyle = .none
-    /// Fixed burn pattern for the live view, so it doesn't flicker.
+    /// Fixed per-session seed for textured borders, so the live view does not flicker.
     private let borderSeed = UInt32.random(in: 0...UInt32.max)
 
     override init() {
