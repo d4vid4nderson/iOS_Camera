@@ -60,7 +60,7 @@ enum Darkroom {
         }
 
         let film = FilmLook.apply(stock, to: source, stamp: stampText)
-        let developed = PrintBorder.apply(finish.border, to: film, seed: finish.seed).settingProperties(metadata)
+        let developed = PrintBorder.apply(finish.border, to: film, seed: finish.seed, width: finish.width).settingProperties(metadata)
 
         guard let sRGB = CGColorSpace(name: CGColorSpace.sRGB),
               let jpeg = context.jpegRepresentation(

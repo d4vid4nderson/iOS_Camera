@@ -37,6 +37,7 @@ final class CameraModel: NSObject, ObservableObject {
     private static let flashKey = "flash"
     private static let stampKey = "stamp"
     private static let borderKey = "border"
+    private static let borderWidthKey = "borderWidth"
     private static func lensKey(_ position: AVCaptureDevice.Position) -> String {
         position == .front ? "lensFocal.front" : "lensFocal.back"
     }
@@ -66,6 +67,17 @@ final class CameraModel: NSObject, ObservableObject {
         didSet {
             UserDefaults.standard.set(border.rawValue, forKey: Self.borderKey)
             renderer.border = border
+        }
+    }
+    /// Border width as a fraction of the print's short side (whole percent steps).
+    @Published private(set) var borderWidth: Double = {
+        let saved = UserDefaults.standard.object(forKey: CameraModel.borderWidthKey) as? Double
+        return min(max(saved ?? PrintBorder.defaultWidth, PrintBorder.widthRange.lowerBound),
+                   PrintBorder.widthRange.upperBound)
+    }() {
+        didSet {
+            UserDefaults.standard.set(borderWidth, forKey: Self.borderWidthKey)
+            renderer.borderWidth = borderWidth
         }
     }
     @Published private(set) var stampMode: StampMode =
@@ -124,6 +136,7 @@ final class CameraModel: NSObject, ObservableObject {
         renderer.stock = developedStock
         renderer.stampMode = stampMode
         renderer.border = border
+        renderer.borderWidth = borderWidth
     }
 
     // MARK: - Lifecycle
@@ -265,6 +278,13 @@ final class CameraModel: NSObject, ObservableObject {
     func cycleStamp() { stampMode = stampMode.next }
     func cycleBorder() { border = border.next }
     func selectBorder(_ style: BorderStyle) { border = style }
+
+    /// Set the border width (fraction of the short side), snapped to whole percents.
+    func setBorderWidth(_ width: Double) {
+        let range = PrintBorder.widthRange
+        let snapped = (min(max(width, range.lowerBound), range.upperBound) * 100).rounded() / 100
+        if snapped != borderWidth { borderWidth = snapped }
+    }
 
     /// Set the GRAIN multiplier, snapped to the nearest 25% click.
     func setGrainLevel(_ level: Double) {
@@ -434,7 +454,7 @@ final class CameraModel: NSObject, ObservableObject {
         let stock = self.developedStock
         let flashMode = flashAvailable ? flash.mode : .off
         let stampText = stampMode.text(for: Date())
-        let finish = PrintFinish(border: border, seed: UInt32.random(in: 0...UInt32.max))
+        let finish = PrintFinish(border: border, seed: UInt32.random(in: 0...UInt32.max), width: borderWidth)
 
         framesShot += 1
         developing += 1
