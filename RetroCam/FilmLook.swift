@@ -7,7 +7,8 @@ import CoreImage.CIFilterBuiltins
 /// Grain size is expressed relative to the image's long side, so a 1,500 px
 /// preview and a 4,000 px still end up with the same-looking grain.
 enum FilmLook {
-    static func apply(_ stock: FilmStock, to input: CIImage) -> CIImage {
+    /// - Parameter stamp: date-back text to burn into the frame (before grain/vignette), if any.
+    static func apply(_ stock: FilmStock, to input: CIImage, stamp: String? = nil) -> CIImage {
         let extent = input.extent
 
         // 0. Lens + exposure, in linear light before the film sees it.
@@ -45,6 +46,11 @@ enum FilmLook {
 
         // 4. Paper toning.
         image = tone(image, paper: stock.paper)
+
+        // 4b. Date back: exposed onto the film, so grain and vignette land on it too.
+        if let stamp {
+            image = DateStamp.burn(stamp, into: image)
+        }
 
         // 5. Grain.
         if stock.grain > 0 {

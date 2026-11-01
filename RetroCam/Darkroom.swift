@@ -28,7 +28,7 @@ enum Darkroom {
         let thumbnail: UIImage
     }
 
-    static func develop(_ photoData: Data, stock: FilmStock) throws -> Print {
+    static func develop(_ photoData: Data, stock: FilmStock, stampText: String? = nil) throws -> Print {
         guard var source = CIImage(data: photoData, options: [.applyOrientationProperty: true]) else {
             throw CameraError.processingFailed
         }
@@ -58,7 +58,7 @@ enum Darkroom {
                                            parameters: [kCIInputScaleKey: scale, kCIInputAspectRatioKey: 1])
         }
 
-        let developed = FilmLook.apply(stock, to: source).settingProperties(metadata)
+        let developed = FilmLook.apply(stock, to: source, stamp: stampText).settingProperties(metadata)
 
         guard let sRGB = CGColorSpace(name: CGColorSpace.sRGB),
               let jpeg = context.jpegRepresentation(
