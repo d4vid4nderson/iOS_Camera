@@ -50,6 +50,15 @@ jobs:
           ci/install-asc-key.sh "$KEY_PATH"
           echo "KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
 
+      - name: Check credentials with Apple
+        env:
+          TEAM_ID: RN599658F9
+          BUNDLE_ID: com.davidanderson.retrocam
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet pyjwt cryptography
+          "$RUNNER_TEMP/venv/bin/python" ci/asc-preflight.py
+
       - name: Archive (unsigned)
         run: |
           set -o pipefail
@@ -68,14 +77,16 @@ jobs:
       - name: Sign with cloud-managed certificate and upload
         run: |
           set -o pipefail
+          KEY_ID=$(printf '%s' "$ASC_KEY_ID" | tr -d '[:space:]')
+          ISSUER_ID=$(printf '%s' "$ASC_ISSUER_ID" | tr -d '[:space:]')
           xcodebuild -exportArchive \
             -archivePath "$RUNNER_TEMP/RetroCam.xcarchive" \
             -exportOptionsPlist ci/ExportOptions.plist \
             -exportPath "$RUNNER_TEMP/export" \
             -allowProvisioningUpdates \
             -authenticationKeyPath "$KEY_PATH" \
-            -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER_ID" \
             | tee export.log
 
       - name: Remove API key
