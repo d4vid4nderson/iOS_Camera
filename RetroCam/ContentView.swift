@@ -444,7 +444,7 @@ private struct ShutterButtonStyle: ButtonStyle {
                     for g in Self.grain {
                         let p = CGRect(x: g.x * size.width, y: g.y * size.height, width: g.r * 2, height: g.r * 2)
                         ctx.fill(Path(ellipseIn: p),
-                                 with: .color((g.light ? Color.white : Color.black).opacity(g.alpha)))
+                                 with: .color((g.light ? Color.white : Color.black).opacity(g.alpha * finish.palette.grain)))
                     }
                 }
                 .clipShape(Circle())
