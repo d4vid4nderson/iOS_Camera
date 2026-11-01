@@ -15,7 +15,7 @@ What that means for this app:
   has no ads or in-app purchases. Ask the author before any commercial release.
 - **No derivatives:** nothing in the artwork is repainted or recoloured. To fit
   the iOS icon format, the 256 px icon was cut out of the author's 640 x 360
-  presentation image (its sharpest copy), cropped just inside its chrome rim and the dark groove inside it (pixels 7-248 of the 256 px icon)
+  presentation image (its sharpest copy), cropped inside its chrome rim, the dark groove and the shaded band along each edge (x 17-235, y 19-237 of the 256 px icon), so the edges match the corners iOS cuts away
   so the black leather runs to the edge (iOS clips every icon to a rounder
   corner than this 2011 artwork has, which otherwise cut the rim off at the
   corners), and scaled to 1024 px with light sharpening. Cropping is still a
