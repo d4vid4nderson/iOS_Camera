@@ -21,7 +21,7 @@ A black & white film camera for iPhone. SwiftUI + AVFoundation + Core Image, no 
 Requires Xcode 16+ and iOS 17+ on a real iPhone (the simulator has no camera).
 
 1. Open `RetroCam.xcodeproj`.
-2. Target RetroCam → Signing & Capabilities: pick your Team and change the bundle ID from `com.example.retrocam` to something unique.
+2. Target RetroCam → Signing & Capabilities: pick your Team and the project is preset to team `RN599658F9` and bundle ID `com.davidanderson.retrocam`; change both if you fork it.
 3. Plug in your phone, select it, Run.
 
 ## Where to tweak
