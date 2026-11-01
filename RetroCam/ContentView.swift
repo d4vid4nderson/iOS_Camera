@@ -8,11 +8,40 @@ private extension Font {
 
 private let cameraBody = Color(white: 0.09)
 
+/// The settings that live behind the icon bar.
+private enum SettingPanel: String, Identifiable {
+    case film, lens, exposure, grain, border
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .film: return "FILM"
+        case .lens: return "LENS"
+        case .exposure: return "EXPOSURE"
+        case .grain: return "GRAIN"
+        case .border: return "BORDER"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .film: return "film"
+        case .lens: return "camera.aperture"
+        case .exposure: return "plusminus.circle"
+        case .grain: return "aqi.medium"
+        case .border: return "photo.artframe"
+        }
+    }
+}
+
 struct ContentView: View {
     @StateObject private var camera = CameraModel()
     @Environment(\.scenePhase) private var scenePhase
     @State private var focusPoint: CGPoint?
     @State private var showingPrint = false
+    /// The settings panel floating over the bottom of the viewfinder, if any.
+    /// It overlays the viewfinder, so opening it never moves the viewfinder or the shutter.
+    @State private var openPanel: SettingPanel?
     @AppStorage(ShutterFinish.storageKey) private var finishRaw = ShutterFinish.copper.rawValue
 
     private var finish: ShutterFinish { ShutterFinish(rawValue: finishRaw) ?? .copper }
@@ -23,12 +52,18 @@ struct ContentView: View {
         ZStack {
             cameraBody.ignoresSafeArea()
 
-            VStack(spacing: 14) {
+            VStack(spacing: 12) {
                 topPlate
                 viewfinder
-                dials
-                lensPicker
-                stockPicker
+                    .overlay(alignment: .bottom) {
+                        if let panel = openPanel {
+                            panelView(panel)
+                                .padding(8)
+                                .transition(.opacity.combined(with: .offset(y: 14)))
+                        }
+                    }
+                iconBar
+                Spacer(minLength: 0)
                 controls
             }
             .padding(.horizontal, 16)
@@ -55,100 +90,184 @@ struct ContentView: View {
         }
     }
 
-    // MARK: Top plate: frame counter, film loaded, exposure dial
+    private func toggle(_ panel: SettingPanel) {
+        withAnimation(.snappy(duration: 0.25)) {
+            openPanel = openPanel == panel ? nil : panel
+        }
+    }
+
+    // MARK: Top plate: frame counter, film loaded, flash and date stamp
 
     private var topPlate: some View {
         HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("FRAME")
-                    .font(.mono(9)).foregroundStyle(.secondary)
-                Text(String(format: "%02d", camera.framesShot) + "/\(CameraModel.rollLength)")
-                    .font(.mono(20, .bold)).foregroundStyle(accent)
-                    .contentTransition(.numericText())
-            }
-            .frame(width: 100, alignment: .leading)
+            Text(String(format: "%02d", camera.framesShot) + "/\(CameraModel.rollLength)")
+                .font(.mono(15, .bold)).foregroundStyle(accent)
+                .contentTransition(.numericText())
+                .frame(width: 90, alignment: .leading)
+                .accessibilityLabel("Frame \(camera.framesShot) of \(CameraModel.rollLength)")
 
             Spacer()
 
-            VStack(spacing: 2) {
-                Text(camera.stock.name).font(.mono(13, .semibold))
-                Text("ISO \(camera.stock.iso)").font(.mono(10)).foregroundStyle(.secondary)
+            Button { toggle(.film) } label: {
+                HStack(spacing: 6) {
+                    Text(camera.stock.name).font(.mono(12, .semibold))
+                    Text("\(camera.stock.iso)").font(.mono(10)).foregroundStyle(.secondary)
+                }
             }
+            .buttonStyle(.plain)
+            .accessibilityHint("Choose film")
 
             Spacer()
 
-            HStack(spacing: 14) {
+            HStack(spacing: 6) {
                 if camera.flashAvailable {
-                    plateToggle(title: "FLASH", value: camera.flash.label, active: camera.flash != .off) {
-                        camera.cycleFlash()
-                    }
+                    plateIcon(flashSymbol, active: camera.flash != .off,
+                              label: "Flash \(camera.flash.label)") { camera.cycleFlash() }
+                        .sensoryFeedback(.selection, trigger: camera.flash)
                 }
-                plateToggle(title: "STAMP", value: camera.stampMode.label, active: camera.stampMode != .off) {
-                    camera.cycleStamp()
-                }
+                plateIcon("calendar", active: camera.stampMode != .off,
+                          badge: camera.stampMode == .dateTime ? "T" : nil,
+                          label: "Date stamp \(camera.stampMode.label)") { camera.cycleStamp() }
+                    .sensoryFeedback(.selection, trigger: camera.stampMode)
             }
-            .frame(width: 100, alignment: .trailing)
+            .frame(width: 90, alignment: .trailing)
+        }
+        .frame(height: 34)
+    }
+
+    private var flashSymbol: String {
+        switch camera.flash {
+        case .off: return "bolt.slash"
+        case .auto: return "bolt.badge.automatic"
+        case .on: return "bolt.fill"
         }
     }
 
-    /// Small tap-to-cycle control in the top plate (FLASH, STAMP).
-    private func plateToggle(title: String, value: String, active: Bool,
-                             action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 2) {
-                Text(title).font(.mono(9)).foregroundStyle(.secondary)
-                Text(value)
-                    .font(.mono(12, .bold))
-                    .foregroundStyle(active ? accent : Color(white: 0.6))
-            }
-        }
-        .buttonStyle(.plain)
-        .sensoryFeedback(.selection, trigger: value)
-    }
-
-    // MARK: Dials: exposure and grain
-
-    private var dials: some View {
-        HStack {
-            dial(label: "EV", value: String(format: "%+.1f", camera.exposureBias),
-                 minus: { camera.nudgeExposure(by: -1 / 3) },
-                 plus: { camera.nudgeExposure(by: 1 / 3) })
-            Spacer()
-            plateToggle(title: "BORDER", value: camera.border.label, active: camera.border != .none) {
-                camera.cycleBorder()
-            }
-            Spacer()
-            dial(label: "GRAIN",
-                 value: camera.grainLevel == 0 ? "OFF" : "\(Int((camera.grainLevel * 100).rounded()))%",
-                 minus: { camera.nudgeGrain(by: -1) },
-                 plus: { camera.nudgeGrain(by: 1) })
-        }
-        .padding(.horizontal, 4)
-    }
-
-    private func dial(label: String, value: String,
-                      minus: @escaping () -> Void, plus: @escaping () -> Void) -> some View {
-        HStack(spacing: 8) {
-            dialButton("minus", action: minus)
-            VStack(spacing: 2) {
-                Text(label).font(.mono(9)).foregroundStyle(.secondary)
-                Text(value)
-                    .font(.mono(14, .bold)).foregroundStyle(accent)
-                    .contentTransition(.numericText())
-            }
-            .frame(width: 52)
-            dialButton("plus", action: plus)
-        }
-    }
-
-    private func dialButton(_ symbol: String, action: @escaping () -> Void) -> some View {
+    /// Small tap-to-cycle icon in the top plate (flash, date stamp).
+    private func plateIcon(_ symbol: String, active: Bool, badge: String? = nil, label: String,
+                           action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 12, weight: .bold))
-                .frame(width: 28, height: 28)
-                .background(Circle().fill(Color(white: 0.18)))
+                .font(.system(size: 15, weight: .medium))
+                .frame(width: 34, height: 34)
+                .overlay(alignment: .bottomTrailing) {
+                    if let badge {
+                        Text(badge).font(.mono(8, .bold)).offset(x: -4, y: -4)
+                    }
+                }
+                .foregroundStyle(active ? accent : Color(white: 0.55))
+                .contentShape(Rectangle())
         }
-        .foregroundStyle(.white)
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+
+    // MARK: Icon bar: every setting one tap away, opening above the bar
+
+    private var iconBar: some View {
+        HStack(spacing: 4) {
+            barItem(.film, value: camera.stock.shortName)
+            if camera.lenses.count > 1 {
+                barItem(.lens, value: camera.lens.map { "\($0.focalLength)" } ?? "—")
+            }
+            barItem(.exposure, value: exposureText, highlighted: camera.exposureBias != 0)
+            barItem(.grain, value: grainText)
+            barItem(.border, value: camera.border.label, highlighted: camera.border != .none)
+        }
+        .padding(4)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color(white: 0.12)))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(white: 0.2), lineWidth: 0.5))
+        .sensoryFeedback(.selection, trigger: openPanel)
+    }
+
+    private func barItem(_ panel: SettingPanel, value: String, highlighted: Bool = false) -> some View {
+        let open = openPanel == panel
+        return Button { toggle(panel) } label: {
+            VStack(spacing: 4) {
+                Image(systemName: panel.symbol)
+                    .font(.system(size: 16, weight: .medium))
+                    .frame(height: 18)
+                Text(value)
+                    .font(.mono(9, .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .contentTransition(.numericText())
+            }
+            .foregroundStyle(open || highlighted ? accent : Color(white: 0.8))
+            .frame(maxWidth: .infinity)
+            .frame(height: 46)
+            .background(RoundedRectangle(cornerRadius: 9).fill(open ? accent.opacity(0.18) : .clear))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(panel.title.capitalized), \(value)")
+        .accessibilityAddTraits(open ? .isSelected : [])
+    }
+
+    private var exposureText: String {
+        camera.exposureBias == 0 ? "±0" : String(format: "%+.1f", camera.exposureBias)
+    }
+
+    private var grainText: String {
+        camera.grainLevel == 0 ? "OFF" : "\(Int((camera.grainLevel * 100).rounded()))%"
+    }
+
+    // MARK: Panels
+
+    private func panelView(_ panel: SettingPanel) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(panel.title).font(.mono(10, .semibold)).foregroundStyle(.secondary)
+                Spacer()
+                Text(panelValue(panel)).font(.mono(10, .bold)).foregroundStyle(accent)
+                    .contentTransition(.numericText())
+            }
+            .padding(.horizontal, 4)
+
+            switch panel {
+            case .film: stockPicker
+            case .lens: lensPicker
+            case .exposure:
+                ScrubDial(value: Double(camera.exposureBias), range: -2...2, step: 1.0 / 3,
+                          majorEvery: 3, accent: accent,
+                          label: { v in abs(v) < 0.01 ? "0" : String(format: "%+.0f", v.rounded()) },
+                          spoken: { v in String(format: "%+.1f stops", v) },
+                          onChange: { camera.setExposure(Float($0)) })
+            case .grain:
+                ScrubDial(value: camera.grainLevel, range: 0...2, step: 0.25,
+                          majorEvery: 4, accent: accent,
+                          label: { v in v < 0.01 ? "OFF" : "\(Int((v * 100).rounded()))" },
+                          spoken: { v in v == 0 ? "Off" : "\(Int(v * 100)) percent" },
+                          onChange: { camera.setGrainLevel($0) })
+            case .border: borderPicker
+            }
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 14).fill(Color(white: 0.11).opacity(0.94)))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color(white: 0.25), lineWidth: 0.5))
+    }
+
+    private func panelValue(_ panel: SettingPanel) -> String {
+        switch panel {
+        case .film: return "ISO \(camera.stock.iso)"
+        case .lens: return camera.lens.map { $0.isNative ? $0.name : "\($0.name) CROP" } ?? ""
+        case .exposure: return exposureText + " EV"
+        case .grain: return grainText
+        case .border: return camera.border.label
+        }
+    }
+
+    private func chip(_ text: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(text)
+                .font(.mono(12, .bold))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(Capsule().fill(selected ? accent.opacity(0.18) : Color(white: 0.17)))
+                .overlay(Capsule().stroke(selected ? accent : .clear, lineWidth: 1.2))
+                .foregroundStyle(selected ? accent : .white)
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: Viewfinder
@@ -173,6 +292,11 @@ struct ContentView: View {
             }
             .contentShape(Rectangle())
             .onTapGesture(coordinateSpace: .local) { location in
+                // With a panel open, a tap on the picture just closes it.
+                if openPanel != nil {
+                    withAnimation(.snappy(duration: 0.25)) { openPanel = nil }
+                    return
+                }
                 camera.focus(at: CGPoint(x: location.x / geo.size.width, y: location.y / geo.size.height))
                 withAnimation(.easeOut(duration: 0.15)) { focusPoint = location }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
@@ -208,38 +332,35 @@ struct ContentView: View {
         }
     }
 
-    // MARK: Lens picker (only lenses this phone can do well; hidden if there's just one)
+    // MARK: Panel contents
 
-    @ViewBuilder
+    /// Lenses this phone can do well (the bar hides the lens item if there's just one).
     private var lensPicker: some View {
-        if camera.lenses.count > 1 {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(camera.lenses) { option in
-                        let selected = option == camera.lens
-                        Button { camera.selectLens(option) } label: {
-                            Text(option.name)
-                                .font(.mono(12, .bold))
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 7)
-                                .background(Capsule().fill(selected ? accent.opacity(0.18) : Color(white: 0.14)))
-                                .overlay(Capsule().stroke(selected ? accent : .clear, lineWidth: 1.2))
-                                .foregroundStyle(selected ? accent : .white)
-                        }
-                    }
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(camera.lenses) { option in
+                    chip(option.name, selected: option == camera.lens) { camera.selectLens(option) }
                 }
-                .padding(.horizontal, 2)
             }
-            .sensoryFeedback(.selection, trigger: camera.lens)
+            .padding(.horizontal, 2)
         }
+        .sensoryFeedback(.selection, trigger: camera.lens)
     }
 
-    // MARK: Film picker
+    private var borderPicker: some View {
+        HStack(spacing: 8) {
+            ForEach(BorderStyle.allCases, id: \.self) { style in
+                chip(style.label, selected: style == camera.border) { camera.selectBorder(style) }
+            }
+            Spacer(minLength: 0)
+        }
+        .sensoryFeedback(.selection, trigger: camera.border)
+    }
 
     private var stockPicker: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
+                HStack(spacing: 8) {
                     ForEach(FilmStock.all) { stock in
                         canister(stock)
                             .id(stock.id)
@@ -253,7 +374,9 @@ struct ContentView: View {
                 }
                 .padding(.horizontal, 2)
             }
+            .onAppear { proxy.scrollTo(camera.stock.id, anchor: .center) }
         }
+        .sensoryFeedback(.selection, trigger: camera.stock.id)
     }
 
     private func canister(_ stock: FilmStock) -> some View {
@@ -264,83 +387,17 @@ struct ContentView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .frame(width: 170, alignment: .leading)
+        .frame(width: 160, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(selected ? accent.opacity(0.15) : Color(white: 0.14))
+            RoundedRectangle(cornerRadius: 8)
+                .fill(selected ? accent.opacity(0.15) : Color(white: 0.17))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 6)
+            RoundedRectangle(cornerRadius: 8)
                 .stroke(selected ? accent : .clear, lineWidth: 1.2)
         )
         .foregroundStyle(selected ? accent : .white)
-    }
-
-    // MARK: Shutter row
-
-    private var controls: some View {
-        HStack {
-            Button { showingPrint = true } label: {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 4).fill(Color(white: 0.15))
-                    if let print = camera.lastPrint {
-                        Image(uiImage: print).resizable().scaledToFill()
-                    }
-                    if camera.developing > 0 {
-                        ProgressView().tint(accent)
-                    }
-                }
-                .frame(width: 56, height: 56)
-                .clipShape(RoundedRectangle(cornerRadius: 4))
-            }
-            .disabled(camera.lastPrint == nil)
-
-            Spacer()
-
-            if camera.rollFinished {
-                Button { withAnimation { camera.rewindRoll() } } label: {
-                    Text("REWIND")
-                        .font(.mono(15, .bold))
-                        .foregroundStyle(.black)
-                        .frame(width: 84, height: 84)
-                        .background(Circle().fill(accent))
-                }
-            } else {
-                Button { camera.shoot() } label: { EmptyView() }
-                    .buttonStyle(ShutterButtonStyle(finish: finish))
-                    .disabled(camera.status != .running)
-                    // Long-press the shutter to change its finish (and the app's accent).
-                    .contextMenu {
-                        // Inline picker: iOS draws the checkmark on the current finish;
-                        // each row shows a swatch of that finish's shutter face.
-                        Picker("Shutter finish", selection: $finishRaw) {
-                            ForEach(ShutterFinish.allCases) { option in
-                                Label {
-                                    Text(option.name)
-                                } icon: {
-                                    Image(uiImage: option.swatch)
-                                }
-                                .tag(option.rawValue)
-                            }
-                        }
-                        .pickerStyle(.inline)
-                    }
-                    .sensoryFeedback(.selection, trigger: finishRaw)
-                    .accessibilityLabel("Shutter")
-                    .accessibilityHint("Long press to change the shutter finish")
-            }
-
-            Spacer()
-
-            Button { camera.flipCamera() } label: {
-                Image(systemName: "arrow.triangle.2.circlepath.camera")
-                    .font(.system(size: 20))
-                    .frame(width: 56, height: 56)
-                    .background(Circle().fill(Color(white: 0.15)))
-            }
-            .foregroundStyle(.white)
-        }
-        .padding(.horizontal, 8)
+        .accessibilityAddTraits(.isButton)
     }
 
     private func toast(_ text: String) -> some View {
@@ -356,6 +413,88 @@ struct ContentView: View {
         .task(id: text) {
             try? await Task.sleep(for: .seconds(3))
             withAnimation { camera.message = nil }
+        }
+    }
+}
+
+private extension FilmStock {
+    /// One word for the icon bar.
+    var shortName: String {
+        id == "sepia" ? "SEPIA" : String(name.split(separator: " ").first ?? "")
+    }
+}
+
+/// A ruler you drag under a fixed needle, like the scale on a lens barrel.
+/// Clicks to `step`; major ticks every `majorEvery` steps carry a label.
+private struct ScrubDial: View {
+    let value: Double
+    let range: ClosedRange<Double>
+    let step: Double
+    let majorEvery: Int
+    let accent: Color
+    let label: (Double) -> String
+    let spoken: (Double) -> String
+    let onChange: (Double) -> Void
+
+    @State private var dragStart: Double?
+    /// Points of travel per click.
+    private let spacing: CGFloat = 14
+
+    private var steps: Int { Int(((range.upperBound - range.lowerBound) / step).rounded()) }
+
+    private func snapped(_ raw: Double) -> Double {
+        let clicks = ((raw - range.lowerBound) / step).rounded()
+        return min(max(range.lowerBound + clicks * step, range.lowerBound), range.upperBound)
+    }
+
+    var body: some View {
+        Canvas { ctx, size in
+            let mid = size.width / 2
+            for i in 0...steps {
+                let v = range.lowerBound + Double(i) * step
+                let x = mid + CGFloat((v - value) / step) * spacing
+                guard x > -20, x < size.width + 20 else { continue }
+                let major = i % majorEvery == 0
+                // Ticks fade towards the ends, as if the scale wraps round a barrel.
+                let fade = 1 - min(abs(x - mid) / mid, 1) * 0.8
+                var tick = Path()
+                tick.move(to: CGPoint(x: x, y: 6))
+                tick.addLine(to: CGPoint(x: x, y: major ? 22 : 14))
+                ctx.stroke(tick, with: .color(.white.opacity((major ? 0.8 : 0.4) * fade)),
+                           lineWidth: major ? 1.5 : 1)
+                if major {
+                    ctx.draw(Text(label(v)).font(.mono(9)).foregroundColor(.white.opacity(0.75 * fade)),
+                             at: CGPoint(x: x, y: 34))
+                }
+            }
+            // Fixed index needle.
+            var needle = Path()
+            needle.move(to: CGPoint(x: mid, y: 0))
+            needle.addLine(to: CGPoint(x: mid, y: 26))
+            ctx.stroke(needle, with: .color(accent), style: StrokeStyle(lineWidth: 2, lineCap: .round))
+        }
+        .frame(height: 42)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { drag in
+                    let start = dragStart ?? value
+                    if dragStart == nil { dragStart = start }
+                    // Dragging right pulls lower values under the needle.
+                    let next = snapped(start - Double(drag.translation.width / spacing) * step)
+                    if abs(next - value) > step / 2 { onChange(next) }
+                }
+                .onEnded { _ in dragStart = nil }
+        )
+        .sensoryFeedback(.selection, trigger: value)
+        .accessibilityElement()
+        .accessibilityValue(spoken(value))
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: onChange(snapped(value + step))
+            case .decrement: onChange(snapped(value - step))
+            @unknown default: break
+            }
         }
     }
 }
