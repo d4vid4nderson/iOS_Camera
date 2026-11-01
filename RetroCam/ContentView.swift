@@ -6,7 +6,6 @@ private extension Font {
     }
 }
 
-private let amber = Color(red: 1.0, green: 0.69, blue: 0.0)
 private let cameraBody = Color(white: 0.09)
 
 struct ContentView: View {
@@ -14,6 +13,11 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var focusPoint: CGPoint?
     @State private var showingPrint = false
+    @AppStorage(ShutterFinish.storageKey) private var finishRaw = ShutterFinish.copper.rawValue
+
+    private var finish: ShutterFinish { ShutterFinish(rawValue: finishRaw) ?? .copper }
+    /// The app's one accent: always the shutter's finish (copper by default).
+    private var accent: Color { finish.palette.accent }
 
     var body: some View {
         ZStack {
@@ -35,6 +39,7 @@ struct ContentView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .tint(accent)
         .statusBarHidden()
         .onAppear { camera.start() }
         .onChange(of: scenePhase) { _, phase in
@@ -58,7 +63,7 @@ struct ContentView: View {
                 Text("FRAME")
                     .font(.mono(9)).foregroundStyle(.secondary)
                 Text(String(format: "%02d", camera.framesShot) + "/\(CameraModel.rollLength)")
-                    .font(.mono(20, .bold)).foregroundStyle(amber)
+                    .font(.mono(20, .bold)).foregroundStyle(accent)
                     .contentTransition(.numericText())
             }
             .frame(width: 100, alignment: .leading)
@@ -94,7 +99,7 @@ struct ContentView: View {
                 Text(title).font(.mono(9)).foregroundStyle(.secondary)
                 Text(value)
                     .font(.mono(12, .bold))
-                    .foregroundStyle(active ? amber : Color(white: 0.6))
+                    .foregroundStyle(active ? accent : Color(white: 0.6))
             }
         }
         .buttonStyle(.plain)
@@ -128,7 +133,7 @@ struct ContentView: View {
             VStack(spacing: 2) {
                 Text(label).font(.mono(9)).foregroundStyle(.secondary)
                 Text(value)
-                    .font(.mono(14, .bold)).foregroundStyle(amber)
+                    .font(.mono(14, .bold)).foregroundStyle(accent)
                     .contentTransition(.numericText())
             }
             .frame(width: 52)
@@ -155,7 +160,7 @@ struct ContentView: View {
 
                 if let focusPoint {
                     RoundedRectangle(cornerRadius: 2)
-                        .stroke(amber, lineWidth: 1.5)
+                        .stroke(accent, lineWidth: 1.5)
                         .frame(width: 64, height: 64)
                         .position(focusPoint)
                         .transition(.opacity)
@@ -195,7 +200,7 @@ struct ContentView: View {
                         UIApplication.shared.open(url)
                     }
                 }
-                .font(.mono(13, .bold)).foregroundStyle(amber)
+                .font(.mono(13, .bold)).foregroundStyle(accent)
             }
             .padding()
         case .failed(let reason):
@@ -217,9 +222,9 @@ struct ContentView: View {
                                 .font(.mono(12, .bold))
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 7)
-                                .background(Capsule().fill(selected ? amber.opacity(0.18) : Color(white: 0.14)))
-                                .overlay(Capsule().stroke(selected ? amber : .clear, lineWidth: 1.2))
-                                .foregroundStyle(selected ? amber : .white)
+                                .background(Capsule().fill(selected ? accent.opacity(0.18) : Color(white: 0.14)))
+                                .overlay(Capsule().stroke(selected ? accent : .clear, lineWidth: 1.2))
+                                .foregroundStyle(selected ? accent : .white)
                         }
                     }
                 }
@@ -262,13 +267,13 @@ struct ContentView: View {
         .frame(width: 170, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(selected ? amber.opacity(0.15) : Color(white: 0.14))
+                .fill(selected ? accent.opacity(0.15) : Color(white: 0.14))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 6)
-                .stroke(selected ? amber : .clear, lineWidth: 1.2)
+                .stroke(selected ? accent : .clear, lineWidth: 1.2)
         )
-        .foregroundStyle(selected ? amber : .white)
+        .foregroundStyle(selected ? accent : .white)
     }
 
     // MARK: Shutter row
@@ -282,7 +287,7 @@ struct ContentView: View {
                         Image(uiImage: print).resizable().scaledToFill()
                     }
                     if camera.developing > 0 {
-                        ProgressView().tint(amber)
+                        ProgressView().tint(accent)
                     }
                 }
                 .frame(width: 56, height: 56)
@@ -298,17 +303,31 @@ struct ContentView: View {
                         .font(.mono(15, .bold))
                         .foregroundStyle(.black)
                         .frame(width: 84, height: 84)
-                        .background(Circle().fill(amber))
+                        .background(Circle().fill(accent))
                 }
             } else {
-                Button { camera.shoot() } label: {
-                    ZStack {
-                        Circle().stroke(Color(white: 0.85), lineWidth: 4).frame(width: 84, height: 84)
-                        Circle().fill(Color(white: 0.92)).frame(width: 70, height: 70)
+                Button { camera.shoot() } label: { EmptyView() }
+                    .buttonStyle(ShutterButtonStyle(finish: finish))
+                    .disabled(camera.status != .running)
+                    // Long-press the shutter to change its finish (and the app's accent).
+                    .contextMenu {
+                        Section("Shutter finish") {
+                            ForEach(ShutterFinish.allCases) { option in
+                                Button {
+                                    withAnimation(.easeInOut(duration: 0.25)) { finishRaw = option.rawValue }
+                                } label: {
+                                    if option == finish {
+                                        Label(option.name, systemImage: "checkmark")
+                                    } else {
+                                        Text(option.name)
+                                    }
+                                }
+                            }
+                        }
                     }
-                }
-                .buttonStyle(ShutterButtonStyle())
-                .disabled(camera.status != .running)
+                    .sensoryFeedback(.selection, trigger: finishRaw)
+                    .accessibilityLabel("Shutter")
+                    .accessibilityHint("Long press to change the shutter finish")
             }
 
             Spacer()
@@ -341,11 +360,106 @@ struct ContentView: View {
     }
 }
 
+/// Shutter release sunk into the body, in the chosen anodised finish (copper by default).
+/// Lit from above like the rest of the app,
+/// so the hole is dark under its top lip and light on its bottom lip, and the lip's
+/// shadow falls across the top of the button. Anodised, not glossy: matte flat face,
+/// fine grain, a small bevel, faint lathe rings in the bore.
 private struct ShutterButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    let finish: ShutterFinish
+
+    /// Fixed speckle pattern for the anodised face (same every launch, so it never shimmers).
+    private static let grain: [(x: CGFloat, y: CGFloat, r: CGFloat, light: Bool, alpha: Double)] = {
+        var seed: UInt64 = 0x5EED
+        func next() -> Double {
+            seed = seed &* 6364136223846793005 &+ 1442695040888963407
+            return Double(seed >> 11) / Double(1 << 53)
+        }
+        return (0..<700).map { _ in
+            (CGFloat(next()), CGFloat(next()), CGFloat(0.25 + next() * 0.35), next() < 0.5, 0.05 + next() * 0.08)
+        }
+    }()
+
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.92 : 1)
-            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+        let pressed = configuration.isPressed
+        return ZStack {
+            bore.frame(width: 67, height: 67)
+
+            button(pressed: pressed)
+                .frame(width: 60, height: 60)
+                .brightness(pressed ? -0.05 : 0)
+                .scaleEffect(pressed ? 0.97 : 1)
+        }
+        .saturation(isEnabled ? 1 : 0.2)
+        .opacity(isEnabled ? 1 : 0.6)
+        .contentShape(Circle())
+        .animation(.easeOut(duration: 0.08), value: pressed)
+    }
+
+    /// The hole cut into the body: concave, so darker at the top and lighter at the bottom.
+    private var bore: some View {
+        Circle()
+            .fill(LinearGradient(colors: [Color(white: 0.03), Color(white: 0.09)],
+                                 startPoint: .top, endPoint: .bottom))
+            .overlay(
+                Canvas { ctx, size in
+                    let centre = CGPoint(x: size.width / 2, y: size.height / 2)
+                    var radius: CGFloat = 30.5
+                    var i = 0
+                    while radius < size.width / 2 - 1 {
+                        let ring = Path(ellipseIn: CGRect(x: centre.x - radius, y: centre.y - radius,
+                                                          width: radius * 2, height: radius * 2))
+                        ctx.stroke(ring, with: .color(.white.opacity(i % 3 == 0 ? 0.03 : 0.015)), lineWidth: 0.5)
+                        radius += 0.9
+                        i += 1
+                    }
+                }
+            )
+            // Shadow thrown into the hole by the upper lip.
+            .overlay(
+                Circle()
+                    .stroke(Color.black.opacity(0.85), lineWidth: 3)
+                    .blur(radius: 1.5)
+                    .offset(y: 1.5)
+                    .clipShape(Circle())
+            )
+            // Only the lower lip faces the light.
+            .overlay(
+                Circle().strokeBorder(
+                    LinearGradient(colors: [.clear, .clear, Color.white.opacity(0.18)],
+                                   startPoint: .top, endPoint: .bottom),
+                    lineWidth: 0.6)
+            )
+    }
+
+    /// Flat matte anodised face with fine grain, a small bevel, and the lip's shadow across
+    /// its top (deeper while pressed, as it sinks further).
+    private func button(pressed: Bool) -> some View {
+        Circle()
+            .fill(LinearGradient(colors: [finish.palette.faceTop, finish.palette.faceBottom],
+                                 startPoint: .top, endPoint: .bottom))
+            .overlay(
+                Canvas { ctx, size in
+                    for g in Self.grain {
+                        let p = CGRect(x: g.x * size.width, y: g.y * size.height, width: g.r * 2, height: g.r * 2)
+                        ctx.fill(Path(ellipseIn: p),
+                                 with: .color((g.light ? Color.white : Color.black).opacity(g.alpha)))
+                    }
+                }
+                .clipShape(Circle())
+            )
+            .overlay(
+                Circle().strokeBorder(
+                    LinearGradient(colors: [finish.palette.bevelLight.opacity(0.6), .clear, finish.palette.bevelDark.opacity(0.9)],
+                                   startPoint: .top, endPoint: .bottom),
+                    lineWidth: 1.2)
+            )
+            .overlay(
+                Circle().fill(
+                    LinearGradient(colors: [Color.black.opacity(pressed ? 0.6 : 0.45), .clear],
+                                   startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.45)))
+            )
     }
 }
 
