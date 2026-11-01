@@ -452,7 +452,11 @@ struct ContentView: View {
                                     proxy.scrollTo(stock.id, anchor: .center)
                                 }
                             }
-                            .contextMenu { filmMenu(stock) }
+                            // Own preview: lifting the card itself would keep the
+                            // scrolling strip's clipping and cut the card off.
+                            .filmContextMenu(enabled: camera.library.isEdited(id: stock.id) || stock.isCustom,
+                                             menu: { filmMenu(stock) },
+                                             preview: { canister(stock) })
                     }
                 }
                 .padding(.horizontal, 2)
@@ -724,6 +728,20 @@ private extension FilmStock {
         case "sepia": return "SEPIA"
         case "lith": return "LITH"
         default: return String(name.split(separator: " ").first ?? "")
+        }
+    }
+}
+
+private extension View {
+    /// A long-press menu with a custom preview, only on films that have menu items.
+    @ViewBuilder
+    func filmContextMenu<M: View, P: View>(enabled: Bool,
+                                           @ViewBuilder menu: () -> M,
+                                           @ViewBuilder preview: () -> P) -> some View {
+        if enabled {
+            contextMenu(menuItems: menu, preview: preview)
+        } else {
+            self
         }
     }
 }
