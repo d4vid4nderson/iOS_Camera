@@ -53,6 +53,39 @@ enum ShutterFinish: String, CaseIterable, Identifiable {
     }
 }
 
+extension ShutterFinish {
+    /// A small picture of this finish's shutter face for menus: the face gradient with
+    /// its bevel. Rendered as an original-colour image, because menus otherwise tint
+    /// icons a single flat colour.
+    var swatch: UIImage {
+        let size = CGSize(width: 24, height: 24)
+        let p = palette
+        let image = UIGraphicsImageRenderer(size: size).image { ctx in
+            let cg = ctx.cgContext
+            let face = CGRect(origin: .zero, size: size).insetBy(dx: 2, dy: 2)
+            // Dark well around the face, like the shutter's recess.
+            UIColor(white: 0.04, alpha: 1).setFill()
+            UIBezierPath(ovalIn: CGRect(origin: .zero, size: size).insetBy(dx: 0.5, dy: 0.5)).fill()
+            // Face: top-to-bottom gradient.
+            cg.saveGState()
+            UIBezierPath(ovalIn: face).addClip()
+            let colors = [UIColor(p.faceTop).cgColor, UIColor(p.faceBottom).cgColor] as CFArray
+            if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 1]) {
+                cg.drawLinearGradient(gradient, start: CGPoint(x: face.midX, y: face.minY),
+                                      end: CGPoint(x: face.midX, y: face.maxY), options: [])
+            }
+            cg.restoreGState()
+            // Bevel: light along the top edge.
+            let rim = UIBezierPath(arcCenter: CGPoint(x: face.midX, y: face.midY), radius: face.width / 2 - 0.6,
+                                   startAngle: .pi * 1.1, endAngle: .pi * 1.9, clockwise: true)
+            rim.lineWidth = 1
+            UIColor(p.bevelLight).withAlphaComponent(0.7).setStroke()
+            rim.stroke()
+        }
+        return image.withRenderingMode(.alwaysOriginal)
+    }
+}
+
 private func rgb(_ r: Double, _ g: Double, _ b: Double) -> Color {
     Color(red: r, green: g, blue: b)
 }

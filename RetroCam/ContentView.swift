@@ -311,19 +311,19 @@ struct ContentView: View {
                     .disabled(camera.status != .running)
                     // Long-press the shutter to change its finish (and the app's accent).
                     .contextMenu {
-                        Section("Shutter finish") {
+                        // Inline picker: iOS draws the checkmark on the current finish;
+                        // each row shows a swatch of that finish's shutter face.
+                        Picker("Shutter finish", selection: $finishRaw) {
                             ForEach(ShutterFinish.allCases) { option in
-                                Button {
-                                    withAnimation(.easeInOut(duration: 0.25)) { finishRaw = option.rawValue }
-                                } label: {
-                                    if option == finish {
-                                        Label(option.name, systemImage: "checkmark")
-                                    } else {
-                                        Text(option.name)
-                                    }
+                                Label {
+                                    Text(option.name)
+                                } icon: {
+                                    Image(uiImage: option.swatch)
                                 }
+                                .tag(option.rawValue)
                             }
                         }
+                        .pickerStyle(.inline)
                     }
                     .sensoryFeedback(.selection, trigger: finishRaw)
                     .accessibilityLabel("Shutter")
