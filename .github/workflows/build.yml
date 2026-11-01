@@ -1,0 +1,39 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    name: Compile (iOS, unsigned)
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 26
+        run: ci/select-xcode.sh
+
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project RetroCam.xcodeproj \
+            -scheme RetroCam \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            | tee build.log
+
+      - name: Show generated Info.plist
+        run: plutil -p build/DerivedData/Build/Products/Release-iphoneos/RetroCam.app/Info.plist
+
+      - name: Upload build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
