@@ -21,6 +21,11 @@ jobs:
           swiftc RetroCam/LensPlanner.swift ci/lens-tests/main.swift -o "$RUNNER_TEMP/lens-tests"
           "$RUNNER_TEMP/lens-tests"
 
+      - name: Film model tests
+        run: |
+          swiftc RetroCam/FilmStock.swift RetroCam/FilmLibrary.swift ci/film-tests/main.swift -o "$RUNNER_TEMP/film-tests"
+          "$RUNNER_TEMP/film-tests"
+
       - name: Build
         run: |
           set -o pipefail

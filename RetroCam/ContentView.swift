@@ -10,12 +10,13 @@ private let cameraBody = Color(white: 0.09)
 
 /// The settings that live behind the icon bar.
 private enum SettingPanel: String, Identifiable {
-    case film, lens, exposure, grain, border
+    case film, adjust, lens, exposure, grain, border
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .film: return "FILM"
+        case .adjust: return "ADJUST"
         case .lens: return "LENS"
         case .exposure: return "EXPOSURE"
         case .grain: return "GRAIN"
@@ -26,6 +27,7 @@ private enum SettingPanel: String, Identifiable {
     var symbol: String {
         switch self {
         case .film: return "film"
+        case .adjust: return "slider.horizontal.3"
         case .lens: return "camera.aperture"
         case .exposure: return "plusminus.circle"
         case .grain: return "aqi.medium"
@@ -42,6 +44,11 @@ struct ContentView: View {
     /// The settings panel floating over the bottom of the viewfinder, if any.
     /// It overlays the viewfinder, so opening it never moves the viewfinder or the shutter.
     @State private var openPanel: SettingPanel?
+    /// Which setting the ADJUST panel's dial is editing.
+    @State private var adjusting: AdjustParam = .contrast
+    /// Saving or renaming a film: the name field's alert.
+    @State private var naming: FilmNaming?
+    @State private var filmName = ""
     @AppStorage(ShutterFinish.storageKey) private var finishRaw = ShutterFinish.copper.rawValue
 
     private var finish: ShutterFinish { ShutterFinish(rawValue: finishRaw) ?? .copper }
@@ -85,6 +92,23 @@ struct ContentView: View {
         .sensoryFeedback(.impact(weight: .medium), trigger: camera.framesShot)
         .sheet(isPresented: $showingPrint) {
             if let print = camera.lastPrint { PrintView(image: print) }
+        }
+        .alert(naming?.title ?? "", isPresented: Binding(
+            get: { naming != nil }, set: { if !$0 { naming = nil } })) {
+            TextField("Film name", text: $filmName)
+                .textInputAutocapitalization(.characters)
+                .autocorrectionDisabled()
+            Button(naming?.action ?? "Save") {
+                switch naming {
+                case .saveNew: camera.saveFilm(named: filmName)
+                case .rename(let id): camera.renameFilm(id: id, to: filmName)
+                case nil: break
+                }
+                naming = nil
+            }
+            Button("Cancel", role: .cancel) { naming = nil }
+        } message: {
+            Text(naming?.message ?? "")
         }
     }
 
@@ -193,6 +217,8 @@ struct ContentView: View {
     private var iconBar: some View {
         HStack(spacing: 4) {
             barItem(.film, value: camera.stock.shortName)
+            barItem(.adjust, value: camera.isFilmEdited ? "EDITED" : "EDIT",
+                    highlighted: camera.isFilmEdited)
             if camera.lenses.count > 1 {
                 barItem(.lens, value: camera.lens.map { "\($0.focalLength)" } ?? "—")
             }
@@ -254,6 +280,7 @@ struct ContentView: View {
 
             switch panel {
             case .film: stockPicker
+            case .adjust: adjustPanel
             case .lens: lensPicker
             case .exposure:
                 ScrubDial(value: Double(camera.exposureBias), range: -2...2, step: 1.0 / 3,
@@ -278,6 +305,7 @@ struct ContentView: View {
     private func panelValue(_ panel: SettingPanel) -> String {
         switch panel {
         case .film: return "ISO \(camera.stock.iso)"
+        case .adjust: return camera.stock.name + (camera.isFilmEdited ? " · EDITED" : "")
         case .lens: return camera.lens.map { $0.isNative ? $0.name : "\($0.name) CROP" } ?? ""
         case .exposure: return exposureText + " EV"
         case .grain: return grainText
@@ -415,15 +443,16 @@ struct ContentView: View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    ForEach(FilmStock.all) { stock in
+                    ForEach(camera.library.all) { stock in
                         canister(stock)
                             .id(stock.id)
                             .onTapGesture {
                                 withAnimation(.snappy) {
-                                    camera.stock = stock
+                                    camera.selectFilm(id: stock.id)
                                     proxy.scrollTo(stock.id, anchor: .center)
                                 }
                             }
+                            .contextMenu { filmMenu(stock) }
                     }
                 }
                 .padding(.horizontal, 2)
@@ -434,9 +463,19 @@ struct ContentView: View {
     }
 
     private func canister(_ stock: FilmStock) -> some View {
-        let selected = stock == camera.stock
+        let selected = stock.id == camera.stock.id
+        let edited = camera.library.isEdited(id: stock.id)
         return VStack(alignment: .leading, spacing: 3) {
-            Text(stock.name).font(.mono(11, .bold))
+            HStack(spacing: 5) {
+                if stock.isCustom {
+                    Image(systemName: "person.crop.square").font(.system(size: 9, weight: .bold))
+                }
+                Text(stock.name).font(.mono(11, .bold)).lineLimit(1)
+                if edited {
+                    Circle().fill(accent).frame(width: 5, height: 5)
+                        .accessibilityLabel("Edited")
+                }
+            }
             Text(stock.blurb).font(.mono(9)).foregroundStyle(.secondary).lineLimit(1)
         }
         .padding(.horizontal, 12)
@@ -452,6 +491,141 @@ struct ContentView: View {
         )
         .foregroundStyle(selected ? accent : .white)
         .accessibilityAddTraits(.isButton)
+    }
+
+    /// Long-press menu on a film card.
+    @ViewBuilder
+    private func filmMenu(_ stock: FilmStock) -> some View {
+        if camera.library.isEdited(id: stock.id) {
+            Button {
+                camera.selectFilm(id: stock.id)
+                camera.resetFilm()
+            } label: { Label("Reset adjustments", systemImage: "arrow.uturn.backward") }
+        }
+        if stock.isCustom {
+            Button {
+                filmName = stock.name
+                naming = .rename(stock.id)
+            } label: { Label("Rename", systemImage: "pencil") }
+            Button(role: .destructive) {
+                camera.deleteFilm(id: stock.id)
+            } label: { Label("Delete", systemImage: "trash") }
+        }
+    }
+
+    // MARK: Adjust panel: per-film contrast, curve, tone, lens character
+
+    private var adjustPanel: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(AdjustParam.allCases) { param in
+                            smallChip(param.title, selected: param == adjusting) {
+                                withAnimation(.snappy(duration: 0.2)) { adjusting = param }
+                            }
+                            .id(param)
+                        }
+                    }
+                    .padding(.horizontal, 2)
+                }
+                .onAppear { proxy.scrollTo(adjusting, anchor: .center) }
+            }
+            .sensoryFeedback(.selection, trigger: adjusting)
+
+            adjustControl(adjusting)
+                .id(adjusting)
+                .frame(minHeight: 42)
+
+            HStack(spacing: 8) {
+                Text(adjustValueText(adjusting))
+                    .font(.mono(10, .bold)).foregroundStyle(accent)
+                    .contentTransition(.numericText())
+                Spacer(minLength: 0)
+                if camera.isFilmEdited {
+                    smallChip("RESET", selected: false) { camera.resetFilm() }
+                }
+                if camera.stock.isCustom {
+                    Menu {
+                        Button("Update \u{201C}\(camera.stock.name)\u{201D}") { camera.updateSavedFilm() }
+                            .disabled(!camera.isFilmEdited)
+                        Button("Save as new film\u{2026}") { beginSaving() }
+                    } label: { chipLabel("SAVE", selected: true) }
+                } else {
+                    smallChip("SAVE AS MY FILM", selected: true) { beginSaving() }
+                }
+            }
+        }
+    }
+
+    private func beginSaving() {
+        filmName = camera.stock.isCustom ? camera.stock.name : "MY " + camera.stock.shortName
+        naming = .saveNew
+    }
+
+    @ViewBuilder
+    private func adjustControl(_ param: AdjustParam) -> some View {
+        switch param {
+        case .filter:
+            chipRow(ColorFilter.allCases, label: \.label,
+                    selected: camera.stock.colorFilter) { filter in
+                camera.adjustFilm { $0.apply(filter) }
+            }
+        case .tone:
+            chipRow(Toning.allCases, label: \.label, selected: camera.stock.tone) { tone in
+                camera.adjustFilm {
+                    $0.tone = tone
+                    if tone != .neutral && $0.toneAmount < 0.05 { $0.toneAmount = 1 }
+                }
+            }
+        default:
+            if let path = param.keyPath {
+                ScrubDial(value: Double(camera.stock[keyPath: path]),
+                          range: param.range, step: param.step, majorEvery: param.majorEvery,
+                          accent: accent,
+                          label: { param.format($0) },
+                          spoken: { "\(param.title.capitalized) \(param.format($0))" },
+                          onChange: { v in camera.adjustFilm { $0[keyPath: path] = CGFloat(v) } })
+            }
+        }
+    }
+
+    private func adjustValueText(_ param: AdjustParam) -> String {
+        switch param {
+        case .filter: return "FILTER " + (camera.stock.colorFilter?.label ?? "CUSTOM")
+        case .tone: return "TONE " + camera.stock.tone.label
+        default:
+            guard let path = param.keyPath else { return "" }
+            return param.title + " " + param.format(Double(camera.stock[keyPath: path]))
+        }
+    }
+
+    private func chipRow<T: Identifiable & Equatable>(_ items: [T], label: KeyPath<T, String>, selected: T?,
+                                                    action: @escaping (T) -> Void) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(items) { item in
+                    smallChip(item[keyPath: label], selected: item == selected) { action(item) }
+                }
+            }
+            .padding(.horizontal, 2)
+            .padding(.vertical, 4)
+        }
+    }
+
+    private func smallChip(_ text: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) { chipLabel(text, selected: selected) }
+            .buttonStyle(.plain)
+    }
+
+    private func chipLabel(_ text: String, selected: Bool) -> some View {
+        Text(text)
+            .font(.mono(10, .bold))
+            .padding(.horizontal, 9)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(selected ? accent.opacity(0.18) : Color(white: 0.17)))
+            .overlay(Capsule().stroke(selected ? accent : .clear, lineWidth: 1))
+            .foregroundStyle(selected ? accent : .white)
     }
 
     // MARK: Shutter row
@@ -546,7 +720,116 @@ struct ContentView: View {
 private extension FilmStock {
     /// One word for the icon bar.
     var shortName: String {
-        id == "sepia" ? "SEPIA" : String(name.split(separator: " ").first ?? "")
+        switch id {
+        case "sepia": return "SEPIA"
+        case "lith": return "LITH"
+        default: return String(name.split(separator: " ").first ?? "")
+        }
+    }
+}
+
+/// The film settings the ADJUST panel edits, with each one's dial scale.
+private enum AdjustParam: String, CaseIterable, Identifiable {
+    case filter, contrast, key, fade, whites, tone, toneAmount, glow, grainSize, vignette, softness, fog
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .filter: return "FILTER"
+        case .contrast: return "CONTRAST"
+        case .key: return "KEY"
+        case .fade: return "FADE"
+        case .whites: return "WHITES"
+        case .tone: return "TONE"
+        case .toneAmount: return "TONE %"
+        case .glow: return "GLOW"
+        case .grainSize: return "GRAIN SIZE"
+        case .vignette: return "VIGNETTE"
+        case .softness: return "SOFTNESS"
+        case .fog: return "FOG"
+        }
+    }
+
+    var keyPath: WritableKeyPath<FilmStock, CGFloat>? {
+        switch self {
+        case .filter, .tone: return nil
+        case .contrast: return \.contrast
+        case .key: return \.key
+        case .fade: return \.blackLift
+        case .whites: return \.whitePoint
+        case .toneAmount: return \.toneAmount
+        case .glow: return \.bloom
+        case .grainSize: return \.grainSize
+        case .vignette: return \.vignette
+        case .softness: return \.edgeSoftness
+        case .fog: return \.fog
+        }
+    }
+
+    var range: ClosedRange<Double> {
+        switch self {
+        case .key: return -1...1
+        case .fade: return 0...0.25
+        case .whites: return 0.75...1
+        case .grainSize: return 0.6...3.0
+        case .vignette: return 0...1.2
+        default: return 0...1
+        }
+    }
+
+    var step: Double {
+        switch self {
+        case .key: return 0.1
+        case .fade, .whites: return 0.01
+        case .grainSize: return 0.1
+        default: return 0.05
+        }
+    }
+
+    var majorEvery: Int {
+        switch self {
+        case .key, .fade, .whites: return 5
+        default: return 4
+        }
+    }
+
+    /// How a value reads on the dial and in the panel.
+    func format(_ v: Double) -> String {
+        switch self {
+        case .key:
+            let n = Int((v * 10).rounded())
+            return n == 0 ? "0" : String(format: "%+d", n)
+        case .grainSize: return String(format: "%.1f", v)
+        default: return "\(Int((v * 100).rounded()))"
+        }
+    }
+}
+
+/// Naming a film in the alert: saving a new one or renaming one of the user's own.
+private enum FilmNaming: Equatable {
+    case saveNew
+    case rename(String)
+
+    var title: String {
+        switch self {
+        case .saveNew: return "Save as your film"
+        case .rename: return "Rename film"
+        }
+    }
+
+    var action: String {
+        switch self {
+        case .saveNew: return "Save"
+        case .rename: return "Rename"
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .saveNew: return "Keeps every setting, so you can load it again from the film picker."
+        case .rename: return ""
+        }
     }
 }
 

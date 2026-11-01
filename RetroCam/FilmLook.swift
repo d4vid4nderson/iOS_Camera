@@ -36,16 +36,23 @@ enum FilmLook {
         // 2. Work in gamma-encoded space for the tonal/print steps (curves behave like a darkroom).
         image = image.applyingFilter("CILinearToSRGBToneCurve")
 
-        // 3. Characteristic curve: S-curve for contrast, lifted blacks, dimmed whites.
+        // 3. Characteristic curve: S-curve for contrast, mid-tone key, lifted blacks, dimmed whites.
         image = toneCurve(image, stock: stock)
+
+        // 3a. Uneven chemical fog (old / expired film): soft blotches lifting the shadows.
+        if stock.fog > 0 {
+            image = addFog(to: image, amount: stock.fog)
+        }
 
         // 3b. Highlight glow (diffusion / halation-like bloom around bright areas).
         if stock.bloom > 0 {
             image = bloom(image, amount: stock.bloom)
         }
 
-        // 4. Paper toning.
-        image = tone(image, paper: stock.paper)
+        // 4. Print toning (split: separate ink, mid and paper colours).
+        if stock.toneAmount > 0, stock.tone != .neutral {
+            image = tone(image, toning: stock.tone, amount: stock.toneAmount)
+        }
 
         // 4b. Date back: exposed onto the film, so grain and vignette land on it too.
         if let stamp {
@@ -63,7 +70,7 @@ enum FilmLook {
             v.inputImage = image
             v.center = CGPoint(x: extent.midX, y: extent.midY)
             v.radius = Float(max(extent.width, extent.height) * 0.62)
-            v.intensity = Float(stock.vignette * 0.8)
+            v.intensity = Float(min(stock.vignette, 1.2) * 0.8)
             v.falloff = 0.6
             image = v.outputImage ?? image
         }
@@ -126,35 +133,80 @@ enum FilmLook {
         return screen.outputImage?.cropped(to: extent) ?? image
     }
 
-    private static func toneCurve(_ image: CIImage, stock: FilmStock) -> CIImage {
-        let c = stock.contrast
-        let lo = stock.blackLift
-        let hi = stock.whitePoint
+    /// Contrast is an S around the mid point; `key` slides the mid tones down (low key,
+    /// moody) or up (high key, airy) while black and white stay put.
+    static func curvePoints(contrast c: CGFloat, key k: CGFloat,
+                            blackLift lo: CGFloat, whitePoint hi: CGFloat) -> [CGPoint] {
         func y(_ v: CGFloat) -> CGFloat { lo + min(max(v, 0), 1) * (hi - lo) }
+        let key = min(max(k, -1), 1)
+        let mid = 0.5 + 0.2 * key
+        let q1 = min(max(0.25 - 0.13 * c + 0.16 * key, 0.02), mid - 0.02)
+        let q3 = max(min(0.75 + 0.13 * c + 0.12 * key, 0.98), mid + 0.02)
+        return [CGPoint(x: 0, y: y(0)), CGPoint(x: 0.25, y: y(q1)), CGPoint(x: 0.5, y: y(mid)),
+                CGPoint(x: 0.75, y: y(q3)), CGPoint(x: 1, y: y(1))]
+    }
 
+    private static func toneCurve(_ image: CIImage, stock: FilmStock) -> CIImage {
+        let p = curvePoints(contrast: stock.contrast, key: stock.key,
+                            blackLift: stock.blackLift, whitePoint: stock.whitePoint)
         let curve = CIFilter.toneCurve()
         curve.inputImage = image
-        curve.point0 = CGPoint(x: 0.0, y: y(0))
-        curve.point1 = CGPoint(x: 0.25, y: y(0.25 - 0.13 * c))
-        curve.point2 = CGPoint(x: 0.5, y: y(0.5))
-        curve.point3 = CGPoint(x: 0.75, y: y(0.75 + 0.13 * c))
-        curve.point4 = CGPoint(x: 1.0, y: y(1))
+        curve.point0 = p[0]
+        curve.point1 = p[1]
+        curve.point2 = p[2]
+        curve.point3 = p[3]
+        curve.point4 = p[4]
         return curve.outputImage ?? image
     }
 
-    private static func tone(_ image: CIImage, paper: FilmStock.PaperTone) -> CIImage {
-        let color: CIColor
-        let amount: Float
-        switch paper {
-        case .neutral: return image
-        case .warm: color = CIColor(red: 1.0, green: 0.86, blue: 0.66); amount = 0.75
-        case .cool: color = CIColor(red: 0.86, green: 0.93, blue: 1.0); amount = 0.6
-        }
-        let f = CIFilter.colorMonochrome()
-        f.inputImage = image
-        f.color = color
-        f.intensity = amount
-        return f.outputImage ?? image
+    /// Tone the grey print: each channel follows a quadratic through the toning's ink,
+    /// mid and paper colours (see `Toning.coefficients`).
+    private static func tone(_ image: CIImage, toning: Toning, amount: CGFloat) -> CIImage {
+        let k = toning.coefficients(amount: amount)
+        let poly = CIFilter.colorPolynomial()
+        poly.inputImage = image
+        poly.redCoefficients = CIVector(x: k.r.0, y: k.r.1, z: k.r.2, w: 0)
+        poly.greenCoefficients = CIVector(x: k.g.0, y: k.g.1, z: k.g.2, w: 0)
+        poly.blueCoefficients = CIVector(x: k.b.0, y: k.b.1, z: k.b.2, w: 0)
+        poly.alphaCoefficients = CIVector(x: 0, y: 1, z: 0, w: 0)
+        return poly.outputImage?.applyingFilter("CIColorClamp") ?? image
+    }
+
+    /// Large, soft blotches of fog laid over the print, strongest in the shadows (where
+    /// fog shows on a real negative-to-print chain). Fixed pattern, so the live view
+    /// doesn't flicker; scaled to the image so preview and print match.
+    private static func addFog(to image: CIImage, amount: CGFloat) -> CIImage {
+        let extent = image.extent
+        let longSide = max(extent.width, extent.height)
+        guard let random = CIFilter.randomGenerator().outputImage else { return image }
+        // Blur a 12 x 12 patch of noise while it's tiny (cheap), then stretch it over
+        // the frame: ~7 soft blotches across the long side.
+        let cells = longSide / 7
+        let patch = CGRect(x: 0, y: 0, width: 12, height: 12)
+        let blotches = random.settingAlphaOne(in: patch.insetBy(dx: -4, dy: -4))
+            .applyingGaussianBlur(sigma: 0.9)
+            .cropped(to: patch)
+            .transformed(by: CGAffineTransform(scaleX: cells, y: cells)
+                .concatenating(CGAffineTransform(translationX: extent.minX - cells, y: extent.minY - cells)))
+            .applyingGaussianBlur(sigma: Double(cells * 0.25))
+            .cropped(to: extent)
+
+        // Red channel of the noise (mean 0.5) -> fog 0 ... lift, with the blotches
+        // stretched (x4) so they read after the blur evened them out.
+        let lift = CGFloat(0.22) * min(max(amount, 0), 1)
+        let fog = CIFilter.colorMatrix()
+        fog.inputImage = blotches
+        let w = CIVector(x: lift * 4, y: 0, z: 0, w: 0)
+        fog.rVector = w; fog.gVector = w; fog.bVector = w
+        fog.aVector = CIVector(x: 0, y: 0, z: 0, w: 1)
+        fog.biasVector = CIVector(x: -lift * 1.5, y: -lift * 1.5, z: -lift * 1.5, w: 0)
+        guard let layer = fog.outputImage?.applyingFilter("CIColorClamp") else { return image }
+
+        // Screen: lifts shadows a lot, highlights hardly at all.
+        let screen = CIFilter.screenBlendMode()
+        screen.inputImage = layer
+        screen.backgroundImage = image
+        return screen.outputImage?.cropped(to: extent) ?? image
     }
 
     // MARK: - Grain
