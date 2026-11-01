@@ -58,11 +58,7 @@ enum Darkroom {
                                            parameters: [kCIInputScaleKey: scale, kCIInputAspectRatioKey: 1])
         }
 
-        var printed = FilmLook.apply(stock, to: source)
-        if let stampText {
-            printed = DateStamp.overlay(stampText, on: printed)
-        }
-        let developed = printed.settingProperties(metadata)
+        let developed = FilmLook.apply(stock, to: source, stamp: stampText).settingProperties(metadata)
 
         guard let sRGB = CGColorSpace(name: CGColorSpace.sRGB),
               let jpeg = context.jpegRepresentation(

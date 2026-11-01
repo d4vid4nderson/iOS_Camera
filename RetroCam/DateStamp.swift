@@ -1,4 +1,5 @@
 import CoreImage
+import CoreImage.CIFilterBuiltins
 import UIKit
 
 /// What the date back burns into the corner of the frame.
@@ -45,34 +46,58 @@ enum StampMode: String, CaseIterable {
     }
 }
 
-/// Orange seven-segment LED digits, like a 90s date-back camera, with a soft glow.
-/// Drawn by the app (no font needed) and composited onto the developed print.
+/// Seven-segment date-back digits, burned into the film the way a real date back did:
+/// a small light behind the film exposes the digits, so on the print they're soft,
+/// glowing, slightly uneven, and carry the same grain and vignette as the picture.
 enum DateStamp {
-    private static let ledColor = UIColor(red: 1.0, green: 0.50, blue: 0.12, alpha: 0.92)
     private static let cache = NSCache<NSString, CIImage>()
 
-    /// Burn `text` into the bottom-right corner of `image` (a linear-light print from FilmLook).
-    static func overlay(_ text: String, on image: CIImage) -> CIImage {
+    /// Burn `text` into the bottom-right corner of `image`.
+    /// Called by FilmLook in its gamma-encoded print stage, before grain and vignette.
+    static func burn(_ text: String, into image: CIImage) -> CIImage {
         let extent = image.extent
         let longSide = max(extent.width, extent.height)
         let height = (longSide * 0.032).rounded()
         let margin = longSide * 0.045
-        guard height >= 6, let stamp = stampImage(text, height: height) else { return image }
+        guard height >= 6, let glyphs = glyphMask(text, height: height) else { return image }
 
-        let placed = stamp.transformed(by: CGAffineTransform(
-            translationX: extent.maxX - margin - stamp.extent.width,
+        let placed = glyphs.transformed(by: CGAffineTransform(
+            translationX: extent.maxX - margin - glyphs.extent.width,
             y: extent.minY + margin))
-        let glow = placed
-            .applyingGaussianBlur(sigma: Double(height * 0.18))
-            .cropped(to: placed.extent.insetBy(dx: -height, dy: -height))
-        return placed.composited(over: glow.composited(over: image)).cropped(to: extent)
+
+        // Wide red halo (light scattering in the film base, slightly off-register),
+        // warm glow, then a softened orange core. Screened on like light, not pasted on.
+        let layers: [(blur: CGFloat, offset: CGFloat, r: CGFloat, g: CGFloat, b: CGFloat, strength: CGFloat)] = [
+            (0.45, 0.03, 1.0, 0.25, 0.05, 0.35),
+            (0.18, 0.00, 1.0, 0.42, 0.10, 0.55),
+            (0.06, 0.00, 1.0, 0.58, 0.22, 0.95),
+        ]
+        var out = image
+        for layer in layers {
+            let light = placed
+                .applyingGaussianBlur(sigma: Double(height * layer.blur))
+                .transformed(by: CGAffineTransform(translationX: -height * layer.offset, y: -height * layer.offset))
+            let tint = CIFilter.colorMatrix()
+            tint.inputImage = light
+            tint.rVector = CIVector(x: layer.r, y: 0, z: 0, w: 0)
+            tint.gVector = CIVector(x: 0, y: layer.g, z: 0, w: 0)
+            tint.bVector = CIVector(x: 0, y: 0, z: layer.b, w: 0)
+            tint.aVector = CIVector(x: 0, y: 0, z: 0, w: layer.strength)
+            let screen = CIFilter.screenBlendMode()
+            screen.inputImage = tint.outputImage
+            screen.backgroundImage = out
+            out = screen.outputImage ?? out
+        }
+        return out.cropped(to: extent)
     }
 
-    private static func stampImage(_ text: String, height: CGFloat) -> CIImage? {
+    /// White glyphs on transparent, each segment a slightly different strength.
+    /// No colour management: values go straight into FilmLook's encoded print stage.
+    private static func glyphMask(_ text: String, height: CGFloat) -> CIImage? {
         let key = "\(text)|\(Int(height))" as NSString
         if let cached = cache.object(forKey: key) { return cached }
         guard let cg = render(text, height: height) else { return nil }
-        let image = CIImage(cgImage: cg)
+        let image = CIImage(cgImage: cg, options: [.colorSpace: NSNull()])
         cache.setObject(image, forKey: key)
         return image
     }
@@ -112,9 +137,14 @@ enum DateStamp {
             cg.translateBy(x: pad, y: pad)
             // Lean right: top of each glyph shifted by `slant`.
             cg.concatenate(CGAffineTransform(a: 1, b: 0, c: -slant / h, d: 1, tx: slant, ty: 0))
-            ledColor.setFill()
 
+            // Worn LEDs: each segment 78-100% strength, same pattern every time.
+            var segmentIndex = 0
             func bar(_ rect: CGRect) {
+                let noise = (sin(Double(segmentIndex) * 12.9898) * 43758.5453)
+                let strength = 0.78 + 0.22 * (noise - noise.rounded(.down))
+                segmentIndex += 1
+                UIColor(white: 1, alpha: CGFloat(strength)).setFill()
                 UIBezierPath(roundedRect: rect, cornerRadius: thickness / 2).fill()
             }
 

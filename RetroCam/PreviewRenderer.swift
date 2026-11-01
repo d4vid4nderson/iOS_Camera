@@ -53,10 +53,7 @@ final class PreviewRenderer: NSObject, MTKViewDelegate {
             translationX: (target.width - image.extent.width) / 2 - image.extent.minX,
             y: (target.height - image.extent.height) / 2 - image.extent.minY))
         let bounds = CGRect(origin: .zero, size: target)
-        image = FilmLook.apply(stock, to: image.cropped(to: bounds))
-        if let text = stampMode.text(for: Date()) {
-            image = DateStamp.overlay(text, on: image)
-        }
+        image = FilmLook.apply(stock, to: image.cropped(to: bounds), stamp: stampMode.text(for: Date()))
 
         let destination = CIRenderDestination(
             width: Int(target.width),
