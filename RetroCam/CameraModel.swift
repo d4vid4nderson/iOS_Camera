@@ -4,6 +4,24 @@ import SwiftUI
 
 /// Owns the capture session. UI state is @Published and only touched on the main thread;
 /// session work happens on `sessionQueue`, frames arrive on `videoQueue`.
+/// Flash setting for the next shot.
+enum FlashSetting: String, CaseIterable {
+    case off, auto, on
+
+    var label: String { rawValue.uppercased() }
+    var mode: AVCaptureDevice.FlashMode {
+        switch self {
+        case .off: return .off
+        case .auto: return .auto
+        case .on: return .on
+        }
+    }
+    var next: FlashSetting {
+        let all = Self.allCases
+        return all[(all.firstIndex(of: self)! + 1) % all.count]
+    }
+}
+
 final class CameraModel: NSObject, ObservableObject {
     enum Status: Equatable {
         case starting
@@ -16,6 +34,8 @@ final class CameraModel: NSObject, ObservableObject {
     /// GRAIN control: multiplier on the film's own grain, in 25% clicks.
     static let grainLevels = stride(from: 0.0, through: 2.0, by: 0.25).map { $0 }
     private static let grainLevelKey = "grainLevel"
+    private static let flashKey = "flash"
+    private static let stampKey = "stamp"
     private static func lensKey(_ position: AVCaptureDevice.Position) -> String {
         position == .front ? "lensFocal.front" : "lensFocal.back"
     }
@@ -34,6 +54,19 @@ final class CameraModel: NSObject, ObservableObject {
         }
     }
     @Published private(set) var exposureBias: Float = 0
+    @Published private(set) var flash: FlashSetting =
+        FlashSetting(rawValue: UserDefaults.standard.string(forKey: CameraModel.flashKey) ?? "") ?? .off {
+        didSet { UserDefaults.standard.set(flash.rawValue, forKey: Self.flashKey) }
+    }
+    /// Whether the current camera has a flash (asked from the phone, per side).
+    @Published private(set) var flashAvailable = false
+    @Published private(set) var stampMode: StampMode =
+        StampMode(rawValue: UserDefaults.standard.string(forKey: CameraModel.stampKey) ?? "") ?? .date {
+        didSet {
+            UserDefaults.standard.set(stampMode.rawValue, forKey: Self.stampKey)
+            renderer.stampMode = stampMode
+        }
+    }
     /// Lenses this phone can offer for the current camera side (discovered at runtime).
     @Published private(set) var lenses: [LensOption] = []
     @Published private(set) var lens: LensOption?
@@ -67,6 +100,7 @@ final class CameraModel: NSObject, ObservableObject {
     override init() {
         super.init()
         renderer.stock = developedStock
+        renderer.stampMode = stampMode
     }
 
     // MARK: - Lifecycle
@@ -202,6 +236,9 @@ final class CameraModel: NSObject, ObservableObject {
         } catch {}
     }
 
+    func cycleFlash() { flash = flash.next }
+    func cycleStamp() { stampMode = stampMode.next }
+
     func selectLens(_ option: LensOption) {
         guard option != lens else { return }
         lens = option
@@ -220,6 +257,8 @@ final class CameraModel: NSObject, ObservableObject {
            }) {
             photoOutput.maxPhotoDimensions = largest
         }
+        let hasFlash = photoOutput.supportedFlashModes.contains(.on)
+        DispatchQueue.main.async { self.flashAvailable = hasFlash }
         guard let connection = videoOutput.connection(with: .video) else { return }
         if connection.isVideoRotationAngleSupported(90) { connection.videoRotationAngle = 90 }
         if connection.isVideoMirroringSupported {
@@ -307,6 +346,8 @@ final class CameraModel: NSObject, ObservableObject {
     func shoot() {
         guard status == .running, !rollFinished else { return }
         let stock = self.developedStock
+        let flashMode = flashAvailable ? flash.mode : .off
+        let stampText = stampMode.text(for: Date())
 
         framesShot += 1
         developing += 1
@@ -323,9 +364,19 @@ final class CameraModel: NSObject, ObservableObject {
             let settings = AVCapturePhotoSettings()
             settings.photoQualityPrioritization = .balanced
             settings.maxPhotoDimensions = self.photoOutput.maxPhotoDimensions
+            if flashMode != .off, self.photoOutput.supportedFlashModes.contains(flashMode) {
+                settings.flashMode = flashMode
+                // Flash shots stay at standard resolution: high-resolution capture and
+                // flash aren't guaranteed to combine on every camera.
+                if let standard = self.input?.device.activeFormat.supportedMaxPhotoDimensions
+                    .filter({ Int($0.width) * Int($0.height) <= 12_600_000 })
+                    .max(by: { Int($0.width) * Int($0.height) < Int($1.width) * Int($1.height) }) {
+                    settings.maxPhotoDimensions = standard
+                }
+            }
             let id = settings.uniqueID
 
-            let processor = PhotoCaptureProcessor(stock: stock) { [weak self] result in
+            let processor = PhotoCaptureProcessor(stock: stock, stampText: stampText) { [weak self] result in
                 guard let self else { return }
                 self.sessionQueue.async { self.inFlight[id] = nil }
                 DispatchQueue.main.async { self.finish(result) }
@@ -368,11 +419,13 @@ extension CameraModel: AVCaptureVideoDataOutputSampleBufferDelegate {
 
 private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelegate {
     private let stock: FilmStock
+    private let stampText: String?
     private let completion: (Result<Darkroom.Print, Error>) -> Void
     private var photoData: Data?
 
-    init(stock: FilmStock, completion: @escaping (Result<Darkroom.Print, Error>) -> Void) {
+    init(stock: FilmStock, stampText: String?, completion: @escaping (Result<Darkroom.Print, Error>) -> Void) {
         self.stock = stock
+        self.stampText = stampText
         self.completion = completion
     }
 
@@ -390,9 +443,10 @@ private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelega
             return
         }
         let stock = self.stock
+        let stampText = self.stampText
         let completion = self.completion
         DispatchQueue.global(qos: .userInitiated).async {
-            completion(Result { try Darkroom.develop(data, stock: stock) })
+            completion(Result { try Darkroom.develop(data, stock: stock, stampText: stampText) })
         }
     }
 }
