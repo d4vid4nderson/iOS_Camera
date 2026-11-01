@@ -53,11 +53,15 @@ struct ContentView: View {
             cameraBody.ignoresSafeArea()
 
             VStack(spacing: 12) {
+                // Spare height on tall phones goes above the camera body, not between
+                // the icon bar and the shutter: everything sits low, near the thumb,
+                // and the shutter stays close to the settings it works with.
+                Spacer(minLength: 0)
                 topPlate
                 viewfinder
                     .overlay { panelLayer }
                 iconBar
-                Spacer(minLength: 0)
+                Spacer(minLength: 4).frame(maxHeight: 24)
                 controls
             }
             .padding(.horizontal, 16)
