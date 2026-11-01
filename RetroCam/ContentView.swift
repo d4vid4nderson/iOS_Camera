@@ -6,8 +6,6 @@ private extension Font {
     }
 }
 
-/// The app's one accent: the same copper as the shutter (and the AccentColor asset).
-private let accent = Color(red: 0.92, green: 0.45, blue: 0.13)
 private let cameraBody = Color(white: 0.09)
 
 struct ContentView: View {
@@ -15,6 +13,11 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var focusPoint: CGPoint?
     @State private var showingPrint = false
+    @AppStorage(ShutterFinish.storageKey) private var finishRaw = ShutterFinish.copper.rawValue
+
+    private var finish: ShutterFinish { ShutterFinish(rawValue: finishRaw) ?? .copper }
+    /// The app's one accent: always the shutter's finish (copper by default).
+    private var accent: Color { finish.palette.accent }
 
     var body: some View {
         ZStack {
@@ -36,6 +39,7 @@ struct ContentView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .tint(accent)
         .statusBarHidden()
         .onAppear { camera.start() }
         .onChange(of: scenePhase) { _, phase in
@@ -299,8 +303,27 @@ struct ContentView: View {
                 }
             } else {
                 Button { camera.shoot() } label: { EmptyView() }
-                    .buttonStyle(ShutterButtonStyle())
-                .disabled(camera.status != .running)
+                    .buttonStyle(ShutterButtonStyle(finish: finish))
+                    .disabled(camera.status != .running)
+                    // Long-press the shutter to change its finish (and the app's accent).
+                    .contextMenu {
+                        Section("Shutter finish") {
+                            ForEach(ShutterFinish.allCases) { option in
+                                Button {
+                                    withAnimation(.easeInOut(duration: 0.25)) { finishRaw = option.rawValue }
+                                } label: {
+                                    if option == finish {
+                                        Label(option.name, systemImage: "checkmark")
+                                    } else {
+                                        Text(option.name)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .sensoryFeedback(.selection, trigger: finishRaw)
+                    .accessibilityLabel("Shutter")
+                    .accessibilityHint("Long press to change the shutter finish")
             }
 
             Spacer()
@@ -333,17 +356,14 @@ struct ContentView: View {
     }
 }
 
-/// Copper shutter release sunk into the body. Lit from above like the rest of the app,
+/// Shutter release sunk into the body, in the chosen anodised finish (copper by default).
+/// Lit from above like the rest of the app,
 /// so the hole is dark under its top lip and light on its bottom lip, and the lip's
 /// shadow falls across the top of the button. Anodised, not glossy: matte flat face,
 /// fine grain, a small bevel, faint lathe rings in the bore.
 private struct ShutterButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
-
-    private static let copperTop = Color(red: 0.92, green: 0.43, blue: 0.13)
-    private static let copperBottom = Color(red: 0.80, green: 0.37, blue: 0.11)
-    private static let bevelLight = Color(red: 1.00, green: 0.72, blue: 0.48)
-    private static let bevelDark = Color(red: 0.42, green: 0.17, blue: 0.04)
+    let finish: ShutterFinish
 
     /// Fixed speckle pattern for the anodised face (same every launch, so it never shimmers).
     private static let grain: [(x: CGFloat, y: CGFloat, r: CGFloat, light: Bool, alpha: Double)] = {
@@ -409,11 +429,11 @@ private struct ShutterButtonStyle: ButtonStyle {
             )
     }
 
-    /// Flat matte copper face with fine grain, a small bevel, and the lip's shadow across
+    /// Flat matte anodised face with fine grain, a small bevel, and the lip's shadow across
     /// its top (deeper while pressed, as it sinks further).
     private func button(pressed: Bool) -> some View {
         Circle()
-            .fill(LinearGradient(colors: [Self.copperTop, Self.copperBottom],
+            .fill(LinearGradient(colors: [finish.palette.faceTop, finish.palette.faceBottom],
                                  startPoint: .top, endPoint: .bottom))
             .overlay(
                 Canvas { ctx, size in
@@ -427,7 +447,7 @@ private struct ShutterButtonStyle: ButtonStyle {
             )
             .overlay(
                 Circle().strokeBorder(
-                    LinearGradient(colors: [Self.bevelLight.opacity(0.6), .clear, Self.bevelDark.opacity(0.9)],
+                    LinearGradient(colors: [finish.palette.bevelLight.opacity(0.6), .clear, finish.palette.bevelDark.opacity(0.9)],
                                    startPoint: .top, endPoint: .bottom),
                     lineWidth: 1.2)
             )
