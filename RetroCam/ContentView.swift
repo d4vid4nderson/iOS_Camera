@@ -22,6 +22,7 @@ struct ContentView: View {
             VStack(spacing: 14) {
                 topPlate
                 viewfinder
+                dials
                 stockPicker
                 controls
             }
@@ -69,16 +70,39 @@ struct ContentView: View {
 
             Spacer()
 
-            HStack(spacing: 8) {
-                dialButton("minus") { camera.nudgeExposure(by: -1 / 3) }
-                VStack(spacing: 2) {
-                    Text("EV").font(.mono(9)).foregroundStyle(.secondary)
-                    Text(String(format: "%+.1f", camera.exposureBias))
-                        .font(.mono(14, .bold)).foregroundStyle(amber)
-                        .frame(width: 44)
-                }
-                dialButton("plus") { camera.nudgeExposure(by: 1 / 3) }
+            // Balances the FRAME counter so the film name stays centred.
+            Color.clear.frame(width: 70, height: 1)
+        }
+    }
+
+    // MARK: Dials: exposure and grain
+
+    private var dials: some View {
+        HStack {
+            dial(label: "EV", value: String(format: "%+.1f", camera.exposureBias),
+                 minus: { camera.nudgeExposure(by: -1 / 3) },
+                 plus: { camera.nudgeExposure(by: 1 / 3) })
+            Spacer()
+            dial(label: "GRAIN",
+                 value: camera.grainLevel == 0 ? "OFF" : "\(Int((camera.grainLevel * 100).rounded()))%",
+                 minus: { camera.nudgeGrain(by: -1) },
+                 plus: { camera.nudgeGrain(by: 1) })
+        }
+        .padding(.horizontal, 4)
+    }
+
+    private func dial(label: String, value: String,
+                      minus: @escaping () -> Void, plus: @escaping () -> Void) -> some View {
+        HStack(spacing: 8) {
+            dialButton("minus", action: minus)
+            VStack(spacing: 2) {
+                Text(label).font(.mono(9)).foregroundStyle(.secondary)
+                Text(value)
+                    .font(.mono(14, .bold)).foregroundStyle(amber)
+                    .contentTransition(.numericText())
             }
+            .frame(width: 52)
+            dialButton("plus", action: plus)
         }
     }
 
