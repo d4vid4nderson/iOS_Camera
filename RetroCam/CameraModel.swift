@@ -32,7 +32,17 @@ final class CameraModel: NSObject, ObservableObject {
 
     static let rollLength = 36
     /// GRAIN control: multiplier on the film's own grain, in 25% clicks.
-    static let grainLevels = stride(from: 0.0, through: 2.0, by: 0.25).map { $0 }
+    /// GRAIN dial positions: 0% to 200% in 10% clicks. Snapped to 2 decimals so stored
+    /// values compare exactly.
+    static let grainLevels = (0...20).map { Double($0) / 10 }
+
+    /// How strongly a GRAIN dial position scales the film's grain. Grain reads much
+    /// stronger than its number suggests, so the response is gentle at the low end and
+    /// steepens: 75% gives a quarter of the film's base grain, 200% the full base grain.
+    static func grainResponse(_ level: Double) -> Double {
+        guard level > 0 else { return 0 }
+        return 0.25 * pow(level / 0.75, 1.413)
+    }
     private static let grainLevelKey = "grainLevel"
     private static let flashKey = "flash"
     private static let stampKey = "stamp"
@@ -119,7 +129,7 @@ final class CameraModel: NSObject, ObservableObject {
     var rollFinished: Bool { framesShot >= Self.rollLength }
 
     /// The selected film with the GRAIN setting applied; used for preview and capture alike.
-    var developedStock: FilmStock { stock.withGrain(scaledBy: grainLevel) }
+    var developedStock: FilmStock { stock.withGrain(scaledBy: Self.grainResponse(grainLevel)) }
 
     let renderer = PreviewRenderer()
 
