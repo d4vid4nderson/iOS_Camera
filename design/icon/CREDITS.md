@@ -13,11 +13,13 @@ What that means for this app:
   App Store description.
 - **Non-commercial:** the icon may only ship in a build that is not sold and
   has no ads or in-app purchases. Ask the author before any commercial release.
-- **No derivatives:** the artwork is used unaltered. The only changes are
-  technical ones needed for the format: the 256 px icon was cut out of the
-  author's 640 x 360 presentation image (its sharpest copy), scaled to 1024 px
-  with light sharpening, and saved as an opaque square, because the App Store
-  requires a 1024 px opaque icon. iOS applies its own corner mask.
+- **No derivatives:** nothing in the artwork is repainted or recoloured. To fit
+  the iOS icon format, the 256 px icon was cut out of the author's 640 x 360
+  presentation image (its sharpest copy), cropped inside its chrome rim, the dark groove and the shaded band along each edge (x 17-235, y 19-237 of the 256 px icon), so the edges match the corners iOS cuts away
+  so the black leather runs to the edge (iOS clips every icon to a rounder
+  corner than this 2011 artwork has, which otherwise cut the rim off at the
+  corners), and scaled to 1024 px with light sharpening. Cropping is still a
+  change to the artwork; ask the author before any public release.
 
 The author's download (`iphone_replacement_icon_camera_by_hehedavid_d3a2hrf.zip`)
 contained only the two files kept here as originals:
