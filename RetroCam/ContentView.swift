@@ -332,51 +332,106 @@ struct ContentView: View {
     }
 }
 
-/// Copper shutter release recessed in a dark machined collar.
+/// Copper shutter release recessed in a dark machined collar. Modelled on anodised
+/// metal rather than glossy plastic: matte flat face, fine grain, a bevel that catches
+/// light at the top edge, and faint lathe rings in the collar.
 private struct ShutterButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
 
-    private static let copperHighlight = Color(red: 1.00, green: 0.66, blue: 0.36)
-    private static let copper = Color(red: 0.92, green: 0.45, blue: 0.13)
-    private static let copperShadow = Color(red: 0.58, green: 0.24, blue: 0.05)
+    private static let copperTop = Color(red: 0.92, green: 0.43, blue: 0.13)
+    private static let copperBottom = Color(red: 0.80, green: 0.37, blue: 0.11)
+    private static let bevelLight = Color(red: 1.00, green: 0.72, blue: 0.48)
+    private static let bevelDark = Color(red: 0.42, green: 0.17, blue: 0.04)
+
+    /// Fixed speckle pattern for the anodised face (same every launch, so it never shimmers).
+    private static let grain: [(x: CGFloat, y: CGFloat, r: CGFloat, light: Bool, alpha: Double)] = {
+        var seed: UInt64 = 0x5EED
+        func next() -> Double {
+            seed = seed &* 6364136223846793005 &+ 1442695040888963407
+            return Double(seed >> 11) / Double(1 << 53)
+        }
+        return (0..<700).map { _ in
+            (CGFloat(next()), CGFloat(next()), CGFloat(0.25 + next() * 0.35), next() < 0.5, 0.05 + next() * 0.08)
+        }
+    }()
 
     func makeBody(configuration: Configuration) -> some View {
         let pressed = configuration.isPressed
         return ZStack {
-            // Collar: dark graphite, lit from above, thin bright rim.
-            Circle()
-                .fill(LinearGradient(colors: [Color(white: 0.17), Color(white: 0.04)],
-                                     startPoint: .top, endPoint: .bottom))
-                .overlay(Circle().stroke(Color(white: 0.24), lineWidth: 1))
-                .frame(width: 88, height: 88)
+            collar.frame(width: 88, height: 88)
 
-            // Recess the button sits in, with an inner shadow.
+            // Well the button sits in, with a soft contact shadow.
             Circle()
-                .fill(Color.black)
+                .fill(Color(white: 0.02))
                 .overlay(
                     Circle()
                         .stroke(Color.black, lineWidth: 4)
-                        .blur(radius: 3)
-                        .offset(y: 1.5)
+                        .blur(radius: 2.5)
+                        .offset(y: 1)
                         .clipShape(Circle())
                 )
-                .frame(width: 70, height: 70)
+                .frame(width: 69, height: 69)
 
-            // The button: satin copper, light from the upper left.
-            Circle()
-                .fill(RadialGradient(colors: [Self.copperHighlight, Self.copper, Self.copperShadow],
-                                     center: UnitPoint(x: 0.35, y: 0.28),
-                                     startRadius: 2, endRadius: 42))
-                .overlay(Circle().stroke(Color.white.opacity(0.22), lineWidth: 0.8).blendMode(.overlay))
+            button
                 .frame(width: 60, height: 60)
-                .shadow(color: .black.opacity(pressed ? 0.3 : 0.7), radius: pressed ? 1 : 3, y: pressed ? 0.5 : 2)
-                .brightness(pressed ? -0.08 : 0)
-                .scaleEffect(pressed ? 0.94 : 1)
+                .shadow(color: .black.opacity(pressed ? 0.35 : 0.6), radius: pressed ? 0.8 : 2, y: pressed ? 0.3 : 1.2)
+                .brightness(pressed ? -0.06 : 0)
+                .scaleEffect(pressed ? 0.96 : 1)
         }
         .saturation(isEnabled ? 1 : 0.2)
         .opacity(isEnabled ? 1 : 0.6)
         .contentShape(Circle())
         .animation(.easeOut(duration: 0.08), value: pressed)
+    }
+
+    /// Matte black anodised collar: faint lathe rings, chamfered outer edge.
+    private var collar: some View {
+        Circle()
+            .fill(LinearGradient(colors: [Color(white: 0.105), Color(white: 0.045)],
+                                 startPoint: .top, endPoint: .bottom))
+            .overlay(
+                Canvas { ctx, size in
+                    let centre = CGPoint(x: size.width / 2, y: size.height / 2)
+                    var radius: CGFloat = 35
+                    var i = 0
+                    while radius < size.width / 2 - 1 {
+                        let ring = Path(ellipseIn: CGRect(x: centre.x - radius, y: centre.y - radius,
+                                                          width: radius * 2, height: radius * 2))
+                        ctx.stroke(ring, with: .color(.white.opacity(i % 3 == 0 ? 0.045 : 0.02)), lineWidth: 0.5)
+                        radius += 0.9
+                        i += 1
+                    }
+                }
+            )
+            .overlay(
+                Circle().strokeBorder(
+                    LinearGradient(colors: [Color(white: 0.30), Color(white: 0.12), Color(white: 0.02)],
+                                   startPoint: .top, endPoint: .bottom),
+                    lineWidth: 1.2)
+            )
+    }
+
+    /// Flat matte copper face with fine grain and a bevelled edge.
+    private var button: some View {
+        Circle()
+            .fill(LinearGradient(colors: [Self.copperTop, Self.copperBottom],
+                                 startPoint: .top, endPoint: .bottom))
+            .overlay(
+                Canvas { ctx, size in
+                    for g in Self.grain {
+                        let p = CGRect(x: g.x * size.width, y: g.y * size.height, width: g.r * 2, height: g.r * 2)
+                        ctx.fill(Path(ellipseIn: p),
+                                 with: .color((g.light ? Color.white : Color.black).opacity(g.alpha)))
+                    }
+                }
+                .clipShape(Circle())
+            )
+            .overlay(
+                Circle().strokeBorder(
+                    LinearGradient(colors: [Self.bevelLight.opacity(0.9), .clear, Self.bevelDark.opacity(0.9)],
+                                   startPoint: .top, endPoint: .bottom),
+                    lineWidth: 1.4)
+            )
     }
 }
 
