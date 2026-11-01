@@ -36,6 +36,13 @@ struct FilmStock: Identifiable, Hashable {
     let vignette: CGFloat
 
     let paper: PaperTone
+
+    /// Glow around bright areas, 0...1 (diffusion / halation-like).
+    var bloom: CGFloat = 0
+    /// Lens softness toward the corners, 0...1.
+    var edgeSoftness: CGFloat = 0
+    /// Exposure push in stops, applied before the film (pushed-processing look).
+    var exposure: CGFloat = 0
 }
 
 extension FilmStock {
@@ -87,6 +94,46 @@ extension FilmStock {
         grain: 0.28, grainSize: 1.5,
         vignette: 0.6, paper: .warm)
 
+    // Tuned against measured tones of reference B&W film looks (Nov 2026):
+    // faded vs crushed blacks, whites capped short of paper white, highlight glow,
+    // softer corners.
+
+    static let steel400 = FilmStock(
+        id: "steel400", name: "STEEL 400", iso: 400,
+        blurb: "Faded blacks, rich mids, glowing lights",
+        red: 0.30, green: 0.55, blue: 0.15,
+        contrast: 0.45, blackLift: 0.05, whitePoint: 0.95,
+        grain: 0.35, grainSize: 1.3,
+        vignette: 0.4, paper: .neutral,
+        bloom: 0.35, edgeSoftness: 0.2)
+
+    static let satin400 = FilmStock(
+        id: "satin400", name: "SATIN 400", iso: 400,
+        blurb: "Deep blacks, punchy, fine smooth grain",
+        red: 0.32, green: 0.53, blue: 0.15,
+        contrast: 0.60, blackLift: 0.02, whitePoint: 0.96,
+        grain: 0.20, grainSize: 1.0,
+        vignette: 0.3, paper: .neutral,
+        bloom: 0.15, edgeSoftness: 0.1)
+
+    static let press400 = FilmStock(
+        id: "press400", name: "PRESS 400", iso: 400,
+        blurb: "Pushed hard: crushed blacks, blown highs",
+        red: 0.34, green: 0.48, blue: 0.18,
+        contrast: 0.85, blackLift: 0.0, whitePoint: 0.96,
+        grain: 0.55, grainSize: 1.8,
+        vignette: 0.6, paper: .neutral,
+        bloom: 0.4, edgeSoftness: 0.5, exposure: 0.4)
+
+    static let frost400 = FilmStock(
+        id: "frost400", name: "FROST 400", iso: 400,
+        blurb: "Hazy and airy, soft-cornered lens",
+        red: 0.30, green: 0.56, blue: 0.14,
+        contrast: 0.30, blackLift: 0.06, whitePoint: 1.0,
+        grain: 0.40, grainSize: 1.6,
+        vignette: 0.5, paper: .neutral,
+        bloom: 0.5, edgeSoftness: 0.6, exposure: 0.2)
+
     /// This stock with its grain scaled by the user's GRAIN setting (0 = off).
     func withGrain(scaledBy factor: Double) -> FilmStock {
         var copy = self
@@ -94,5 +141,6 @@ extension FilmStock {
         return copy
     }
 
-    static let all: [FilmStock] = [.pan50, .classic400, .push3200, .redFilter, .ortho, .sepia]
+    static let all: [FilmStock] = [.pan50, .classic400, .steel400, .satin400, .press400, .frost400,
+                                   .push3200, .redFilter, .ortho, .sepia]
 }
