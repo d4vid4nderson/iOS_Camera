@@ -55,13 +55,7 @@ struct ContentView: View {
             VStack(spacing: 12) {
                 topPlate
                 viewfinder
-                    .overlay(alignment: .bottom) {
-                        if let panel = openPanel {
-                            panelView(panel)
-                                .padding(8)
-                                .transition(.opacity.combined(with: .offset(y: 14)))
-                        }
-                    }
+                    .overlay { panelLayer }
                 iconBar
                 Spacer(minLength: 0)
                 controls
@@ -87,6 +81,30 @@ struct ContentView: View {
         .sensoryFeedback(.impact(weight: .medium), trigger: camera.framesShot)
         .sheet(isPresented: $showingPrint) {
             if let print = camera.lastPrint { PrintView(image: print) }
+        }
+    }
+
+    /// The open settings panel, laid over the viewfinder along whichever edge is "down"
+    /// for the person holding the phone: the bottom when upright, the side when it's
+    /// turned. The panel is built in a box the shape of the viewfinder *as they see it*
+    /// (width and height swapped when sideways) and the box is turned to match, so the
+    /// panel reads level and scrubs/scrolls along their horizontal.
+    private var panelLayer: some View {
+        GeometryReader { geo in
+            let sideways = abs(camera.uiRotation) == 90
+            let box = sideways ? CGSize(width: geo.size.height, height: geo.size.width) : geo.size
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                if let panel = openPanel {
+                    panelView(panel)
+                        .padding(8)
+                        .transition(.opacity.combined(with: .offset(y: 14)))
+                }
+            }
+            .frame(width: box.width, height: box.height)
+            .rotationEffect(.degrees(camera.uiRotation))
+            .frame(width: geo.size.width, height: geo.size.height)
+            .animation(.snappy(duration: 0.3), value: camera.uiRotation)
         }
     }
 
@@ -494,6 +512,7 @@ struct ContentView: View {
                 .font(.mono(12))
                 .padding(.horizontal, 14).padding(.vertical, 10)
                 .background(Capsule().fill(Color(white: 0.2)))
+                .rotationEffect(.degrees(camera.uiRotation))
                 .padding(.bottom, 140)
         }
         .transition(.opacity)
