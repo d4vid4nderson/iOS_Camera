@@ -29,7 +29,7 @@ struct FilmStock: Identifiable, Hashable {
     let whitePoint: CGFloat
 
     /// Grain strength 0...1 and clump size (1 = fine).
-    let grain: CGFloat
+    var grain: CGFloat
     let grainSize: CGFloat
 
     /// Lens vignette strength 0...1.
@@ -86,6 +86,13 @@ extension FilmStock {
         contrast: 0.20, blackLift: 0.06, whitePoint: 0.94,
         grain: 0.28, grainSize: 1.5,
         vignette: 0.6, paper: .warm)
+
+    /// This stock with its grain scaled by the user's GRAIN setting (0 = off).
+    func withGrain(scaledBy factor: Double) -> FilmStock {
+        var copy = self
+        copy.grain = grain * CGFloat(factor)
+        return copy
+    }
 
     static let all: [FilmStock] = [.pan50, .classic400, .push3200, .redFilter, .ortho, .sepia]
 }

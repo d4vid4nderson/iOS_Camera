@@ -13,10 +13,22 @@ final class CameraModel: NSObject, ObservableObject {
     }
 
     static let rollLength = 36
+    /// GRAIN control: multiplier on the film's own grain, in 25% clicks.
+    static let grainLevels = stride(from: 0.0, through: 2.0, by: 0.25).map { $0 }
+    private static let grainLevelKey = "grainLevel"
 
     @Published private(set) var status: Status = .starting
     @Published var stock: FilmStock = .classic400 {
-        didSet { renderer.stock = stock }
+        didSet { renderer.stock = developedStock }
+    }
+    @Published private(set) var grainLevel: Double = {
+        let saved = UserDefaults.standard.object(forKey: CameraModel.grainLevelKey) as? Double
+        return saved.map { min(max($0, 0), 2) } ?? 1
+    }() {
+        didSet {
+            UserDefaults.standard.set(grainLevel, forKey: Self.grainLevelKey)
+            renderer.stock = developedStock
+        }
     }
     @Published private(set) var exposureBias: Float = 0
     @Published private(set) var framesShot = 0
@@ -26,6 +38,9 @@ final class CameraModel: NSObject, ObservableObject {
     @Published var message: String?
 
     var rollFinished: Bool { framesShot >= Self.rollLength }
+
+    /// The selected film with the GRAIN setting applied; used for preview and capture alike.
+    var developedStock: FilmStock { stock.withGrain(scaledBy: grainLevel) }
 
     let renderer = PreviewRenderer()
 
@@ -45,7 +60,7 @@ final class CameraModel: NSObject, ObservableObject {
 
     override init() {
         super.init()
-        renderer.stock = stock
+        renderer.stock = developedStock
     }
 
     // MARK: - Lifecycle
@@ -151,6 +166,13 @@ final class CameraModel: NSObject, ObservableObject {
         }
     }
 
+    /// Step the GRAIN control one click up (+1) or down (-1).
+    func nudgeGrain(by clicks: Int) {
+        let levels = Self.grainLevels
+        let current = levels.enumerated().min { abs($0.element - grainLevel) < abs($1.element - grainLevel) }?.offset ?? 4
+        grainLevel = levels[min(max(current + clicks, 0), levels.count - 1)]
+    }
+
     func nudgeExposure(by stops: Float) {
         let value = (exposureBias + stops).clamped(to: -2...2)
         let snapped = (value * 3).rounded() / 3   // 1/3-stop clicks, like a real dial
@@ -203,7 +225,7 @@ final class CameraModel: NSObject, ObservableObject {
 
     func shoot() {
         guard status == .running, !rollFinished else { return }
-        let stock = self.stock
+        let stock = self.developedStock
 
         framesShot += 1
         developing += 1

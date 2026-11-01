@@ -80,35 +80,93 @@ enum FilmLook {
         return f.outputImage ?? image
     }
 
+    // MARK: - Grain
+    //
+    // Two octaves of near-Gaussian noise (fine grain plus larger, softer clumps), each
+    // laid down at a random angle and offset so it never lines up into a grid and
+    // "dances" from frame to frame like real film. Strength follows the tone: strongest
+    // in the midtones, gentler in deep shadows and highlights.
+
+    /// Enlarging + blurring the noise keeps ~43% of its spread; this restores it.
+    /// Measured for blur sigma = 0.5 x scale (see PR description).
+    private static let grainGain: CGFloat = 2.3
+
     private static func addGrain(to image: CIImage, amount: CGFloat, size: CGFloat) -> CIImage {
         let extent = image.extent
-        guard let noiseBase = CIFilter.randomGenerator().outputImage else { return image }
+        // Grain size in pixels, relative to the long side so preview and print match.
+        let px = max(1, size * max(extent.width, extent.height) / 1600)
 
-        // Random offset every call so grain "dances" between frames like real film,
-        // instead of looking like dust stuck on the lens.
-        let dx = CGFloat.random(in: 0..<2048)
-        let dy = CGFloat.random(in: 0..<2048)
-        let scale = max(1, size * max(extent.width, extent.height) / 1600)
+        var grainy = image
+        for (scale, strength) in [(px, 2.6 * amount), (px * 2.2, 1.4 * amount)] {
+            guard let layer = grainLayer(covering: extent, scale: scale, strength: strength) else { return image }
+            let blend = CIFilter.softLightBlendMode()
+            blend.inputImage = layer
+            blend.backgroundImage = grainy
+            grainy = blend.outputImage?.cropped(to: extent) ?? grainy
+        }
 
-        let noise = noiseBase
-            .transformed(by: CGAffineTransform(translationX: -dx, y: -dy))
-            .transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-            .transformed(by: CGAffineTransform(translationX: extent.minX, y: extent.minY))
+        // Tone weighting: 0.3 + 2.8 L - 2.8 L^2 -> 0.3 at black/white, 1.0 at mid-grey.
+        let weight = CIVector(x: 0.3, y: 2.8, z: -2.8, w: 0)
+        let mask = CIFilter.colorPolynomial()
+        mask.inputImage = image
+        mask.redCoefficients = weight
+        mask.greenCoefficients = weight
+        mask.blueCoefficients = weight
+        mask.alphaCoefficients = CIVector(x: 1, y: 0, z: 0, w: 0)
+
+        let mix = CIFilter.blendWithMask()
+        mix.inputImage = grainy
+        mix.backgroundImage = image
+        mix.maskImage = mask.outputImage
+        return mix.outputImage?.cropped(to: extent) ?? grainy
+    }
+
+    /// Mid-grey (0.5) centred grain covering `extent`, clumps about `scale` px across,
+    /// spread (sd) of about 0.167 x `strength`.
+    private static func grainLayer(covering extent: CGRect, scale: CGFloat, strength: CGFloat) -> CIImage? {
+        guard let random = CIFilter.randomGenerator().outputImage else { return nil }
+
+        // Noise space -> image space: jump to a random patch, rotate by a random angle,
+        // enlarge, then centre on the image.
+        let offset = CGPoint(x: CGFloat.random(in: 0..<4096), y: CGFloat.random(in: 0..<4096))
+        let transform = CGAffineTransform(translationX: -offset.x, y: -offset.y)
+            .concatenating(CGAffineTransform(rotationAngle: CGFloat.random(in: 0..<CGFloat.pi)))
+            .concatenating(CGAffineTransform(scaleX: scale, y: scale))
+            .concatenating(CGAffineTransform(translationX: extent.midX, y: extent.midY))
+
+        // CIRandomGenerator's alpha is random too. Left as is, colour filters divide by
+        // it (un-premultiply) and nearly transparent pixels explode into bright specks.
+        // Make the patch we sample opaque first.
+        let margin = scale * 2 + 4
+        let sourceRect = extent.insetBy(dx: -margin, dy: -margin).applying(transform.inverted()).integral
+        let opaque = random.settingAlphaOne(in: sourceRect)
+
+        // Average three independent uniform channels -> near-Gaussian, mean 0.5, sd ~0.167.
+        let third = CIVector(x: 1.0 / 3, y: 1.0 / 3, z: 1.0 / 3, w: 0)
+        let mono = CIFilter.colorMatrix()
+        mono.inputImage = opaque
+        mono.rVector = third
+        mono.gVector = third
+        mono.bVector = third
+        mono.aVector = CIVector(x: 0, y: 0, z: 0, w: 1)
+        guard let monoNoise = mono.outputImage else { return nil }
+
+        // Enlarge, then blur away the sampling grid the enlargement leaves behind.
+        let smooth = monoNoise
+            .transformed(by: transform)
+            .applyingGaussianBlur(sigma: Double(scale * 0.5))
             .cropped(to: extent)
 
-        // Monochrome noise centred on 50% grey (neutral for soft light).
-        let a = amount * 0.9
-        let grey = CIFilter.colorMatrix()
-        grey.inputImage = noise
-        grey.rVector = CIVector(x: a, y: 0, z: 0, w: 0)
-        grey.gVector = CIVector(x: a, y: 0, z: 0, w: 0)
-        grey.bVector = CIVector(x: a, y: 0, z: 0, w: 0)
-        grey.aVector = CIVector(x: 0, y: 0, z: 0, w: 0)
-        grey.biasVector = CIVector(x: 0.5 - a / 2, y: 0.5 - a / 2, z: 0.5 - a / 2, w: 1)
-
-        let blend = CIFilter.softLightBlendMode()
-        blend.inputImage = grey.outputImage
-        blend.backgroundImage = image
-        return blend.outputImage?.cropped(to: extent) ?? image
+        // Restore and set the spread around 0.5, then keep it in range.
+        let k = grainGain * strength
+        let spread = CIVector(x: k, y: 0, z: 0, w: 0)
+        let contrast = CIFilter.colorMatrix()
+        contrast.inputImage = smooth
+        contrast.rVector = spread
+        contrast.gVector = spread
+        contrast.bVector = spread
+        contrast.aVector = CIVector(x: 0, y: 0, z: 0, w: 1)
+        contrast.biasVector = CIVector(x: 0.5 - 0.5 * k, y: 0.5 - 0.5 * k, z: 0.5 - 0.5 * k, w: 0)
+        return contrast.outputImage?.applyingFilter("CIColorClamp").cropped(to: extent)
     }
 }
