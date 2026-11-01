@@ -140,6 +140,8 @@ final class CameraModel: NSObject, ObservableObject {
             if !self.isConfigured {
                 do {
                     try self.configure()
+                    // configure() has committed by now, so the connections are final.
+                    self.updateConnections()
                     self.isConfigured = true
                 } catch {
                     DispatchQueue.main.async { self.status = .failed(error.localizedDescription) }
@@ -168,7 +170,6 @@ final class CameraModel: NSObject, ObservableObject {
         session.addOutput(photoOutput)
         photoOutput.maxPhotoQualityPrioritization = .quality
 
-        updateConnections()
         refreshLenses()
     }
 
@@ -289,8 +290,11 @@ final class CameraModel: NSObject, ObservableObject {
             } catch {
                 DispatchQueue.main.async { self.message = error.localizedDescription }
             }
-            self.updateConnections()
             self.session.commitConfiguration()
+            // After the commit: the new camera's connections only exist once the
+            // configuration is committed. Setting rotation/mirroring before that
+            // hit the outgoing connection and left the front camera landscape.
+            self.updateConnections()
             self.refreshLenses()
             self.applyExposureBias()
         }
