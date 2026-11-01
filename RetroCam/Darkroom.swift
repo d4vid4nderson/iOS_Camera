@@ -29,7 +29,7 @@ enum Darkroom {
     }
 
     static func develop(_ photoData: Data, stock: FilmStock) throws -> Print {
-        guard let source = CIImage(data: photoData, options: [.applyOrientationProperty: true]) else {
+        guard var source = CIImage(data: photoData, options: [.applyOrientationProperty: true]) else {
             throw CameraError.processingFailed
         }
 
@@ -40,6 +40,22 @@ enum Darkroom {
         if var tiff = metadata[kCGImagePropertyTIFFDictionary as String] as? [String: Any] {
             tiff[kCGImagePropertyTIFFOrientation as String] = 1
             metadata[kCGImagePropertyTIFFDictionary as String] = tiff
+        }
+        // Pixel dimensions in EXIF would be stale after resizing; the file states its own size.
+        if var exif = metadata[kCGImagePropertyExifDictionary as String] as? [String: Any] {
+            exif.removeValue(forKey: kCGImagePropertyExifPixelXDimension as String)
+            exif.removeValue(forKey: kCGImagePropertyExifPixelYDimension as String)
+            metadata[kCGImagePropertyExifDictionary as String] = exif
+        }
+
+        // Full-resolution captures (up to 48 MP) are developed at no more than 24 MP:
+        // plenty for film-like detail, and half the memory and time.
+        let maxPixels: CGFloat = 24_000_000
+        let pixels = source.extent.width * source.extent.height
+        if pixels > maxPixels {
+            let scale = (maxPixels / pixels).squareRoot()
+            source = source.applyingFilter("CILanczosScaleTransform",
+                                           parameters: [kCIInputScaleKey: scale, kCIInputAspectRatioKey: 1])
         }
 
         let developed = FilmLook.apply(stock, to: source).settingProperties(metadata)

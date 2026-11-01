@@ -16,6 +16,9 @@ final class CameraModel: NSObject, ObservableObject {
     /// GRAIN control: multiplier on the film's own grain, in 25% clicks.
     static let grainLevels = stride(from: 0.0, through: 2.0, by: 0.25).map { $0 }
     private static let grainLevelKey = "grainLevel"
+    private static func lensKey(_ position: AVCaptureDevice.Position) -> String {
+        position == .front ? "lensFocal.front" : "lensFocal.back"
+    }
 
     @Published private(set) var status: Status = .starting
     @Published var stock: FilmStock = .classic400 {
@@ -31,6 +34,9 @@ final class CameraModel: NSObject, ObservableObject {
         }
     }
     @Published private(set) var exposureBias: Float = 0
+    /// Lenses this phone can offer for the current camera side (discovered at runtime).
+    @Published private(set) var lenses: [LensOption] = []
+    @Published private(set) var lens: LensOption?
     @Published private(set) var framesShot = 0
     @Published private(set) var lastPrint: UIImage?
     @Published private(set) var shutterBlink = false
@@ -120,10 +126,44 @@ final class CameraModel: NSObject, ObservableObject {
         photoOutput.maxPhotoQualityPrioritization = .quality
 
         updateConnections()
+        refreshLenses()
+    }
+
+    /// The richest camera this phone has on that side. On the back, a virtual multi-camera
+    /// device lets one zoom factor move across ultra-wide, main and telephoto.
+    private static func bestDevice(at position: AVCaptureDevice.Position) -> AVCaptureDevice? {
+        let preference: [AVCaptureDevice.DeviceType] = position == .back
+            ? [.builtInTripleCamera, .builtInDualWideCamera, .builtInDualCamera, .builtInWideAngleCamera]
+            : [.builtInWideAngleCamera]
+        for type in preference {
+            if let device = AVCaptureDevice.default(type, for: .video, position: position) { return device }
+        }
+        return nil
+    }
+
+    private static func megapixels(_ format: AVCaptureDevice.Format) -> Double {
+        let best = format.supportedMaxPhotoDimensions.map { Double($0.width) * Double($0.height) }.max()
+        return (best ?? 12_000_000) / 1_000_000
+    }
+
+    /// Describe the physical cameras behind `device` from what the phone reports:
+    /// field of view -> focal length, switch-over zoom factors, and photo size.
+    private static func physicalCameras(of device: AVCaptureDevice) -> [PhysicalCamera] {
+        let baseFocal = LensPlanner.equivalentFocalLength(
+            horizontalFieldOfView: Double(device.activeFormat.videoFieldOfView))
+        let outputLimit = megapixels(device.activeFormat)
+        let members = (device.isVirtualDevice ? device.constituentDevices : [device])
+            .sorted { $0.activeFormat.videoFieldOfView > $1.activeFormat.videoFieldOfView }  // widest first
+        let zooms = [1.0] + device.virtualDeviceSwitchOverVideoZoomFactors.map { $0.doubleValue }
+        return zip(members, zooms).map { member, zoom in
+            PhysicalCamera(focalLength: baseFocal * zoom,
+                           megapixels: min(megapixels(member.activeFormat), outputLimit),
+                           zoomFactor: zoom)
+        }
     }
 
     private func attachCamera(at position: AVCaptureDevice.Position) throws {
-        guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position) else {
+        guard let device = Self.bestDevice(at: position) else {
             throw CameraError.noCamera
         }
         let newInput = try AVCaptureDeviceInput(device: device)
@@ -138,8 +178,48 @@ final class CameraModel: NSObject, ObservableObject {
         rotationCoordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: nil)
     }
 
-    /// Portrait viewfinder; mirror it for selfies.
+    /// Session queue only. Work out this side's lenses and select the remembered one.
+    private func refreshLenses() {
+        guard let device = input?.device else { return }
+        let options = LensPlanner.lenses(for: Self.physicalCameras(of: device))
+        let saved = UserDefaults.standard.object(forKey: Self.lensKey(position)) as? Int
+        let chosen = LensPlanner.defaultLens(in: options, preferred: saved)
+        if let chosen { applyZoom(chosen.zoomFactor) }
+        DispatchQueue.main.async {
+            self.lenses = options
+            self.lens = chosen
+        }
+    }
+
+    /// Session queue only.
+    private func applyZoom(_ factor: Double) {
+        guard let device = input?.device else { return }
+        let zoom = CGFloat(factor).clamped(to: device.minAvailableVideoZoomFactor...device.maxAvailableVideoZoomFactor)
+        do {
+            try device.lockForConfiguration()
+            device.videoZoomFactor = zoom
+            device.unlockForConfiguration()
+        } catch {}
+    }
+
+    func selectLens(_ option: LensOption) {
+        guard option != lens else { return }
+        lens = option
+        sessionQueue.async {
+            UserDefaults.standard.set(option.focalLength, forKey: Self.lensKey(self.position))
+            self.applyZoom(option.zoomFactor)
+        }
+    }
+
+    /// Portrait viewfinder; mirror it for selfies. Allow full-resolution photos so cropped
+    /// lenses (35mm, 50mm...) keep real detail instead of upscaling a 12 MP frame.
     private func updateConnections() {
+        if let device = input?.device,
+           let largest = device.activeFormat.supportedMaxPhotoDimensions.max(by: {
+               Int($0.width) * Int($0.height) < Int($1.width) * Int($1.height)
+           }) {
+            photoOutput.maxPhotoDimensions = largest
+        }
         guard let connection = videoOutput.connection(with: .video) else { return }
         if connection.isVideoRotationAngleSupported(90) { connection.videoRotationAngle = 90 }
         if connection.isVideoMirroringSupported {
@@ -162,6 +242,7 @@ final class CameraModel: NSObject, ObservableObject {
             }
             self.updateConnections()
             self.session.commitConfiguration()
+            self.refreshLenses()
             self.applyExposureBias()
         }
     }
@@ -241,6 +322,7 @@ final class CameraModel: NSObject, ObservableObject {
 
             let settings = AVCapturePhotoSettings()
             settings.photoQualityPrioritization = .balanced
+            settings.maxPhotoDimensions = self.photoOutput.maxPhotoDimensions
             let id = settings.uniqueID
 
             let processor = PhotoCaptureProcessor(stock: stock) { [weak self] result in

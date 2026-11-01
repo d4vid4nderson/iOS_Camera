@@ -16,6 +16,11 @@ jobs:
       - name: Select Xcode 26
         run: ci/select-xcode.sh
 
+      - name: Lens planner tests
+        run: |
+          swiftc RetroCam/LensPlanner.swift ci/lens-tests/main.swift -o "$RUNNER_TEMP/lens-tests"
+          "$RUNNER_TEMP/lens-tests"
+
       - name: Build
         run: |
           set -o pipefail
