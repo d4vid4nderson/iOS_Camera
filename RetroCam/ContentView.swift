@@ -10,13 +10,14 @@ private let cameraBody = Color(white: 0.09)
 
 /// The settings that live behind the icon bar.
 private enum SettingPanel: String, Identifiable {
-    case film, adjust, lens, exposure, grain, border
+    case film, adjust, fx, lens, exposure, grain, border
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .film: return "FILM"
         case .adjust: return "ADJUST"
+        case .fx: return "FX"
         case .lens: return "LENS"
         case .exposure: return "EXPOSURE"
         case .grain: return "GRAIN"
@@ -28,6 +29,7 @@ private enum SettingPanel: String, Identifiable {
         switch self {
         case .film: return "film"
         case .adjust: return "slider.horizontal.3"
+        case .fx: return "wand.and.rays"
         case .lens: return "camera.aperture"
         case .exposure: return "plusminus.circle"
         case .grain: return "aqi.medium"
@@ -223,6 +225,8 @@ struct ContentView: View {
             barItem(.exposure, value: exposureText, highlighted: camera.exposureBias != 0)
             barItem(.grain, value: grainText)
             barItem(.border, value: camera.border.label, highlighted: camera.border != .none)
+            barItem(.fx, value: camera.stock.effect == .none ? "OFF" : camera.stock.effect.label,
+                    highlighted: camera.stock.effect != .none)
         }
         .padding(4)
         .background(RoundedRectangle(cornerRadius: 12).fill(Color(white: 0.12)))
@@ -284,6 +288,7 @@ struct ContentView: View {
                     stockPicker
                 }
             case .adjust: adjustPanel
+            case .fx: fxPanel
             case .lens: lensPicker
             case .exposure:
                 ScrubDial(value: Double(camera.exposureBias), range: -2...2, step: 1.0 / 3,
@@ -309,6 +314,9 @@ struct ContentView: View {
         switch panel {
         case .film: return "ISO \(camera.stock.iso)"
         case .adjust: return camera.stock.name + (camera.isFilmEdited ? " · EDITED" : "")
+        case .fx:
+            let fx = camera.stock.effect
+            return fx == .none ? "OFF" : "\(fx.label) · \(Int((camera.stock.effectAmount * 100).rounded()))"
         case .lens: return camera.lens.map { $0.isNative ? $0.name : "\($0.name) CROP" } ?? ""
         case .exposure: return exposureText + " EV"
         case .grain: return grainText
@@ -348,6 +356,28 @@ struct ContentView: View {
                 Color.black.opacity(camera.shutterBlink ? 1 : 0)
 
                 statusOverlay
+
+                // FX open: drag on the picture to move the effect's centre.
+                if openPanel == .fx, camera.stock.effect.usesCenter {
+                    Circle()
+                        .stroke(accent, lineWidth: 1.5)
+                        .background(Circle().fill(accent.opacity(0.15)))
+                        .frame(width: 30, height: 30)
+                        .overlay(Circle().fill(accent).frame(width: 4, height: 4))
+                        .position(x: camera.stock.effectX * geo.size.width,
+                                  y: camera.stock.effectY * geo.size.height)
+                        .allowsHitTesting(false)
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { drag in
+                                    let x = min(max(drag.location.x / geo.size.width, 0.03), 0.97)
+                                    let y = min(max(drag.location.y / geo.size.height, 0.03), 0.97)
+                                    camera.adjustFilm { $0.effectX = x; $0.effectY = y }
+                                }
+                        )
+                }
 
                 if let diagnostics = camera.diagnostics {
                     Text(diagnostics)
@@ -625,6 +655,41 @@ struct ContentView: View {
         }
         nameFieldFocused = false
         naming = nil
+    }
+
+    // MARK: FX panel: lens and print effects
+
+    private var fxPanel: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            chipRow(LensEffect.allCases, label: \.label, selected: camera.stock.effect) { effect in
+                camera.adjustFilm { $0.effect = effect }
+            }
+            .sensoryFeedback(.selection, trigger: camera.stock.effect)
+
+            if camera.stock.effect != .none {
+                ScrubDial(value: Double(camera.stock.effectAmount), range: 0...1, step: 0.05,
+                          majorEvery: 4, accent: accent,
+                          label: { "\(Int(($0 * 100).rounded()))" },
+                          spoken: { "Effect strength \(Int(($0 * 100).rounded())) percent" },
+                          onChange: { v in camera.adjustFilm { $0.effectAmount = CGFloat(v) } })
+
+                if camera.stock.effect.usesCenter {
+                    HStack(spacing: 6) {
+                        Text("DRAG THE PICTURE TO MOVE IT")
+                            .font(.mono(9)).foregroundStyle(.secondary)
+                            .lineLimit(1).minimumScaleFactor(0.7)
+                        Spacer(minLength: 4)
+                        smallChip("CENTER", selected: false) {
+                            camera.adjustFilm { $0.effectX = 0.5; $0.effectY = 0.5 }
+                        }
+                        smallChip("TILT", selected: camera.tiltSteering) {
+                            camera.tiltSteering.toggle()
+                        }
+                    }
+                }
+            }
+        }
+        .animation(.snappy(duration: 0.2), value: camera.stock.effect == .none)
     }
 
     // MARK: Adjust panel: per-film contrast, curve, tone, lens character

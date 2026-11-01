@@ -49,9 +49,53 @@ struct FilmStock: Identifiable, Hashable, Codable {
     /// Uneven chemical fog, as on old or expired film, 0...1.
     var fog: CGFloat = 0
 
+    /// Optional lens / print effect (FX panel), how strong it is, and where it's centred
+    /// (0...1 across and down the frame, top-left origin, like the screen).
+    var effect: LensEffect = .none
+    var effectAmount: CGFloat = 0.5
+    var effectX: CGFloat = 0.5
+    var effectY: CGFloat = 0.5
+
     /// True for films the user saved (they can be renamed and deleted).
     var isCustom: Bool { id.hasPrefix(Self.customPrefix) }
     static let customPrefix = "custom-"
+}
+
+// MARK: - Lens and print effects
+
+/// Distortions a real lens, camera or print process can make, applied live.
+enum LensEffect: String, CaseIterable, Codable, Identifiable {
+    case none, fisheye, swirl, tiltShift, zoomBurst, drag, double, prism, ripple, halftone, etch, kaleido
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .none: return "NONE"
+        case .fisheye: return "FISHEYE"
+        case .swirl: return "SWIRL"
+        case .tiltShift: return "TILT-SHIFT"
+        case .zoomBurst: return "ZOOM"
+        case .drag: return "DRAG"
+        case .double: return "DOUBLE"
+        case .prism: return "PRISM"
+        case .ripple: return "RIPPLE"
+        case .halftone: return "HALFTONE"
+        case .etch: return "ETCH"
+        case .kaleido: return "KALEIDO"
+        }
+    }
+
+    /// Whether the effect has a centre worth moving (drag / tilt on the viewfinder).
+    var usesCenter: Bool {
+        switch self {
+        case .none, .drag, .halftone, .etch: return false
+        default: return true
+        }
+    }
+
+    /// Print-stage effects work on the developed grey image; the rest act like the lens.
+    var isPrintEffect: Bool { self == .halftone || self == .etch }
 }
 
 // MARK: - Toning
@@ -180,6 +224,7 @@ extension FilmStock {
     private enum CodingKeys: String, CodingKey {
         case id, name, iso, blurb, red, green, blue, contrast, blackLift, whitePoint
         case grain, grainSize, vignette, tone, toneAmount, bloom, edgeSoftness, exposure, key, fog
+        case effect, effectAmount, effectX, effectY
     }
 
     init(from decoder: Decoder) throws {
@@ -206,6 +251,10 @@ extension FilmStock {
         exposure = value(.exposure, 0)
         key = value(.key, 0)
         fog = value(.fog, 0)
+        effect = value(.effect, LensEffect.none)
+        effectAmount = value(.effectAmount, 0.5)
+        effectX = value(.effectX, 0.5)
+        effectY = value(.effectY, 0.5)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -220,6 +269,8 @@ extension FilmStock {
         try c.encode(tone, forKey: .tone); try c.encode(toneAmount, forKey: .toneAmount)
         try c.encode(bloom, forKey: .bloom); try c.encode(edgeSoftness, forKey: .edgeSoftness)
         try c.encode(exposure, forKey: .exposure); try c.encode(key, forKey: .key); try c.encode(fog, forKey: .fog)
+        try c.encode(effect, forKey: .effect); try c.encode(effectAmount, forKey: .effectAmount)
+        try c.encode(effectX, forKey: .effectX); try c.encode(effectY, forKey: .effectY)
     }
 }
 

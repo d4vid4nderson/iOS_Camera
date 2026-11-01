@@ -1,4 +1,5 @@
 import AVFoundation
+import CoreMotion
 import CoreImage
 import SwiftUI
 
@@ -49,6 +50,7 @@ final class CameraModel: NSObject, ObservableObject {
     private static let borderKey = "border"
     private static let borderWidthKey = "borderWidth"
     private static let filmKey = "film.selected"
+    private static let tiltKey = "fx.tilt"
     private static func lensKey(_ position: AVCaptureDevice.Position) -> String {
         position == .front ? "lensFocal.front" : "lensFocal.back"
     }
@@ -66,8 +68,22 @@ final class CameraModel: NSObject, ObservableObject {
         didSet {
             renderer.stock = developedStock
             if stock.id != oldValue.id { UserDefaults.standard.set(stock.id, forKey: Self.filmKey) }
+            if stock.effect != oldValue.effect { updateTiltSteering() }
         }
     }
+
+    /// Tilt the phone to move the effect's centre (FX panel). Remembered between launches.
+    @Published var tiltSteering = UserDefaults.standard.bool(forKey: CameraModel.tiltKey) {
+        didSet {
+            UserDefaults.standard.set(tiltSteering, forKey: Self.tiltKey)
+            updateTiltSteering()
+        }
+    }
+    private let motion = CMMotionManager()
+    private var tiltReference: CMAcceleration?
+    /// How far tilting has moved the effect centre (fractions of the frame). Not published:
+    /// it changes 30 times a second and only the renderer needs it.
+    private var tiltOffset = CGPoint.zero
     @Published private(set) var grainLevel: Double = {
         let saved = UserDefaults.standard.object(forKey: CameraModel.grainLevelKey) as? Double
         return saved.map { min(max($0, 0), 2) } ?? 1
@@ -129,7 +145,36 @@ final class CameraModel: NSObject, ObservableObject {
     var rollFinished: Bool { framesShot >= Self.rollLength }
 
     /// The selected film with the GRAIN setting applied; used for preview and capture alike.
-    var developedStock: FilmStock { stock.withGrain(scaledBy: Self.grainResponse(grainLevel)) }
+    var developedStock: FilmStock {
+        var film = stock.withGrain(scaledBy: Self.grainResponse(grainLevel))
+        if tiltSteering, film.effect.usesCenter {
+            film.effectX = min(max(film.effectX + tiltOffset.x, 0.03), 0.97)
+            film.effectY = min(max(film.effectY + tiltOffset.y, 0.03), 0.97)
+        }
+        return film
+    }
+
+    /// Follow the phone's tilt while it's switched on and the effect has a centre.
+    /// The angle the phone is at when steering starts counts as "level".
+    private func updateTiltSteering() {
+        let wanted = tiltSteering && stock.effect.usesCenter && motion.isDeviceMotionAvailable
+        if wanted, !motion.isDeviceMotionActive {
+            tiltReference = nil
+            motion.deviceMotionUpdateInterval = 1.0 / 30
+            motion.startDeviceMotionUpdates(to: .main) { [weak self] data, _ in
+                guard let self, let g = data?.gravity else { return }
+                let ref = self.tiltReference ?? g
+                if self.tiltReference == nil { self.tiltReference = g }
+                // Roll left/right moves it across; tipping the top away or toward you, up/down.
+                self.tiltOffset = CGPoint(x: (g.x - ref.x) * 0.9, y: (g.z - ref.z) * 0.9)
+                self.renderer.stock = self.developedStock
+            }
+        } else if !wanted, motion.isDeviceMotionActive {
+            motion.stopDeviceMotionUpdates()
+            tiltOffset = .zero
+            renderer.stock = developedStock
+        }
+    }
 
     let renderer = PreviewRenderer()
 
@@ -159,6 +204,7 @@ final class CameraModel: NSObject, ObservableObject {
         renderer.stampMode = stampMode
         renderer.border = border
         renderer.borderWidth = borderWidth
+        updateTiltSteering()
     }
 
     // MARK: - Lifecycle
