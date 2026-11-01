@@ -46,9 +46,13 @@ struct ContentView: View {
     @State private var openPanel: SettingPanel?
     /// Which setting the ADJUST panel's dial is editing.
     @State private var adjusting: AdjustParam = .contrast
-    /// Saving or renaming a film: the name field's alert.
+    /// Saving or renaming a film: shows the name card.
     @State private var naming: FilmNaming?
     @State private var filmName = ""
+    @FocusState private var nameFieldFocused: Bool
+    /// Long-pressed film card whose actions (rename, reset, delete) the FILM panel shows.
+    @State private var managingFilm: String?
+    @State private var confirmingDelete = false
     @AppStorage(ShutterFinish.storageKey) private var finishRaw = ShutterFinish.copper.rawValue
 
     private var finish: ShutterFinish { ShutterFinish(rawValue: finishRaw) ?? .copper }
@@ -77,6 +81,17 @@ struct ContentView: View {
             if let message = camera.message {
                 toast(message)
             }
+
+            if let naming {
+                nameCard(naming)
+                    .transition(.opacity)
+            }
+        }
+        .ignoresSafeArea(.keyboard)
+        .animation(.snappy(duration: 0.2), value: naming)
+        .onChange(of: openPanel) { _, _ in
+            managingFilm = nil
+            confirmingDelete = false
         }
         .preferredColorScheme(.dark)
         .tint(accent)
@@ -92,23 +107,6 @@ struct ContentView: View {
         .sensoryFeedback(.impact(weight: .medium), trigger: camera.framesShot)
         .sheet(isPresented: $showingPrint) {
             if let print = camera.lastPrint { PrintView(image: print) }
-        }
-        .alert(naming?.title ?? "", isPresented: Binding(
-            get: { naming != nil }, set: { if !$0 { naming = nil } })) {
-            TextField("Film name", text: $filmName)
-                .textInputAutocapitalization(.characters)
-                .autocorrectionDisabled()
-            Button(naming?.action ?? "Save") {
-                switch naming {
-                case .saveNew: camera.saveFilm(named: filmName)
-                case .rename(let id): camera.renameFilm(id: id, to: filmName)
-                case nil: break
-                }
-                naming = nil
-            }
-            Button("Cancel", role: .cancel) { naming = nil }
-        } message: {
-            Text(naming?.message ?? "")
         }
     }
 
@@ -279,7 +277,12 @@ struct ContentView: View {
             .padding(.horizontal, 4)
 
             switch panel {
-            case .film: stockPicker
+            case .film:
+                if let id = managingFilm, let film = camera.library.current(id: id) {
+                    filmActions(film)
+                } else {
+                    stockPicker
+                }
             case .adjust: adjustPanel
             case .lens: lensPicker
             case .exposure:
@@ -452,11 +455,14 @@ struct ContentView: View {
                                     proxy.scrollTo(stock.id, anchor: .center)
                                 }
                             }
-                            // Own preview: lifting the card itself would keep the
-                            // scrolling strip's clipping and cut the card off.
-                            .filmContextMenu(enabled: camera.library.isEdited(id: stock.id) || stock.isCustom,
-                                             menu: { filmMenu(stock) },
-                                             preview: { canister(stock) })
+                            // Long press: this film's actions, in the panel's own style.
+                            .onLongPressGesture(minimumDuration: 0.35) {
+                                guard hasActions(stock) else { return }
+                                withAnimation(.snappy(duration: 0.2)) {
+                                    managingFilm = stock.id
+                                    confirmingDelete = false
+                                }
+                            }
                     }
                 }
                 .padding(.horizontal, 2)
@@ -464,6 +470,11 @@ struct ContentView: View {
             .onAppear { proxy.scrollTo(camera.stock.id, anchor: .center) }
         }
         .sensoryFeedback(.selection, trigger: camera.stock.id)
+        .sensoryFeedback(.impact(weight: .light), trigger: managingFilm)
+    }
+
+    private func hasActions(_ stock: FilmStock) -> Bool {
+        stock.isCustom || camera.library.isEdited(id: stock.id)
     }
 
     private func canister(_ stock: FilmStock) -> some View {
@@ -497,24 +508,123 @@ struct ContentView: View {
         .accessibilityAddTraits(.isButton)
     }
 
-    /// Long-press menu on a film card.
-    @ViewBuilder
-    private func filmMenu(_ stock: FilmStock) -> some View {
-        if camera.library.isEdited(id: stock.id) {
-            Button {
-                camera.selectFilm(id: stock.id)
-                camera.resetFilm()
-            } label: { Label("Reset adjustments", systemImage: "arrow.uturn.backward") }
+    /// A long-pressed film's actions, shown in place of the film strip.
+    private func filmActions(_ film: FilmStock) -> some View {
+        let edited = camera.library.isEdited(id: film.id)
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                if film.isCustom {
+                    Image(systemName: "person.crop.square").font(.system(size: 10, weight: .bold))
+                }
+                Text(film.name).font(.mono(12, .bold)).lineLimit(1)
+                if edited {
+                    Text("EDITED").font(.mono(9, .bold)).foregroundStyle(.secondary)
+                }
+            }
+            .foregroundStyle(accent)
+            .padding(.horizontal, 4)
+
+            HStack(spacing: 6) {
+                if film.isCustom {
+                    smallChip("RENAME", selected: false) {
+                        filmName = film.name
+                        naming = .rename(film.id)
+                        managingFilm = nil
+                    }
+                }
+                if edited {
+                    smallChip("RESET", selected: false) {
+                        camera.selectFilm(id: film.id)
+                        camera.resetFilm()
+                        managingFilm = nil
+                    }
+                }
+                if film.isCustom {
+                    Button {
+                        if confirmingDelete {
+                            camera.deleteFilm(id: film.id)
+                            managingFilm = nil
+                            confirmingDelete = false
+                        } else {
+                            withAnimation(.snappy(duration: 0.15)) { confirmingDelete = true }
+                        }
+                    } label: {
+                        Text(confirmingDelete ? "TAP TO DELETE" : "DELETE")
+                            .font(.mono(10, .bold))
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(Color.red.opacity(confirmingDelete ? 0.28 : 0.12)))
+                            .overlay(Capsule().stroke(Color.red.opacity(confirmingDelete ? 0.9 : 0), lineWidth: 1))
+                            .foregroundStyle(Color(red: 1, green: 0.45, blue: 0.4))
+                    }
+                    .buttonStyle(.plain)
+                    .sensoryFeedback(.warning, trigger: confirmingDelete) { _, new in new }
+                }
+                Spacer(minLength: 0)
+                smallChip("DONE", selected: true) {
+                    withAnimation(.snappy(duration: 0.2)) { managingFilm = nil }
+                }
+            }
         }
-        if stock.isCustom {
-            Button {
-                filmName = stock.name
-                naming = .rename(stock.id)
-            } label: { Label("Rename", systemImage: "pencil") }
-            Button(role: .destructive) {
-                camera.deleteFilm(id: stock.id)
-            } label: { Label("Delete", systemImage: "trash") }
+        .padding(.vertical, 4)
+    }
+
+    /// Name a film (save as new / rename): a card in the panels' style above the
+    /// keyboard, instead of the system alert.
+    private func nameCard(_ mode: FilmNaming) -> some View {
+        ZStack(alignment: .top) {
+            Color.black.opacity(0.55)
+                .ignoresSafeArea()
+                .onTapGesture { naming = nil }
+
+            VStack(alignment: .leading, spacing: 12) {
+                Text(mode.title).font(.mono(10, .semibold)).foregroundStyle(.secondary)
+
+                TextField("", text: $filmName, prompt: Text("FILM NAME").foregroundColor(Color(white: 0.35)))
+                    .font(.mono(20, .bold))
+                    .foregroundStyle(accent)
+                    .tint(accent)
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled()
+                    .submitLabel(.done)
+                    .focused($nameFieldFocused)
+                    .onSubmit { commitName(mode) }
+                    .onChange(of: filmName) { _, new in
+                        let capped = String(new.uppercased().prefix(FilmLibrary.maxNameLength))
+                        if capped != new { filmName = capped }
+                    }
+                    .padding(.vertical, 8)
+                    .overlay(alignment: .bottom) {
+                        Rectangle().fill(accent.opacity(0.6)).frame(height: 1)
+                    }
+
+                if !mode.message.isEmpty {
+                    Text(mode.message).font(.mono(10)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                HStack {
+                    smallChip("CANCEL", selected: false) { naming = nil }
+                    Spacer()
+                    smallChip(mode.action, selected: true) { commitName(mode) }
+                }
+            }
+            .padding(16)
+            .background(RoundedRectangle(cornerRadius: 16).fill(Color(white: 0.11)))
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color(white: 0.25), lineWidth: 0.5))
+            .padding(.horizontal, 20)
+            .padding(.top, 110)
+            .onAppear { nameFieldFocused = true }
         }
+    }
+
+    private func commitName(_ mode: FilmNaming) {
+        switch mode {
+        case .saveNew: camera.saveFilm(named: filmName)
+        case .rename(let id): camera.renameFilm(id: id, to: filmName)
+        }
+        nameFieldFocused = false
+        naming = nil
     }
 
     // MARK: Adjust panel: per-film contrast, curve, tone, lens character
@@ -732,20 +842,6 @@ private extension FilmStock {
     }
 }
 
-private extension View {
-    /// A long-press menu with a custom preview, only on films that have menu items.
-    @ViewBuilder
-    func filmContextMenu<M: View, P: View>(enabled: Bool,
-                                           @ViewBuilder menu: () -> M,
-                                           @ViewBuilder preview: () -> P) -> some View {
-        if enabled {
-            contextMenu(menuItems: menu, preview: preview)
-        } else {
-            self
-        }
-    }
-}
-
 /// The film settings the ADJUST panel edits, with each one's dial scale.
 private enum AdjustParam: String, CaseIterable, Identifiable {
     case filter, contrast, key, fade, whites, tone, toneAmount, glow, grainSize, vignette, softness, fog
@@ -824,22 +920,22 @@ private enum AdjustParam: String, CaseIterable, Identifiable {
     }
 }
 
-/// Naming a film in the alert: saving a new one or renaming one of the user's own.
+/// Naming a film in the name card: saving a new one or renaming one of the user's own.
 private enum FilmNaming: Equatable {
     case saveNew
     case rename(String)
 
     var title: String {
         switch self {
-        case .saveNew: return "Save as your film"
-        case .rename: return "Rename film"
+        case .saveNew: return "NAME YOUR FILM"
+        case .rename: return "RENAME FILM"
         }
     }
 
     var action: String {
         switch self {
-        case .saveNew: return "Save"
-        case .rename: return "Rename"
+        case .saveNew: return "SAVE"
+        case .rename: return "RENAME"
         }
     }
 
