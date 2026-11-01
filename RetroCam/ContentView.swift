@@ -105,6 +105,8 @@ struct ContentView: View {
                 .contentTransition(.numericText())
                 .frame(width: 90, alignment: .leading)
                 .accessibilityLabel("Frame \(camera.framesShot) of \(CameraModel.rollLength)")
+                // Hidden: long-press for a camera-orientation readout (for bug reports).
+                .onLongPressGesture { camera.showDiagnostics.toggle() }
 
             Spacer()
 
@@ -156,6 +158,8 @@ struct ContentView: View {
                     }
                 }
                 .foregroundStyle(active ? accent : Color(white: 0.55))
+                .rotationEffect(.degrees(camera.uiRotation))
+                .animation(.snappy(duration: 0.3), value: camera.uiRotation)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -193,6 +197,8 @@ struct ContentView: View {
                     .minimumScaleFactor(0.7)
                     .contentTransition(.numericText())
             }
+            .rotationEffect(.degrees(camera.uiRotation))
+            .animation(.snappy(duration: 0.3), value: camera.uiRotation)
             .foregroundStyle(open || highlighted ? accent : Color(white: 0.8))
             .frame(maxWidth: .infinity)
             .frame(height: 46)
@@ -289,6 +295,16 @@ struct ContentView: View {
                 Color.black.opacity(camera.shutterBlink ? 1 : 0)
 
                 statusOverlay
+
+                if let diagnostics = camera.diagnostics {
+                    Text(diagnostics)
+                        .font(.mono(10))
+                        .padding(6)
+                        .background(Color.black.opacity(0.7))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        .padding(6)
+                        .allowsHitTesting(false)
+                }
             }
             .contentShape(Rectangle())
             .onTapGesture(coordinateSpace: .local) { location in
@@ -416,6 +432,8 @@ struct ContentView: View {
                 }
                 .frame(width: 56, height: 56)
                 .clipShape(RoundedRectangle(cornerRadius: 4))
+                .rotationEffect(.degrees(camera.uiRotation))
+                .animation(.snappy(duration: 0.3), value: camera.uiRotation)
             }
             .disabled(camera.lastPrint == nil)
 
@@ -459,6 +477,8 @@ struct ContentView: View {
             Button { camera.flipCamera() } label: {
                 Image(systemName: "arrow.triangle.2.circlepath.camera")
                     .font(.system(size: 20))
+                    .rotationEffect(.degrees(camera.uiRotation))
+                    .animation(.snappy(duration: 0.3), value: camera.uiRotation)
                     .frame(width: 56, height: 56)
                     .background(Circle().fill(Color(white: 0.15)))
             }

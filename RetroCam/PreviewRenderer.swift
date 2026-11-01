@@ -44,9 +44,16 @@ final class PreviewRenderer: NSObject, MTKViewDelegate {
         lock.unlock()
 
         let target = view.drawableSize
-        guard let frame, target.width > 0, target.height > 0,
+        guard var frame, target.width > 0, target.height > 0,
               let drawable = view.currentDrawable,
               let commandBuffer = commandQueue.makeCommandBuffer() else { return }
+
+        // Safety net: the camera connection should already deliver portrait frames. If a
+        // camera still hands over landscape ones, turn them rather than show them sideways.
+        if frame.extent.width > frame.extent.height {
+            frame = frame.oriented(.right)
+            frame = frame.transformed(by: CGAffineTransform(translationX: -frame.extent.minX, y: -frame.extent.minY))
+        }
 
         // Aspect-fill the frame into the drawable, *then* develop it, so we only
         // process as many pixels as the screen shows.
