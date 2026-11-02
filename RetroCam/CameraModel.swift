@@ -51,6 +51,7 @@ final class CameraModel: NSObject, ObservableObject {
     private static let borderWidthKey = "borderWidth"
     private static let filmKey = "film.selected"
     private static let tiltKey = "fx.tilt"
+    private static let developKey = "develop.mode"
     private static func lensKey(_ position: AVCaptureDevice.Position) -> String {
         position == .front ? "lensFocal.front" : "lensFocal.back"
     }
@@ -153,6 +154,15 @@ final class CameraModel: NSObject, ObservableObject {
     private var saveChain: Task<Void, Never>?
     private var toldAboutAlbums = false
 
+    /// How new rolls develop: instantly, when the roll ends, or the next morning.
+    /// A roll keeps the mode it started with.
+    @Published var developMode = DevelopMode(rawValue: UserDefaults.standard.string(forKey: CameraModel.developKey) ?? "") ?? .instant {
+        didSet { UserDefaults.standard.set(developMode.rawValue, forKey: Self.developKey) }
+    }
+    /// Bumped whenever stored rolls change (a frame saved, a roll finished or developed),
+    /// so the roll viewer can refresh.
+    @Published private(set) var rollsVersion = 0
+
     /// The selected film with the GRAIN setting applied; used for preview and capture alike.
     var developedStock: FilmStock {
         var film = stock.withGrain(scaledBy: Self.grainResponse(grainLevel))
@@ -220,6 +230,7 @@ final class CameraModel: NSObject, ObservableObject {
     // MARK: - Lifecycle
 
     func start() {
+        developReadyRolls()
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             run()
@@ -389,6 +400,12 @@ final class CameraModel: NSObject, ObservableObject {
     func updateSavedFilm() {
         guard stock.isCustom else { return }
         library.update(stock)
+    }
+
+    /// Add a film someone shared with you (from a mono36:// link or QR code) and load it.
+    func addSharedFilm(_ film: FilmStock) {
+        library.add(film)
+        selectFilm(id: film.id)
     }
 
     func renameFilm(id: String, to name: String) {
@@ -570,9 +587,48 @@ final class CameraModel: NSObject, ObservableObject {
         }
     }
 
-    /// Wind on to a fresh roll (its album is made when its first frame is saved).
+    /// Wind on to a fresh roll (its album is made when its first frame is saved). Works
+    /// before frame 36 too: the rest of the old roll stays blank.
     func rewindRoll() {
-        roll = roll.next()
+        guard roll.frames > 0 else { return }
+        var finished = roll
+        finished.finish()
+        RollStore.updateInfo(finished)
+        roll = finished.next()
+        rollsVersion += 1
+        developReadyRolls()
+    }
+
+    /// Develop every finished roll whose time has come: file its waiting frames into its
+    /// Photos album, in order, and reveal them in the roll viewer.
+    func developReadyRolls() {
+        let previous = saveChain
+        saveChain = Task {
+            await previous?.value
+            var developed: [Int] = []
+            for stored in RollStore.rolls() where stored.isDeveloped() {
+                let waiting = RollStore.pendingFrames(of: stored.number)
+                guard !waiting.isEmpty else { continue }
+                for frame in waiting {
+                    guard let jpeg = try? Data(contentsOf: RollStore.pendingURL(roll: stored.number, frame: frame)) else { continue }
+                    do {
+                        _ = try await RollAlbums.save(jpeg, to: stored)
+                        RollStore.clearPending(roll: stored.number, frame: frame)
+                    } catch {
+                        await MainActor.run { self.message = error.localizedDescription }
+                        break   // keep the rest waiting; try again next time
+                    }
+                }
+                developed.append(stored.number)
+            }
+            await MainActor.run {
+                self.rollsVersion += 1
+                guard !developed.isEmpty else { return }
+                self.lastPrint = RollStore.latestThumbnail()
+                let names = developed.sorted().map { String(format: "ROLL %02d", $0) }.joined(separator: ", ")
+                self.message = "\(names) \(developed.count == 1 ? "HAS" : "HAVE") DEVELOPED"
+            }
+        }
     }
 
     // MARK: - Capture
@@ -584,7 +640,7 @@ final class CameraModel: NSObject, ObservableObject {
         let stampText = stampMode.text(for: Date())
         let finish = PrintFinish(border: border, seed: UInt32.random(in: 0...UInt32.max), width: borderWidth)
 
-        roll.expose(film: self.stock.name)
+        roll.expose(film: self.stock.name, develop: developMode)
         let frameRoll = roll
         let frameNumber = roll.frames
         developing += 1
@@ -626,7 +682,8 @@ final class CameraModel: NSObject, ObservableObject {
     private func finish(_ result: Result<Darkroom.Print, Error>, roll frameRoll: Roll, frame: Int) {
         switch result {
         case .success(let print):
-            lastPrint = print.thumbnail
+            let instant = frameRoll.develop == .instant
+            if instant { lastPrint = print.thumbnail }   // develop-later frames stay hidden
             let previous = saveChain
             saveChain = Task {
                 await previous?.value
@@ -635,6 +692,20 @@ final class CameraModel: NSObject, ObservableObject {
                     try RollStore.save(print.jpeg, roll: frameRoll, frame: frame)
                 } catch {
                     await MainActor.run { self.message = "Couldn't keep this frame in your roll: \(error.localizedDescription)" }
+                }
+                guard instant else {
+                    // Develop later: hold the full frame until the roll develops.
+                    do {
+                        try RollStore.savePending(print.jpeg, roll: frameRoll.number, frame: frame)
+                    } catch {
+                        await MainActor.run { self.message = error.localizedDescription }
+                    }
+                    await MainActor.run {
+                        self.developing -= 1
+                        self.rollsVersion += 1
+                        if frameRoll.isDeveloped() { self.developReadyRolls() }   // e.g. ROLL END after frame 36
+                    }
+                    return
                 }
                 do {
                     let outcome = try await RollAlbums.save(print.jpeg, to: frameRoll)
@@ -649,7 +720,10 @@ final class CameraModel: NSObject, ObservableObject {
                 } catch {
                     await MainActor.run { self.message = error.localizedDescription }
                 }
-                await MainActor.run { self.developing -= 1 }
+                await MainActor.run {
+                    self.developing -= 1
+                    self.rollsVersion += 1
+                }
             }
         case .failure(let error):
             developing -= 1

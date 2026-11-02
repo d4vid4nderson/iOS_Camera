@@ -54,6 +54,10 @@ struct ContentView: View {
     @FocusState private var nameFieldFocused: Bool
     /// Long-pressed film card whose actions (rename, reset, delete) the FILM panel shows.
     @State private var managingFilm: String?
+    /// Film whose recipe is being shared (QR / link).
+    @State private var sharingFilm: FilmStock?
+    /// A film someone shared, waiting for "ADD".
+    @State private var incomingFilm: FilmStock?
     @State private var confirmingDelete = false
     @AppStorage(ShutterFinish.storageKey) private var finishRaw = ShutterFinish.copper.rawValue
 
@@ -91,6 +95,11 @@ struct ContentView: View {
                 nameCard(naming)
                     .transition(.opacity)
             }
+
+            if let film = incomingFilm {
+                importCard(film)
+                    .transition(.opacity)
+            }
         }
         .ignoresSafeArea(.keyboard)
         .animation(.snappy(duration: 0.2), value: naming)
@@ -112,6 +121,16 @@ struct ContentView: View {
         .sensoryFeedback(.impact(weight: .medium), trigger: camera.framesShot)
         .fullScreenCover(isPresented: $showingPrint) {
             RollViewer(camera: camera, accent: accent)
+        }
+        .sheet(item: $sharingFilm) { film in
+            FilmShareSheet(film: film, accent: accent)
+        }
+        .onOpenURL { url in
+            if let film = FilmCode.film(from: url) {
+                withAnimation(.snappy(duration: 0.2)) { incomingFilm = film }
+            } else {
+                camera.message = "That film link didn't work."
+            }
         }
     }
 
@@ -514,9 +533,8 @@ struct ContentView: View {
         .sensoryFeedback(.impact(weight: .light), trigger: managingFilm)
     }
 
-    private func hasActions(_ stock: FilmStock) -> Bool {
-        stock.isCustom || camera.library.isEdited(id: stock.id)
-    }
+    /// Every film can at least be shared; your own and edited ones have more.
+    private func hasActions(_ stock: FilmStock) -> Bool { true }
 
     private func canister(_ stock: FilmStock) -> some View {
         let selected = stock.id == camera.stock.id
@@ -602,6 +620,10 @@ struct ContentView: View {
                     .sensoryFeedback(.warning, trigger: confirmingDelete) { _, new in new }
                 }
                 Spacer(minLength: 0)
+                smallChip("SHARE", selected: false) {
+                    sharingFilm = film
+                    managingFilm = nil
+                }
                 smallChip("DONE", selected: true) {
                     withAnimation(.snappy(duration: 0.2)) { managingFilm = nil }
                 }
@@ -657,6 +679,44 @@ struct ContentView: View {
             .padding(.top, 110)
             .onAppear { nameFieldFocused = true }
         }
+    }
+
+    /// Someone shared a film with you: add it to your films?
+    private func importCard(_ film: FilmStock) -> some View {
+        ZStack(alignment: .top) {
+            Color.black.opacity(0.55)
+                .ignoresSafeArea()
+                .onTapGesture { incomingFilm = nil }
+
+            VStack(alignment: .leading, spacing: 12) {
+                Text("FILM SHARED WITH YOU").font(.mono(10, .semibold)).foregroundStyle(.secondary)
+                Text(film.name).font(.mono(20, .bold)).foregroundStyle(accent)
+                Text(filmSummary(film)).font(.mono(10)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    smallChip("NOT NOW", selected: false) { incomingFilm = nil }
+                    Spacer()
+                    smallChip("ADD TO MY FILMS", selected: true) {
+                        camera.addSharedFilm(film)
+                        incomingFilm = nil
+                        camera.message = "\(film.name) ADDED"
+                    }
+                }
+            }
+            .padding(16)
+            .background(RoundedRectangle(cornerRadius: 16).fill(Color(white: 0.11)))
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color(white: 0.25), lineWidth: 0.5))
+            .padding(.horizontal, 20)
+            .padding(.top, 110)
+        }
+    }
+
+    private func filmSummary(_ film: FilmStock) -> String {
+        var parts = ["FILTER " + (film.colorFilter?.label ?? "CUSTOM"),
+                     "CONTRAST \(Int((film.contrast * 100).rounded()))"]
+        if film.tone != .neutral, film.toneAmount > 0 { parts.append("TONE " + film.tone.label) }
+        if film.effect != .none { parts.append("FX " + film.effect.label) }
+        return parts.joined(separator: " · ")
     }
 
     private func commitName(_ mode: FilmNaming) {

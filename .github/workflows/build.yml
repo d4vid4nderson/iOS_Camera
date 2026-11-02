@@ -23,7 +23,7 @@ jobs:
 
       - name: Film model tests
         run: |
-          swiftc RetroCam/FilmStock.swift RetroCam/FilmLibrary.swift RetroCam/Roll.swift ci/film-tests/main.swift -o "$RUNNER_TEMP/film-tests"
+          swiftc RetroCam/FilmStock.swift RetroCam/FilmLibrary.swift RetroCam/Roll.swift RetroCam/FilmCode.swift ci/film-tests/main.swift -o "$RUNNER_TEMP/film-tests"
           "$RUNNER_TEMP/film-tests"
 
       - name: Build
@@ -39,7 +39,11 @@ jobs:
             | tee build.log
 
       - name: Show generated Info.plist
-        run: plutil -p build/DerivedData/Build/Products/Release-iphoneos/RetroCam.app/Info.plist
+        run: |
+          plist=build/DerivedData/Build/Products/Release-iphoneos/RetroCam.app/Info.plist
+          plutil -p "$plist"
+          # Film recipe links (mono36://) need the URL type merged from Config/Info.plist.
+          plutil -p "$plist" | grep -q '"mono36"' || { echo "mono36 URL scheme missing"; exit 1; }
 
       - name: Upload build log
         if: failure()

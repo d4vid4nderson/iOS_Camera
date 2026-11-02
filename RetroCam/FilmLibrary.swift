@@ -49,6 +49,12 @@ struct FilmLibrary: Equatable {
         return film
     }
 
+    /// Add a film someone shared (already given its own custom id).
+    mutating func add(_ film: FilmStock) {
+        guard film.isCustom, original(id: film.id) == nil else { return }
+        custom.append(film)
+    }
+
     /// Write the current adjustments into the user's own film `stock.id`.
     mutating func update(_ stock: FilmStock) {
         guard stock.isCustom, let index = custom.firstIndex(where: { $0.id == stock.id }) else { return }
