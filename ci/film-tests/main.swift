@@ -139,15 +139,40 @@ let oldJSON = #"{"number":2,"frames":5}"#.data(using: .utf8)!
 let oldRoll = try! JSONDecoder().decode(Roll.self, from: oldJSON)
 check(oldRoll.develop == .instant && oldRoll.finishedAt == nil && oldRoll.frames == 5, "older saved rolls still load")
 
-// Film recipe links: round trip, new id, and junk rejected.
+// Film recipe links: compact, round trip within a click of every dial, new id, old links
+// still open, junk rejected.
 var recipe = FilmStock.lith
 recipe.name = "MY LITH"; recipe.effect = .swirl; recipe.effectAmount = 0.7; recipe.contrast = 0.81
+recipe.effectX = 0.25; recipe.effectY = 0.6; recipe.key = -0.35; recipe.exposure = 0.3
 let link = FilmCode.url(for: recipe)!
-check(link.scheme == "exposures" && link.absoluteString.count < 1500, "film link is compact (\(link.absoluteString.count) chars)")
+check(link.scheme == "exposures" && link.absoluteString.count <= 72, "film link is compact (\(link.absoluteString.count) chars)")
 let received = FilmCode.film(from: link)!
 check(received.isCustom && received.id != recipe.id && received.name == "MY LITH", "received film is a new custom film")
-check(near(received.contrast, 0.81) && received.effect == .swirl && received.tone == recipe.tone, "every setting survives the link")
-check(FilmCode.film(from: URL(string: "exposures://film?d=garbage")!) == nil, "damaged links are rejected")
+check(received.effect == .swirl && received.tone == recipe.tone && received.iso == recipe.iso, "enums and ISO survive")
+// Packed to 1/255 of each range: well inside the dials' 0.01-0.1 steps.
+let pairs: [(CGFloat, CGFloat, String)] = [
+    (received.contrast, recipe.contrast, "contrast"), (received.key, recipe.key, "key"),
+    (received.red, recipe.red, "red"), (received.green, recipe.green, "green"), (received.blue, recipe.blue, "blue"),
+    (received.blackLift, recipe.blackLift, "fade"), (received.whitePoint, recipe.whitePoint, "whites"),
+    (received.grain, recipe.grain, "grain"), (received.grainSize, recipe.grainSize, "grain size"),
+    (received.vignette, recipe.vignette, "vignette"), (received.toneAmount, recipe.toneAmount, "tone amount"),
+    (received.bloom, recipe.bloom, "glow"), (received.exposure, recipe.exposure, "exposure"),
+    (received.effectAmount, recipe.effectAmount, "fx amount"),
+    (received.effectX, recipe.effectX, "fx x"), (received.effectY, recipe.effectY, "fx y"),
+]
+for (got, want, name) in pairs { check(near(got, want, 0.012), "\(name) survives the link (\(got) vs \(want))") }
+for film in FilmStock.all {
+    let back = FilmCode.film(from: FilmCode.url(for: film)!)!
+    check(back.name == film.name && back.tone == film.tone && near(back.contrast, film.contrast, 0.005), "\(film.id) round-trips")
+}
+// A link from the first sharing build (zlib JSON) still opens.
+var oldFilm = FilmStock.noir; oldFilm.id = "shared"; oldFilm.name = "OLD NOIR"
+let oldPacked = try! (JSONEncoder().encode(oldFilm) as NSData).compressed(using: .zlib) as Data
+var oldParts = URLComponents(); oldParts.scheme = "exposures"; oldParts.host = "film"
+oldParts.queryItems = [URLQueryItem(name: "d", value: FilmCode.base64url(oldPacked))]
+check(FilmCode.film(from: oldParts.url!)?.name == "OLD NOIR", "older film links still open")
+check(FilmCode.film(from: URL(string: "exposures://film?d=garbage")!) == nil, "damaged old links are rejected")
+check(FilmCode.film(from: URL(string: "exposures://f/garbage")!) == nil, "damaged links are rejected")
 check(FilmCode.film(from: URL(string: "https://example.com/film?d=abc")!) == nil, "other links are ignored")
 var shareLib = FilmLibrary()
 shareLib.add(received)
