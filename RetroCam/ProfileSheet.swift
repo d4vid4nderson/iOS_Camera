@@ -31,6 +31,8 @@ struct ProfileSheet: View {
     @State private var note: String?
     @State private var viewingMine: IncomingUser?
     @State private var confirmDeleteAccount = false
+    @State private var makingCard = false
+    @State private var sharing: ShareItems?
 
     var body: some View {
         ScrollView {
@@ -123,6 +125,9 @@ struct ProfileSheet: View {
         .fullScreenCover(item: $viewingMine) { me in
             UserProfileView(userID: me.id, camera: camera, accent: accent)
         }
+        .sheet(item: $sharing) { item in
+            ActivityView(items: item.items).ignoresSafeArea()
+        }
         .onAppear(perform: loadRolls)
         .task { await account.refresh() }
         .onReceive(account.$headshotVersion.dropFirst()) { _ in
@@ -168,8 +173,8 @@ struct ProfileSheet: View {
                 Text("PUBLIC PROFILE").font(.mono(9, .semibold)).foregroundStyle(.secondary)
                 HStack(spacing: 6) {
                     chip("VIEW MY PROFILE", selected: true) { viewingMine = IncomingUser(id: me.id) }
-                    ShareLink(item: me.url) { chipText("SHARE LINK", selected: false) }
-                        .buttonStyle(.plain)
+                    chip(makingCard ? "MAKING CARD…" : "SHARE PROFILE", selected: false) { shareProfile(me) }
+                        .disabled(makingCard)
                 }
                 Text(profile.showOnCards
                      ? "Your name and headshot show on your profile."
@@ -431,6 +436,20 @@ struct ProfileSheet: View {
         guard account.isSignedIn else { return }
         let current = profile
         Task { await account.syncProfile(current, avatarChanged: avatarChanged) }
+    }
+
+    /// Share your public profile as a card (latest roll covers, headshot, name, counts) with
+    /// its link. Just the link if the profile can't be fetched.
+    private func shareProfile(_ me: Account.Me) {
+        makingCard = true
+        Task {
+            var card: UIImage?
+            if let remote = try? await RollShare.fetchProfile(id: me.id) {
+                card = await ProfileCard.make(for: remote)
+            }
+            makingCard = false
+            sharing = ShareItems(items: [card as Any?, me.url].compactMap { $0 })
+        }
     }
 
     private func chip(_ text: String, selected: Bool, action: @escaping () -> Void) -> some View {

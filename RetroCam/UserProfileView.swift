@@ -20,6 +20,7 @@ struct UserProfileView: View {
     @State private var opening: OpenRoll?
     @State private var sharing: ShareItems?
     @State private var confirmingBlock = false
+    @State private var makingCard = false
 
     private var isMe: Bool { account.me?.id == userID }
 
@@ -90,7 +91,8 @@ struct UserProfileView: View {
             }
             if let profile {
                 HStack(spacing: 8) {
-                    chip("SHARE PROFILE", selected: true) { sharing = ShareItems(items: [profile.url]) }
+                    chip(makingCard ? "MAKING CARD…" : "SHARE PROFILE", selected: true) { shareProfile(profile) }
+                        .disabled(makingCard)
                     Spacer(minLength: 0)
                     if !isMe {
                         chip("BLOCK", selected: false) { withAnimation(.snappy(duration: 0.15)) { confirmingBlock = true } }
@@ -193,6 +195,16 @@ struct UserProfileView: View {
                 .foregroundStyle(destructive ? Color(red: 1, green: 0.45, blue: 0.4) : Color(white: 0.55))
         }
         .buttonStyle(.plain)
+    }
+
+    /// Share the profile as a card (latest roll covers, headshot, name, counts) with its link.
+    private func shareProfile(_ profile: RollShare.RemoteProfile) {
+        makingCard = true
+        Task {
+            let card = await ProfileCard.make(for: profile)
+            makingCard = false
+            sharing = ShareItems(items: [card as Any?, profile.url].compactMap { $0 })
+        }
     }
 
     private func chip(_ text: String, selected: Bool, action: @escaping () -> Void) -> some View {
