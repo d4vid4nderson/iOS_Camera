@@ -2,82 +2,210 @@ import CoreImage
 import CoreImage.CIFilterBuiltins
 import UIKit
 
-/// A film's share code as a card in the app's style: a QR drawn with round dots and
-/// rounded corner eyes on paper, set on an accent-coloured card with sprocket holes, the
-/// film's name and "Exposures". It's still a standard QR code, so the iPhone Camera app
-/// scans it; the shapes only change how each module is drawn, not where it is.
+/// A film's share card. Two layouts in one style:
+///
+/// - **Photo**: a frame you shot on the film fills the top, with the film's name, a short
+///   description and a small code below. Shows what the film does.
+/// - **Tones**: for a film with no frames yet (or when you'd rather not share a photo):
+///   the name large on a dark card, the film's tone scale (black to white, developed
+///   through the film, so toned films show their colour) and the code on a light tile.
+///
+/// The code is a standard QR code drawn with joined round modules, so the iPhone Camera
+/// app scans it; the shapes only change how each module is drawn, not where it is.
 enum FilmCodeCard {
     static let size = CGSize(width: 1080, height: 1350)   // 4:5, the portrait size feeds use
 
-    static func render(film: FilmStock, url: URL, accent: UIColor) -> UIImage? {
+    static func render(film: FilmStock, url: URL, photo: UIImage?) -> UIImage? {
         guard let modules = modules(for: url.absoluteString) else { return nil }
-        let n = modules.count
-        let ink = UIColor(white: 0.08, alpha: 1)
-        let paper = UIColor(red: 0.97, green: 0.95, blue: 0.92, alpha: 1)
-
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         format.opaque = true
         return UIGraphicsImageRenderer(size: size, format: format).image { ctx in
-            let cg = ctx.cgContext
-            accent.setFill()
-            cg.fill(CGRect(origin: .zero, size: size))
-
-            // Sprocket holes along the top and bottom, centred.
-            let hole = CGSize(width: 30, height: 26), gap: CGFloat = 28
-            let count = Int((size.width - 80 + gap) / (hole.width + gap))
-            let run = CGFloat(count) * hole.width + CGFloat(count - 1) * gap
-            UIColor(white: 0.12, alpha: 1).setFill()
-            for y in [34, size.height - 34 - hole.height] {
-                for i in 0..<count {
-                    let x = (size.width - run) / 2 + CGFloat(i) * (hole.width + gap)
-                    UIBezierPath(roundedRect: CGRect(x: x, y: y, width: hole.width, height: hole.height),
-                                 cornerRadius: 7).fill()
-                }
+            if let photo {
+                drawPhotoCard(film: film, photo: photo, modules: modules, in: ctx.cgContext)
+            } else {
+                drawToneCard(film: film, modules: modules, in: ctx.cgContext)
             }
+        }
+    }
 
-            // Paper square with the code.
-            let side: CGFloat = 860
-            let square = CGRect(x: (size.width - side) / 2, y: 110, width: side, height: side)
-            paper.setFill()
-            UIBezierPath(roundedRect: square, cornerRadius: 56).fill()
+    // MARK: Layouts
 
-            let quiet: CGFloat = 3
-            let m = side / (CGFloat(n) + 2 * quiet)
-            func origin(_ r: Int, _ c: Int) -> CGPoint {
-                CGPoint(x: square.minX + (CGFloat(c) + quiet) * m, y: square.minY + (CGFloat(r) + quiet) * m)
+    private static func drawPhotoCard(film: FilmStock, photo: UIImage, modules: [[Bool]], in cg: CGContext) {
+        let background = UIColor(red: 0.961, green: 0.953, blue: 0.937, alpha: 1)
+        let ink = UIColor(white: 0.067, alpha: 1)
+        let muted = UIColor(red: 0.50, green: 0.486, blue: 0.463, alpha: 1)
+        let margin: CGFloat = 56
+
+        background.setFill()
+        cg.fill(CGRect(origin: .zero, size: size))
+
+        // The frame, whole (prints may have borders), as large as fits the top.
+        let area = CGRect(x: margin, y: margin, width: size.width - 2 * margin, height: 880)
+        let aspect = photo.size.width / max(photo.size.height, 1)
+        var frame = area
+        if aspect > area.width / area.height {
+            frame.size.height = area.width / aspect
+        } else {
+            frame.size.width = area.height * aspect
+            frame.origin.x = area.midX - frame.width / 2
+        }
+        cg.saveGState()
+        UIBezierPath(roundedRect: frame, cornerRadius: 20).addClip()
+        photo.draw(in: frame)
+        cg.restoreGState()
+
+        let textTop = frame.maxY + 52
+        let maxWidth = size.width - 2 * margin
+        let title = fitted(film.name, weight: .bold, size: 92, minSize: 54, width: maxWidth)
+        draw(film.name, font: title, color: ink, at: CGPoint(x: margin - 3, y: textTop), kern: -title.pointSize * 0.02)
+        draw(film.shareCaption, font: .systemFont(ofSize: 29, weight: .regular), color: muted,
+             at: CGPoint(x: margin, y: textTop + title.lineHeight + 8))
+
+        let codeSide: CGFloat = 210
+        let codeRect = CGRect(x: size.width - margin - codeSide, y: size.height - margin - codeSide,
+                              width: codeSide, height: codeSide)
+        drawCode(modules, in: codeRect, ink: ink, paper: background, context: cg)
+
+        let mark = UIFont.systemFont(ofSize: 22, weight: .semibold)
+        let markY = size.height - margin - mark.lineHeight
+        draw("EXPOSURES", font: mark, color: ink, at: CGPoint(x: margin, y: markY), kern: 1)
+        let markWidth = ("EXPOSURES" as NSString).size(withAttributes: [.font: mark, .kern: 1]).width
+        draw("Scan to load this film", font: .systemFont(ofSize: 22, weight: .regular), color: muted,
+             at: CGPoint(x: margin + markWidth + 14, y: markY))
+    }
+
+    private static func drawToneCard(film: FilmStock, modules: [[Bool]], in cg: CGContext) {
+        let background = UIColor(red: 0.055, green: 0.055, blue: 0.059, alpha: 1)
+        let light = UIColor(red: 0.949, green: 0.941, blue: 0.925, alpha: 1)
+        let muted = UIColor(red: 0.55, green: 0.54, blue: 0.525, alpha: 1)
+        let margin: CGFloat = 64
+
+        background.setFill()
+        cg.fill(CGRect(origin: .zero, size: size))
+
+        draw("EXPOSURES", font: .systemFont(ofSize: 22, weight: .semibold), color: muted,
+             at: CGPoint(x: margin, y: 52), kern: 1)
+        let title = fitted(film.name, weight: .bold, size: 150, minSize: 64, width: size.width - 2 * margin)
+        let titleTop: CGFloat = 150 + (150 - title.pointSize) * 0.6
+        draw(film.name, font: title, color: light, at: CGPoint(x: margin - 5, y: titleTop), kern: -title.pointSize * 0.025)
+        draw(film.shareCaption, font: .systemFont(ofSize: 30, weight: .regular), color: muted,
+             at: CGPoint(x: margin + 2, y: 340))
+
+        // Tone scale: an even grey ramp developed through the film.
+        let tones = toneScale(for: film, steps: 11)
+        let gap: CGFloat = 6, top: CGFloat = 430, height: CGFloat = 150
+        let step = (size.width - 2 * margin - gap * CGFloat(tones.count - 1)) / CGFloat(tones.count)
+        for (i, tone) in tones.enumerated() {
+            tone.setFill()
+            UIBezierPath(roundedRect: CGRect(x: margin + CGFloat(i) * (step + gap), y: top, width: step, height: height),
+                         cornerRadius: 10).fill()
+        }
+        draw("TONE SCALE", font: .systemFont(ofSize: 20, weight: .medium), color: muted,
+             at: CGPoint(x: margin, y: top + height + 16), kern: 1)
+
+        // The code on a light tile (dark-on-light scans most reliably).
+        let tileSide: CGFloat = 520, codeSide: CGFloat = 400
+        let tile = CGRect(x: (size.width - tileSide) / 2, y: 760, width: tileSide, height: tileSide)
+        light.setFill()
+        UIBezierPath(roundedRect: tile, cornerRadius: 44).fill()
+        drawCode(modules, in: tile.insetBy(dx: (tileSide - codeSide) / 2, dy: (tileSide - codeSide) / 2),
+                 ink: background, paper: light, context: cg)
+    }
+
+    // MARK: Pieces
+
+    private static func draw(_ text: String, font: UIFont, color: UIColor, at point: CGPoint, kern: CGFloat = 0) {
+        (text as NSString).draw(at: point, withAttributes: [.font: font, .foregroundColor: color, .kern: kern])
+    }
+
+    /// The largest bold size (down to `minSize`) at which `text` fits on one line.
+    private static func fitted(_ text: String, weight: UIFont.Weight, size: CGFloat, minSize: CGFloat, width: CGFloat) -> UIFont {
+        var pointSize = size
+        while pointSize > minSize {
+            let font = UIFont.systemFont(ofSize: pointSize, weight: weight)
+            if (text as NSString).size(withAttributes: [.font: font]).width <= width { return font }
+            pointSize -= 2
+        }
+        return UIFont.systemFont(ofSize: minSize, weight: weight)
+    }
+
+    /// The QR modules as round dots joined to their neighbours, with rounded corner eyes.
+    private static func drawCode(_ modules: [[Bool]], in rect: CGRect, ink: UIColor, paper: UIColor, context cg: CGContext) {
+        let n = modules.count
+        let m = rect.width / CGFloat(n)
+        let finders = [(0, 0), (0, n - 7), (n - 7, 0)]
+        func inFinder(_ r: Int, _ c: Int) -> Bool {
+            finders.contains { r >= $0.0 && r < $0.0 + 7 && c >= $0.1 && c < $0.1 + 7 }
+        }
+        func on(_ r: Int, _ c: Int) -> Bool {
+            r >= 0 && r < n && c >= 0 && c < n && modules[r][c] && !inFinder(r, c)
+        }
+        let dot = m * 0.84, pad = (m - dot) / 2
+
+        ink.setFill()
+        for r in 0..<n {
+            for c in 0..<n where on(r, c) {
+                let x = rect.minX + CGFloat(c) * m, y = rect.minY + CGFloat(r) * m
+                cg.fillEllipse(in: CGRect(x: x + pad, y: y + pad, width: dot, height: dot))
+                if on(r, c + 1) { cg.fill(CGRect(x: x + m / 2, y: y + pad, width: m, height: dot)) }
+                if on(r + 1, c) { cg.fill(CGRect(x: x + pad, y: y + m / 2, width: dot, height: m)) }
             }
-            let finders = [(0, 0), (0, n - 7), (n - 7, 0)]
-            func inFinder(_ r: Int, _ c: Int) -> Bool {
-                finders.contains { r >= $0.0 && r < $0.0 + 7 && c >= $0.1 && c < $0.1 + 7 }
-            }
-
+        }
+        for (fr, fc) in finders {
+            let x = rect.minX + CGFloat(fc) * m, y = rect.minY + CGFloat(fr) * m
             ink.setFill()
-            let pad = m * 0.08
-            for r in 0..<n {
-                for c in 0..<n where modules[r][c] && !inFinder(r, c) {
-                    let p = origin(r, c)
-                    cg.fillEllipse(in: CGRect(x: p.x + pad, y: p.y + pad, width: m - 2 * pad, height: m - 2 * pad))
+            UIBezierPath(roundedRect: CGRect(x: x, y: y, width: 7 * m, height: 7 * m), cornerRadius: 2.3 * m).fill()
+            paper.setFill()
+            UIBezierPath(roundedRect: CGRect(x: x + m, y: y + m, width: 5 * m, height: 5 * m), cornerRadius: 1.6 * m).fill()
+            ink.setFill()
+            UIBezierPath(roundedRect: CGRect(x: x + 2 * m, y: y + 2 * m, width: 3 * m, height: 3 * m), cornerRadius: 1.2 * m).fill()
+        }
+    }
+
+    private static let context = CIContext()
+
+    /// `steps` greys from black to white as the film prints them: its curve, filter and
+    /// toning, without grain, fog, vignette or lens effects.
+    static func toneScale(for film: FilmStock, steps: Int) -> [UIColor] {
+        var flat = film
+        flat.grain = 0
+        flat.vignette = 0
+        flat.fog = 0
+        flat.bloom = 0
+        flat.edgeSoftness = 0
+        flat.effect = .none
+
+        // A ramp of even sRGB greys, one 8x8 patch per step.
+        let patch = 8, width = steps * patch
+        var pixels = [UInt8](repeating: 255, count: width * patch * 4)
+        for i in 0..<steps {
+            let v = UInt8((Double(i) / Double(max(steps - 1, 1)) * 255).rounded())
+            for y in 0..<patch {
+                for x in i * patch..<(i + 1) * patch {
+                    let p = (y * width + x) * 4
+                    pixels[p] = v; pixels[p + 1] = v; pixels[p + 2] = v
                 }
             }
-            for (fr, fc) in finders {
-                let p = origin(fr, fc)
-                ink.setFill()
-                UIBezierPath(roundedRect: CGRect(x: p.x, y: p.y, width: 7 * m, height: 7 * m), cornerRadius: 2.2 * m).fill()
-                paper.setFill()
-                UIBezierPath(roundedRect: CGRect(x: p.x + m, y: p.y + m, width: 5 * m, height: 5 * m), cornerRadius: 1.5 * m).fill()
-                ink.setFill()
-                UIBezierPath(roundedRect: CGRect(x: p.x + 2 * m, y: p.y + 2 * m, width: 3 * m, height: 3 * m), cornerRadius: 1.0 * m).fill()
-            }
+        }
+        let fallback = (0..<steps).map { UIColor(white: CGFloat($0) / CGFloat(max(steps - 1, 1)), alpha: 1) }
+        guard let sRGB = CGColorSpace(name: CGColorSpace.sRGB),
+              let provider = CGDataProvider(data: Data(pixels) as CFData),
+              let ramp = CGImage(width: width, height: patch, bitsPerComponent: 8, bitsPerPixel: 32,
+                                 bytesPerRow: width * 4, space: sRGB,
+                                 bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue),
+                                 provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent)
+        else { return fallback }
 
-            // Film name and the line under it.
-            (film.name as NSString).draw(
-                at: CGPoint(x: square.minX, y: square.maxY + 44),
-                withAttributes: [.font: UIFont.monospacedSystemFont(ofSize: 76, weight: .bold), .foregroundColor: ink])
-            ("SCAN TO LOAD THIS FILM  ·  EXPOSURES" as NSString).draw(
-                at: CGPoint(x: square.minX, y: square.maxY + 150),
-                withAttributes: [.font: UIFont.monospacedSystemFont(ofSize: 28, weight: .regular),
-                                 .foregroundColor: UIColor(white: 0.16, alpha: 1)])
+        let developed = FilmLook.apply(flat, to: CIImage(cgImage: ramp))
+        guard let out = context.createCGImage(developed, from: developed.extent, format: .RGBA8, colorSpace: sRGB),
+              let data = out.dataProvider?.data, let bytes = CFDataGetBytePtr(data) else { return fallback }
+        let rowBytes = out.bytesPerRow, y = out.height / 2
+        return (0..<steps).map { i in
+            let x = min(i * patch + patch / 2, out.width - 1)
+            let p = y * rowBytes + x * 4
+            return UIColor(red: CGFloat(bytes[p]) / 255, green: CGFloat(bytes[p + 1]) / 255,
+                           blue: CGFloat(bytes[p + 2]) / 255, alpha: 1)
         }
     }
 

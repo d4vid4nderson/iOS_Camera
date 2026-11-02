@@ -436,3 +436,27 @@ extension FilmStock {
 
     static func builtIn(id: String) -> FilmStock? { all.first { $0.id == id } }
 }
+
+extension FilmStock {
+    /// One line for share cards: "Black & white · ISO 50 · Fine grain",
+    /// "Selenium toned · ISO 100 · Medium grain".
+    var shareCaption: String {
+        let kind: String
+        if tone == .neutral || toneAmount < 0.3 {
+            kind = "Black & white"
+        } else {
+            let names: [Toning: String] = [
+                .warm: "Sepia", .cool: "Cool", .selenium: "Selenium", .split: "Split",
+                .gold: "Gold", .platinum: "Platinum", .cyanotype: "Cyanotype", .tintype: "Tintype",
+            ]
+            kind = "\(names[tone] ?? "Toned") toned"
+        }
+        let texture: String
+        switch grain {
+        case ..<0.2: texture = "Fine grain"
+        case ..<0.45: texture = "Medium grain"
+        default: texture = "Heavy grain"
+        }
+        return "\(kind)  ·  ISO \(iso)  ·  \(texture)"
+    }
+}

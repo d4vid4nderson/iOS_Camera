@@ -641,6 +641,7 @@ final class CameraModel: NSObject, ObservableObject {
         let finish = PrintFinish(border: border, seed: UInt32.random(in: 0...UInt32.max), width: borderWidth)
 
         roll.expose(film: self.stock.name, develop: developMode)
+        let filmID = self.stock.id
         let frameRoll = roll
         let frameNumber = roll.frames
         developing += 1
@@ -672,14 +673,14 @@ final class CameraModel: NSObject, ObservableObject {
             let processor = PhotoCaptureProcessor(stock: stock, stampText: stampText, finish: finish) { [weak self] result in
                 guard let self else { return }
                 self.sessionQueue.async { self.inFlight[id] = nil }
-                DispatchQueue.main.async { self.finish(result, roll: frameRoll, frame: frameNumber) }
+                DispatchQueue.main.async { self.finish(result, roll: frameRoll, frame: frameNumber, filmID: filmID) }
             }
             self.inFlight[id] = processor
             self.photoOutput.capturePhoto(with: settings, delegate: processor)
         }
     }
 
-    private func finish(_ result: Result<Darkroom.Print, Error>, roll frameRoll: Roll, frame: Int) {
+    private func finish(_ result: Result<Darkroom.Print, Error>, roll frameRoll: Roll, frame: Int, filmID: String) {
         switch result {
         case .success(let print):
             let instant = frameRoll.develop == .instant
@@ -689,7 +690,7 @@ final class CameraModel: NSObject, ObservableObject {
                 await previous?.value
                 // The app's own read-only copy for the roll viewer, kept whatever Photos allows.
                 do {
-                    try RollStore.save(print.jpeg, roll: frameRoll, frame: frame)
+                    try RollStore.save(print.jpeg, roll: frameRoll, frame: frame, filmID: filmID)
                 } catch {
                     await MainActor.run { self.message = "Couldn't keep this frame in your roll: \(error.localizedDescription)" }
                 }
