@@ -58,6 +58,7 @@ struct ContentView: View {
     @State private var sharingFilm: FilmStock?
     /// A film someone shared, waiting for "ADD".
     @State private var incomingFilm: FilmStock?
+    @State private var incomingRoll: IncomingRoll?
     @State private var confirmingDelete = false
     @AppStorage(ShutterFinish.storageKey) private var finishRaw = ShutterFinish.copper.rawValue
 
@@ -125,11 +126,17 @@ struct ContentView: View {
         .sheet(item: $sharingFilm) { film in
             FilmShareSheet(film: film, accent: accent)
         }
+        .fullScreenCover(item: $incomingRoll) { ref in
+            SharedRollView(rollID: ref.id, camera: camera, accent: accent)
+        }
         .onOpenURL { url in
             if let film = FilmCode.film(from: url) {
                 withAnimation(.snappy(duration: 0.2)) { incomingFilm = film }
+            } else if let id = ShareLinks.rollID(from: url) {
+                showingPrint = false
+                incomingRoll = IncomingRoll(id: id)
             } else {
-                camera.message = "That film link didn't work."
+                camera.message = "That link didn't work."
             }
         }
     }
@@ -1324,4 +1331,9 @@ private struct ShutterButtonStyle: ButtonStyle {
 
 #Preview {
     ContentView()
+}
+
+/// A shared roll opened from a link.
+struct IncomingRoll: Identifiable {
+    let id: String
 }

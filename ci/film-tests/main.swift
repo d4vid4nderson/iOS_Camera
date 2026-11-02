@@ -145,7 +145,7 @@ var recipe = FilmStock.lith
 recipe.name = "MY LITH"; recipe.effect = .swirl; recipe.effectAmount = 0.7; recipe.contrast = 0.81
 recipe.effectX = 0.25; recipe.effectY = 0.6; recipe.key = -0.35; recipe.exposure = 0.3
 let link = FilmCode.url(for: recipe)!
-check(link.scheme == "exposures" && link.absoluteString.count <= 72, "film link is compact (\(link.absoluteString.count) chars)")
+check(["exposures", "https"].contains(link.scheme ?? "") && link.lastPathComponent.count <= 50, "film code is compact (\(link.lastPathComponent.count) chars)")
 let received = FilmCode.film(from: link)!
 check(received.isCustom && received.id != recipe.id && received.name == "MY LITH", "received film is a new custom film")
 check(received.effect == .swirl && received.tone == recipe.tone && received.iso == recipe.iso, "enums and ISO survive")
@@ -177,6 +177,16 @@ check(FilmCode.film(from: URL(string: "https://example.com/film?d=abc")!) == nil
 var shareLib = FilmLibrary()
 shareLib.add(received)
 check(shareLib.original(id: received.id) != nil && shareLib.all.last?.id == received.id, "shared film added to the picker")
+
+// Web links (https://<share host>/f/<code> and /r/<id>).
+let panCode = FilmCode.url(for: .pan50)!.lastPathComponent
+let web = URL(string: "https://exposures.example.workers.dev/f/\(panCode)")!
+check(FilmCode.film(from: web, webHost: "exposures.example.workers.dev")?.name == "PAN 50", "web film links open")
+check(FilmCode.film(from: web, webHost: "other.example.com") == nil, "film links from other sites are ignored")
+check(ShareLinks.rollID(from: URL(string: "https://exposures.example.workers.dev/r/AbCd234xyz")!, host: "exposures.example.workers.dev") == "AbCd234xyz", "web roll links parse")
+check(ShareLinks.rollID(from: URL(string: "exposures://r/AbCd234xyz")!) == "AbCd234xyz", "app roll links parse")
+check(ShareLinks.rollID(from: URL(string: "https://evil.example.com/r/AbCd234xyz")!, host: "exposures.example.workers.dev") == nil, "roll links from other sites are ignored")
+check(ShareLinks.rollID(from: URL(string: "exposures://r/short")!) == nil, "bad roll ids are rejected")
 
 // Share card captions.
 check(FilmStock.pan50.shareCaption == "Black & white  ·  ISO 50  ·  Fine grain", "PAN 50 caption: \(FilmStock.pan50.shareCaption)")

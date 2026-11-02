@@ -2,7 +2,8 @@ import CoreGraphics
 import Foundation
 
 /// Share a film's whole recipe (filter, curve, toning, grain, lens, FX) as a link or QR
-/// code: exposures://f/<code>.
+/// code: https://<share host>/f/<code> (opens the app, or a web page about the film for
+/// people without it), or exposures://f/<code> before the share server is set up.
 ///
 /// The code packs each setting into one byte (its position within the range the app
 /// allows), plus the ISO and the name: about 32 bytes, 43 characters. That keeps the QR
@@ -34,18 +35,22 @@ enum FilmCode {
         let iso = UInt16(clamping: film.iso)
         bytes.append(UInt8(iso >> 8)); bytes.append(UInt8(iso & 0xFF))
         bytes.append(contentsOf: Array(FilmLibrary.cleanName(film.name).utf8))
-        return URL(string: "\(scheme)://f/\(base64url(Data(bytes)))")
+        let code = base64url(Data(bytes))
+        if let base = ShareLinks.base { return base.appendingPathComponent("f").appendingPathComponent(code) }
+        return URL(string: "\(scheme)://f/\(code)")
     }
 
     /// The film in a shared link, ready to save as one of the user's own. nil if the link
     /// isn't a film link or is damaged.
-    static func film(from url: URL) -> FilmStock? {
-        guard url.scheme == scheme else { return nil }
+    static func film(from url: URL, webHost: String = ShareLinks.host) -> FilmStock? {
         var film: FilmStock?
-        if url.host == "f" {
+        if url.scheme == scheme, url.host == "f" {
             film = unpack(String(url.path.dropFirst()))
-        } else if url.host == "film" {
+        } else if url.scheme == scheme, url.host == "film" {
             film = legacy(url)
+        } else if url.scheme == "https", !webHost.isEmpty, url.host == webHost {
+            let parts = url.pathComponents.filter { $0 != "/" }
+            if parts.count == 2, parts[0] == "f" { film = unpack(parts[1]) }
         }
         guard var received = film else { return nil }
         received.id = FilmStock.customPrefix + UUID().uuidString

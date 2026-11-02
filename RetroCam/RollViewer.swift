@@ -25,6 +25,10 @@ struct RollViewer: View {
     @State private var makingSheet = false
     @State private var confirmFinish = false
     @State private var deleting: Roll?
+    @State private var confirmingShare: Roll?
+    @State private var uploading: (done: Int, total: Int)?
+    @State private var shareRecord: RollShare.Record?
+    @State private var unsharing = false
 
     private var roll: Roll? { rolls.first { $0.number == selected } }
     private var isInCamera: Bool { selected == camera.roll.number }
@@ -52,6 +56,7 @@ struct RollViewer: View {
         }
         .overlay {
             if let target = deleting { deleteCard(target) }
+            if let target = confirmingShare { shareCard(target) }
         }
         .preferredColorScheme(.dark)
         .onAppear(perform: reload)
@@ -172,12 +177,33 @@ struct RollViewer: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 if !developedFrames.isEmpty, let roll {
-                    chip(makingSheet ? "PRINTING…" : "SHARE SHEET", selected: true) { shareContactSheet(roll) }
+                    if ShareLinks.isConfigured {
+                        if let uploading {
+                            chip("UPLOADING \(uploading.done)/\(uploading.total)", selected: true) {}
+                                .disabled(true)
+                        } else if shareRecord != nil {
+                            chip("SHARE LINK", selected: true) { shareLinkAgain(roll) }
+                        } else {
+                            chip("SHARE ROLL", selected: true) {
+                                withAnimation(.snappy(duration: 0.15)) { confirmingShare = roll }
+                            }
+                        }
+                    }
+                    chip(makingSheet ? "PRINTING…" : "SHEET", selected: !ShareLinks.isConfigured) { shareContactSheet(roll) }
                         .disabled(makingSheet)
                 }
                 Spacer(minLength: 0)
                 if let roll {
                     deleteChip("DELETE ROLL") { withAnimation(.snappy(duration: 0.15)) { deleting = roll } }
+                }
+            }
+            if let shareRecord {
+                HStack(spacing: 8) {
+                    Text("SHARED · LINK WORKS UNTIL " + shareRecord.expiresAt.formatted(.dateTime.month(.abbreviated).day()).uppercased())
+                        .font(.mono(9, .semibold)).foregroundStyle(.secondary)
+                    Spacer(minLength: 0)
+                    chip(unsharing ? "UNSHARING…" : "UNSHARE", selected: false) { unshare() }
+                        .disabled(unsharing)
                 }
             }
 
@@ -310,6 +336,80 @@ struct RollViewer: View {
         .buttonStyle(.plain)
     }
 
+    // MARK: Share a roll as a link
+
+    private func shareCard(_ target: Roll) -> some View {
+        let name = String(format: "ROLL %02d", target.number)
+        let count = developedFrames.count
+        return ZStack {
+            Color.black.opacity(0.6).ignoresSafeArea()
+                .onTapGesture { withAnimation(.snappy(duration: 0.15)) { confirmingShare = nil } }
+            VStack(alignment: .leading, spacing: 12) {
+                Text("SHARE \(name)?").font(.mono(15, .bold)).foregroundStyle(accent)
+                Text("""
+                    Uploads its \(count) developed \(count == 1 ? "frame" : "frames") so anyone with the link can look through them, \
+                    in Exposures or on the web, for \(RollShare.lifetimeDays) days. Unshare any time to delete them.
+
+                    Only share photos you'd post publicly. Nudity, violence and hateful content are removed, and people can report or block you.
+                    """)
+                    .font(.mono(10)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                cardButton("SHARE ROLL", destructive: false) {
+                    confirmingShare = nil
+                    shareRoll(target)
+                }
+                cardButton("CANCEL", destructive: false, quiet: true) {
+                    withAnimation(.snappy(duration: 0.15)) { confirmingShare = nil }
+                }
+            }
+            .padding(18)
+            .background(RoundedRectangle(cornerRadius: 18).fill(Color(white: 0.11)))
+            .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color(white: 0.2), lineWidth: 1))
+            .padding(.horizontal, 22)
+        }
+        .transition(.opacity)
+    }
+
+    private func shareRoll(_ roll: Roll) {
+        let frames = developedFrames
+        let film = camera.film(ofRoll: roll.number)
+        let profile = Profile.load()
+        uploading = (0, frames.count + 1)
+        Task {
+            do {
+                let (record, card) = try await RollShare.share(roll: roll, frames: frames, film: film, profile: profile) { done, total in
+                    uploading = (done, total)
+                }
+                uploading = nil
+                if roll.number == selected { shareRecord = record }
+                sharing = ShareItems(items: [card as Any?, record.url].compactMap { $0 })
+            } catch {
+                uploading = nil
+                camera.message = error.localizedDescription
+            }
+        }
+    }
+
+    private func shareLinkAgain(_ roll: Roll) {
+        guard let record = shareRecord else { return }
+        let card = RollShare.card(for: roll, record: record, film: camera.film(ofRoll: roll.number), profile: Profile.load())
+        sharing = ShareItems(items: [card as Any?, record.url].compactMap { $0 })
+    }
+
+    private func unshare() {
+        guard let number = selected else { return }
+        unsharing = true
+        Task {
+            do {
+                try await RollShare.unshare(roll: number)
+                shareRecord = nil
+            } catch {
+                camera.message = error.localizedDescription
+            }
+            unsharing = false
+        }
+    }
+
     private func shareContactSheet(_ roll: Roll) {
         makingSheet = true
         let frames = developedFrames
@@ -333,9 +433,10 @@ struct RollViewer: View {
     }
 
     private func loadFrames() {
-        guard let number = selected else { frames = []; pending = []; return }
+        guard let number = selected else { frames = []; pending = []; shareRecord = nil; return }
         frames = RollStore.frames(of: number)
         pending = Set(RollStore.pendingFrames(of: number))
+        shareRecord = RollShare.record(for: number)
     }
 }
 

@@ -6,6 +6,19 @@ on:
   pull_request:
 
 jobs:
+  server:
+    name: Share server tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Worker tests
+        working-directory: server
+        run: npm test
+
   build:
     name: Compile (iOS, unsigned)
     runs-on: macos-15
@@ -23,7 +36,7 @@ jobs:
 
       - name: Film model tests
         run: |
-          swiftc RetroCam/FilmStock.swift RetroCam/FilmLibrary.swift RetroCam/Roll.swift RetroCam/FilmCode.swift ci/film-tests/main.swift -o "$RUNNER_TEMP/film-tests"
+          swiftc RetroCam/FilmStock.swift RetroCam/FilmLibrary.swift RetroCam/Roll.swift RetroCam/FilmCode.swift RetroCam/ShareLinks.swift ci/film-tests/main.swift -o "$RUNNER_TEMP/film-tests"
           "$RUNNER_TEMP/film-tests"
 
       - name: Build

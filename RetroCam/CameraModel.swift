@@ -599,6 +599,14 @@ final class CameraModel: NSObject, ObservableObject {
         developReadyRolls()
     }
 
+    /// The film (as you have it now) most of a roll was shot on, for sharing it with the
+    /// roll. nil for rolls shot before films were recorded per frame.
+    func film(ofRoll number: Int) -> FilmStock? {
+        let counts = Dictionary(RollStore.films(of: number).values.map { ($0, 1) }, uniquingKeysWith: +)
+        guard let id = counts.max(by: { $0.value < $1.value })?.key else { return nil }
+        return library.current(id: id)
+    }
+
     /// Delete a roll from Exposures; with `deletingPhotos`, its album and photos in Photos
     /// too (iOS asks first). Deleting the roll that's in the camera loads a fresh one.
     func deleteRoll(_ number: Int, deletingPhotos: Bool) {
@@ -611,6 +619,13 @@ final class CameraModel: NSObject, ObservableObject {
         saveChain = Task {
             await previous?.value
             var photosNote = ""
+            // A shared roll stops being shared: its uploaded photos are deleted too.
+            do {
+                try await RollShare.unshare(roll: number)
+            } catch {
+                await MainActor.run { self.message = "\(name) wasn't deleted: couldn't unshare it (\(error.localizedDescription))" }
+                return
+            }
             do {
                 let removed = try await RollAlbums.remove(rollNumber: number, deletingPhotos: deletingPhotos)
                 if deletingPhotos {

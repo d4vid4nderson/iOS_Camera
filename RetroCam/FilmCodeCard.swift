@@ -155,7 +155,7 @@ enum FilmCodeCard {
     // MARK: Pieces
 
     /// A round headshot, or the name's initials on a plain disc.
-    private static func drawAvatar(_ sharer: Sharer, in rect: CGRect, fill: UIColor, initialsColor: UIColor) {
+    static func drawAvatar(_ sharer: Sharer, in rect: CGRect, fill: UIColor, initialsColor: UIColor) {
         let circle = UIBezierPath(ovalIn: rect)
         if let avatar = sharer.avatar {
             UIGraphicsGetCurrentContext()?.saveGState()
@@ -175,12 +175,12 @@ enum FilmCodeCard {
         }
     }
 
-    private static func draw(_ text: String, font: UIFont, color: UIColor, at point: CGPoint, kern: CGFloat = 0) {
+    static func draw(_ text: String, font: UIFont, color: UIColor, at point: CGPoint, kern: CGFloat = 0) {
         (text as NSString).draw(at: point, withAttributes: [.font: font, .foregroundColor: color, .kern: kern])
     }
 
     /// The largest bold size (down to `minSize`) at which `text` fits on one line.
-    private static func fitted(_ text: String, weight: UIFont.Weight, size: CGFloat, minSize: CGFloat, width: CGFloat) -> UIFont {
+    static func fitted(_ text: String, weight: UIFont.Weight, size: CGFloat, minSize: CGFloat, width: CGFloat) -> UIFont {
         var pointSize = size
         while pointSize > minSize {
             let font = UIFont.systemFont(ofSize: pointSize, weight: weight)
@@ -191,7 +191,7 @@ enum FilmCodeCard {
     }
 
     /// The QR modules as round dots joined to their neighbours, with rounded corner eyes.
-    private static func drawCode(_ modules: [[Bool]], in rect: CGRect, ink: UIColor, paper: UIColor, context cg: CGContext) {
+    static func drawCode(_ modules: [[Bool]], in rect: CGRect, ink: UIColor, paper: UIColor, context cg: CGContext) {
         let n = modules.count
         let m = rect.width / CGFloat(n)
         let finders = [(0, 0), (0, n - 7), (n - 7, 0)]
