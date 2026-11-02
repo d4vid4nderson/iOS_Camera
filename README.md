@@ -1,4 +1,4 @@
-# Exposures
+# Film Exposures
 
 A film camera for iPhone (formerly RetroCam / Mono36; the Xcode project and bundle ID keep the old name).  SwiftUI + AVFoundation + Core Image, no dependencies.
 

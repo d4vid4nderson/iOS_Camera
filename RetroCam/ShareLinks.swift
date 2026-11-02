@@ -2,8 +2,8 @@ import Foundation
 
 /// The web address share links use (the server in server/, on Cloudflare Workers).
 ///
-///   https://<host>/f/<code>   a film: opens Exposures and offers to add it
-///   https://<host>/r/<id>     a shared roll: opens in Exposures' viewer
+///   https://<host>/f/<code>   a film: opens Film Exposures and offers to add it
+///   https://<host>/r/<id>     a shared roll: opens in Film Exposures' viewer
 ///
 /// Until `host` is set, film links fall back to exposures://f/<code> and roll sharing
 /// is hidden.

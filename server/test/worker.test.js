@@ -139,6 +139,6 @@ test('roll pages send people without the app to the App Store', async () => {
   await call(e, 'PUT', `/api/rolls/${id}/frame-01.jpg`, { body: jpeg(), token });
   await call(e, 'POST', `/api/rolls/${id}/publish`, { token });
   const page = await (await call(e, 'GET', `/r/${id}`)).text();
-  assert.match(page, /Get Exposures to see the whole roll/);
+  assert.match(page, /Get Film Exposures to see the whole roll/);
   assert.match(page, /apple-itunes-app" content="app-id=6740000000, app-argument=https:/);
 });

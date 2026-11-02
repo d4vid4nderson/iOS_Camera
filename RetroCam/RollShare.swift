@@ -1,7 +1,7 @@
 import UIKit
 
 /// Sharing a roll as a link: its developed frames are uploaded to the share server
-/// (server/), where anyone with the link can see them for 30 days, in Exposures or on
+/// (server/), where anyone with the link can see them for 30 days, in Film Exposures or on
 /// the web. You can unshare any time, which deletes them.
 enum RollShare {
     static let lifetimeDays = 30

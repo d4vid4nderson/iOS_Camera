@@ -1,15 +1,15 @@
 import Photos
 
-/// Files each roll into its own album ("Roll 07 · CLASSIC 400") inside an "Exposures" folder
+/// Files each roll into its own album ("Roll 07 · CLASSIC 400") inside an "Film Exposures" folder
 /// in Photos. Needs full Photos access; with limited or add-only access the shot is saved
 /// to the library without an album, as before.
 ///
 /// Saves run one at a time (see `CameraModel`), so two frames finishing together can't
 /// both create the roll's album.
 enum RollAlbums {
-    static let folderTitle = "Exposures"
+    static let folderTitle = "Film Exposures"
     /// The folder's name before the app was renamed; renamed in place when found.
-    private static let legacyFolderTitles = ["Mono36"]
+    private static let legacyFolderTitles = ["Exposures", "Mono36"]
     private static let albumsKey = "roll.albums"   // roll number -> album local identifier
 
     enum Outcome {
@@ -74,7 +74,7 @@ enum RollAlbums {
         }
     }
 
-    /// The roll's album, created (inside the Exposures folder) the first time it's needed.
+    /// The roll's album, created (inside the Film Exposures folder) the first time it's needed.
     private static func album(for roll: Roll) async throws -> PHAssetCollection {
         var ids = UserDefaults.standard.dictionary(forKey: albumsKey) as? [String: String] ?? [:]
         let key = String(roll.number)
@@ -110,7 +110,7 @@ enum RollAlbums {
         return PHCollectionList.fetchCollectionLists(with: .folder, subtype: .regularFolder, options: options).firstObject
     }
 
-    /// The Exposures folder if there is one. A folder from before the rename ("Mono36") is
+    /// The Film Exposures folder if there is one. A folder from before a rename ("Exposures", "Mono36") is
     /// renamed in place, so its roll albums stay together.
     private static func currentFolder() async throws -> PHCollectionList? {
         if let existing = folder(titled: folderTitle) { return existing }

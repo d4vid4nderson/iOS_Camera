@@ -74,7 +74,7 @@ enum FilmCodeCard {
         drawCode(modules, in: codeRect, ink: ink, paper: background, context: cg)
 
         let mark = UIFont.systemFont(ofSize: 22, weight: .semibold)
-        let markWidth = ("EXPOSURES" as NSString).size(withAttributes: [.font: mark, .kern: 1]).width
+        let markWidth = ("FILM EXPOSURES" as NSString).size(withAttributes: [.font: mark, .kern: 1]).width
         if let sharer {
             // Headshot + name, with the wordmark and the hint under the name.
             let side: CGFloat = 76
@@ -88,12 +88,12 @@ enum FilmCodeCard {
                 draw(sharer.name, font: nameFont, color: ink, at: CGPoint(x: x, y: top))
             }
             let lineY = sharer.name.isEmpty ? avatarRect.midY - mark.lineHeight / 2 : top + nameFont.lineHeight + 2
-            draw("EXPOSURES", font: mark, color: muted, at: CGPoint(x: x, y: lineY), kern: 1)
+            draw("FILM EXPOSURES", font: mark, color: muted, at: CGPoint(x: x, y: lineY), kern: 1)
             draw("Scan to load this film", font: .systemFont(ofSize: 22, weight: .regular), color: muted,
                  at: CGPoint(x: x + markWidth + 12, y: lineY))
         } else {
             let markY = size.height - margin - mark.lineHeight
-            draw("EXPOSURES", font: mark, color: ink, at: CGPoint(x: margin, y: markY), kern: 1)
+            draw("FILM EXPOSURES", font: mark, color: ink, at: CGPoint(x: margin, y: markY), kern: 1)
             draw("Scan to load this film", font: .systemFont(ofSize: 22, weight: .regular), color: muted,
                  at: CGPoint(x: margin + markWidth + 14, y: markY))
         }
@@ -119,11 +119,11 @@ enum FilmCodeCard {
                 draw(sharer.name, font: nameFont, color: light,
                      at: CGPoint(x: avatarRect.maxX + 16, y: avatarRect.midY - nameFont.lineHeight / 2))
             }
-            let markWidth = ("EXPOSURES" as NSString).size(withAttributes: [.font: mark, .kern: 1]).width
-            draw("EXPOSURES", font: mark, color: muted,
+            let markWidth = ("FILM EXPOSURES" as NSString).size(withAttributes: [.font: mark, .kern: 1]).width
+            draw("FILM EXPOSURES", font: mark, color: muted,
                  at: CGPoint(x: size.width - margin - markWidth, y: avatarRect.midY - mark.lineHeight / 2), kern: 1)
         } else {
-            draw("EXPOSURES", font: mark, color: muted, at: CGPoint(x: margin, y: 52), kern: 1)
+            draw("FILM EXPOSURES", font: mark, color: muted, at: CGPoint(x: margin, y: 52), kern: 1)
         }
         let title = fitted(film.name, weight: .bold, size: 150, minSize: 64, width: size.width - 2 * margin)
         let titleTop: CGFloat = 150 + (150 - title.pointSize) * 0.6
