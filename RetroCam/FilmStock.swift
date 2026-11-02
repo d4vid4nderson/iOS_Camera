@@ -372,14 +372,25 @@ extension FilmStock {
         grain: 0.10, grainSize: 1.0,
         vignette: 0.25)
 
-    static let frost400 = FilmStock(
-        id: "frost400", name: "FROST 400", iso: 400,
-        blurb: "Hazy and airy, soft-cornered lens",
+    /// Bright daylight film: clean, crisp whites and deep but clean blacks, fine sharp grain.
+    static let silver100 = FilmStock(
+        id: "silver100", name: "SILVER 100", iso: 100,
+        blurb: "Bright and crisp, fine sharp grain",
         red: 0.30, green: 0.56, blue: 0.14,
-        contrast: 0.30, blackLift: 0.06, whitePoint: 1.0,
-        grain: 0.40, grainSize: 1.6,
-        vignette: 0.5,
-        bloom: 0.5, edgeSoftness: 0.6, exposure: 0.2, key: 0.15)
+        contrast: 0.55, blackLift: 0.0, whitePoint: 1.0,
+        grain: 0.14, grainSize: 0.9,
+        vignette: 0.2,
+        bloom: 0.1, edgeSoftness: 0.05, exposure: 0.1, key: 0.15)
+
+    /// A modern scanned negative: lifted, matte blacks, soft highlights, medium grain.
+    static let matte400 = FilmStock(
+        id: "matte400", name: "MATTE 400", iso: 400,
+        blurb: "Faded blacks, soft highlights",
+        red: 0.31, green: 0.55, blue: 0.14,
+        contrast: 0.25, blackLift: 0.16, whitePoint: 0.9,
+        grain: 0.32, grainSize: 1.4,
+        vignette: 0.3,
+        bloom: 0.15, edgeSoftness: 0.1, key: 0.05)
 
     static let push3200 = FilmStock(
         id: "push3200", name: "PUSH 3200", iso: 3200,
@@ -507,92 +518,7 @@ extension FilmStock {
         vignette: 0.8,
         bloom: 0.25, edgeSoftness: 0.15, key: -0.45)
 
-    // Filters and special emulsions.
-
-    static let redFilter = FilmStock(
-        id: "red25", name: "RED FILTER", iso: 100,
-        blurb: "Dramatic dark skies, glowing skin",
-        red: 0.78, green: 0.22, blue: 0.0,
-        contrast: 0.40, blackLift: 0.0, whitePoint: 1.0,
-        grain: 0.22, grainSize: 1.2,
-        vignette: 0.5)
-
-    static let ortho = FilmStock(
-        id: "ortho", name: "ORTHO 80", iso: 80,
-        blurb: "Red-blind. Dark lips, moody portraits",
-        red: 0.0, green: 0.50, blue: 0.50,
-        contrast: 0.35, blackLift: 0.02, whitePoint: 1.0,
-        grain: 0.18, grainSize: 1.1,
-        vignette: 0.5,
-        tone: .cool, toneAmount: 1)
-
-    static let infrared = FilmStock(
-        id: "infrared", name: "INFRARED", iso: 200,
-        blurb: "White leaves, black skies, dreamy glow",
-        red: 0.50, green: 1.30, blue: -0.80,
-        contrast: 0.5, blackLift: 0.02, whitePoint: 1.0,
-        grain: 0.3, grainSize: 1.5,
-        vignette: 0.4,
-        bloom: 0.55, edgeSoftness: 0.3, exposure: 0.2, key: 0.25)
-
-    static let tintype = FilmStock(
-        id: "tintype", name: "TINTYPE", iso: 1,
-        blurb: "Wet plate: blue-only, metal-brown, dark edges",
-        red: 0.0, green: 0.15, blue: 0.85,
-        contrast: 0.45, blackLift: 0.04, whitePoint: 0.92,
-        grain: 0.15, grainSize: 1.0,
-        vignette: 1.1,
-        tone: .tintype, toneAmount: 1,
-        bloom: 0.1, edgeSoftness: 0.7, key: -0.15)
-
     // Darkroom prints.
-
-    static let lith = FilmStock(
-        id: "lith", name: "LITH PRINT", iso: 400,
-        blurb: "Harsh, grainy, peach lights over cold blacks",
-        red: 0.33, green: 0.52, blue: 0.15,
-        contrast: 0.95, blackLift: 0.0, whitePoint: 1.0,
-        grain: 0.75, grainSize: 2.4,
-        vignette: 0.5,
-        tone: .split, toneAmount: 1,
-        bloom: 0.2, key: -0.2)
-
-    static let sepia = FilmStock(
-        id: "sepia", name: "DARKROOM SEPIA", iso: 200,
-        blurb: "Faded fibre print, warm toned",
-        red: 0.33, green: 0.55, blue: 0.12,
-        contrast: 0.20, blackLift: 0.06, whitePoint: 0.94,
-        grain: 0.28, grainSize: 1.5,
-        vignette: 0.6,
-        tone: .warm, toneAmount: 0.9)
-
-    static let selenium = FilmStock(
-        id: "selenium", name: "SELENIUM", iso: 100,
-        blurb: "Rich purple-brown blacks, crisp whites",
-        red: 0.32, green: 0.55, blue: 0.13,
-        contrast: 0.5, blackLift: 0.0, whitePoint: 1.0,
-        grain: 0.2, grainSize: 1.1,
-        vignette: 0.35,
-        tone: .selenium, toneAmount: 1, key: -0.05)
-
-    static let platinum = FilmStock(
-        id: "platinum", name: "PLATINUM", iso: 25,
-        blurb: "Soft, long tones on warm matte paper",
-        red: 0.30, green: 0.59, blue: 0.11,
-        contrast: 0.1, blackLift: 0.05, whitePoint: 0.95,
-        grain: 0.12, grainSize: 1.0,
-        vignette: 0.3,
-        tone: .platinum, toneAmount: 1,
-        bloom: 0.1, edgeSoftness: 0.1, key: 0.05)
-
-    static let cyanotype = FilmStock(
-        id: "cyanotype", name: "CYANOTYPE", iso: 12,
-        blurb: "Prussian-blue sun print",
-        red: 0.30, green: 0.55, blue: 0.15,
-        contrast: 0.35, blackLift: 0.06, whitePoint: 0.96,
-        grain: 0.15, grainSize: 1.2,
-        vignette: 0.35,
-        tone: .cyanotype, toneAmount: 1, key: 0.1)
 
     static let expired = FilmStock(
         id: "expired", name: "EXPIRED 200", iso: 200,
@@ -612,12 +538,10 @@ extension FilmStock {
     }
 
     /// Built-in films, in picker order (the picker shows black & white and colour films on
-    /// separate shelves): everyday, colour, filters and emulsions, darkroom prints.
+    /// separate shelves, seven each).
     static let all: [FilmStock] = [
-        .classic400, .pan50, .frost400, .push3200, .noir,
+        .classic400, .pan50, .silver100, .push3200, .noir, .matte400, .expired,
         .warm400, .golden100, .earth200, .meadow400, .tide200, .dusk800, .north400,
-        .redFilter, .ortho, .infrared, .tintype,
-        .lith, .sepia, .selenium, .platinum, .cyanotype, .expired,
     ]
 
     static func builtIn(id: String) -> FilmStock? { all.first { $0.id == id } }

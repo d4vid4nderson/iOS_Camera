@@ -276,7 +276,7 @@ export function homeBody(store) {
 <section class="features">
   <div class="feature"><h3>Rolls of 36</h3><p>Every frame counts. Keep several rolls going, a food roll and a holiday roll, and switch between them. Each roll gets its own album in Photos.</p></div>
   <div class="feature"><h3>Develop later</h3><p>Instant, at the end of the roll, or the next morning at 9. No peeking, no retakes.</p></div>
-  <div class="feature"><h3>Black &amp; white and color</h3><p>Classic monochrome, toned prints and cinematic color films, each with grain, glow and lens character. Make your own and save them.</p></div>
+  <div class="feature"><h3>Black &amp; white and color</h3><p>Seven black &amp; white films and seven cinematic color films, each with grain, glow and lens character. Make your own and save them.</p></div>
   <div class="feature"><h3>Share a film</h3><p>Send a film as a link. Everything travels with it, from curve and grade to grain and effects, so a friend loads exactly your look.</p></div>
 </section>
 <h2 id="films">The films</h2>
