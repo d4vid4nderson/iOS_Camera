@@ -43,6 +43,9 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var focusPoint: CGPoint?
     @State private var showingPrint = false
+    /// Open the roll viewer on the roll in the camera (frame counter) rather than the
+    /// newest print (thumbnail).
+    @State private var rollsFromCounter = false
     /// The settings panel floating over the bottom of the viewfinder, if any.
     /// It overlays the viewfinder, so opening it never moves the viewfinder or the shutter.
     @State private var openPanel: SettingPanel?
@@ -124,7 +127,7 @@ struct ContentView: View {
         }
         .sensoryFeedback(.impact(weight: .medium), trigger: camera.framesShot)
         .fullScreenCover(isPresented: $showingPrint) {
-            RollViewer(camera: camera, accent: accent)
+            RollViewer(camera: camera, accent: accent, opensInCamera: rollsFromCounter)
         }
         .sheet(item: $filmShare) { item in
             ActivityView(items: item.items).ignoresSafeArea()
@@ -181,8 +184,11 @@ struct ContentView: View {
 
     private var topPlate: some View {
         HStack(alignment: .center) {
-            // Roll and frame count: opens your rolls.
-            Button { showingPrint = true } label: {
+            // Roll and frame count: opens the roll in the camera.
+            Button {
+                rollsFromCounter = true
+                showingPrint = true
+            } label: {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(String(format: "ROLL %02d", camera.roll.number))
                         .font(.mono(8, .semibold)).foregroundStyle(.secondary)
@@ -190,12 +196,12 @@ struct ContentView: View {
                         .font(.mono(15, .bold)).foregroundStyle(accent)
                         .contentTransition(.numericText())
                 }
-                .frame(width: 90, height: 40, alignment: .leading)
+                .frame(width: 90, height: 44, alignment: .leading)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Roll \(camera.roll.number), frame \(camera.framesShot) of \(CameraModel.rollLength)")
-            .accessibilityHint("Open your rolls")
+            .accessibilityHint("Open this roll")
             // Hidden: long-press for a camera-orientation readout (for bug reports).
             .simultaneousGesture(LongPressGesture(minimumDuration: 0.8).onEnded { _ in camera.showDiagnostics.toggle() })
 
@@ -212,7 +218,7 @@ struct ContentView: View {
                         .rotationEffect(.degrees(openPanel == .film ? 180 : 0))
                 }
                 .padding(.horizontal, 12)
-                .frame(height: 40)
+                .frame(height: 44)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -222,17 +228,17 @@ struct ContentView: View {
 
             // Your profile: headshot and name for share cards.
             Button { showingProfile = true } label: {
-                ProfileAvatar(photo: profile.photo, size: 30)
-                    .overlay(Circle().stroke(profile.photo == nil ? Color(white: 0.3) : accent.opacity(0.7), lineWidth: 1))
+                ProfileAvatar(photo: profile.photo, size: 40)
+                    .overlay(Circle().stroke(profile.photo == nil ? Color(white: 0.3) : accent.opacity(0.7), lineWidth: 1.5))
                     .rotationEffect(.degrees(camera.uiRotation))
                     .animation(.snappy(duration: 0.3), value: camera.uiRotation)
-                    .frame(width: 90, height: 40, alignment: .trailing)
+                    .frame(width: 90, height: 44, alignment: .trailing)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(profile.name.isEmpty ? "Your profile" : "Your profile, \(profile.name)")
         }
-        .frame(height: 40)
+        .frame(height: 44)
     }
 
     private var flashSymbol: String {
@@ -951,7 +957,10 @@ struct ContentView: View {
 
     private var controls: some View {
         HStack {
-            Button { showingPrint = true } label: {
+            Button {
+                rollsFromCounter = false
+                showingPrint = true
+            } label: {
                 ZStack {
                     RoundedRectangle(cornerRadius: 4).fill(Color(white: 0.15))
                     if let print = camera.lastPrint {
