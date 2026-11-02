@@ -32,6 +32,7 @@ struct ProfileSheet: View {
     @State private var viewingMine: IncomingUser?
     @State private var confirmDeleteAccount = false
     @State private var makingCard = false
+    @State private var openRoll: RollRef?
     @State private var sharing: ShareItems?
 
     var body: some View {
@@ -43,10 +44,16 @@ struct ProfileSheet: View {
                     Button("DONE") { save(); dismiss() }.font(.mono(11, .bold)).foregroundStyle(accent)
                 }
 
-                HStack(spacing: 16) {
+                HStack(alignment: .top, spacing: 16) {
                     ProfileAvatar(photo: profile.photo, size: 96)
                         .overlay { if working { ProgressView() } }
-                    VStack(alignment: .leading, spacing: 8) {
+                    Spacer(minLength: 0)
+                    if ShareLinks.isConfigured, let me = account.me, account.isSignedIn {
+                        signInCorner(me)
+                    }
+                }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
                         PhotosPicker(selection: $pickerItem, matching: .images) {
                             chipText(profile.photo == nil ? "CHOOSE HEADSHOT" : "CHANGE PHOTO", selected: true)
                         }
@@ -82,6 +89,11 @@ struct ProfileSheet: View {
                         }
                 }
 
+                if ShareLinks.isConfigured {
+                    accountSection
+                    signedOutSection
+                }
+
                 VStack(alignment: .leading, spacing: 6) {
                     Text("ON SHARE CARDS").font(.mono(9, .semibold)).foregroundStyle(.secondary)
                     HStack(spacing: 6) {
@@ -102,7 +114,7 @@ struct ProfileSheet: View {
                 }
 
                 if ShareLinks.isConfigured {
-                    accountSection
+                    accountFooter
                 } else {
                     Text("Kept on this phone. Your photo and name only appear on film and roll cards you share.")
                         .font(.mono(10)).foregroundStyle(.secondary)
@@ -124,6 +136,9 @@ struct ProfileSheet: View {
         .overlay { if let roll = askingTerms { termsCard(roll) } }
         .fullScreenCover(item: $viewingMine) { me in
             UserProfileView(userID: me.id, camera: camera, accent: accent)
+        }
+        .fullScreenCover(item: $openRoll, onDismiss: loadRolls) { ref in
+            RollViewer(camera: camera, accent: accent, opensOnRoll: ref.number)
         }
         .sheet(item: $sharing) { item in
             ActivityView(items: item.items).ignoresSafeArea()
@@ -178,40 +193,56 @@ struct ProfileSheet: View {
                 }
                 Text(profile.showOnCards
                      ? "Your name and headshot show on your profile."
-                     : "Your name and headshot are hidden, here and on cards. Choose SHOW above to put them on your profile.")
+                     : "Your name and headshot are hidden, here and on cards. Choose SHOW under ON SHARE CARDS to put them on your profile.")
                     .font(.mono(9)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 10) {
                 Text("YOUR ROLLS").font(.mono(9, .semibold)).foregroundStyle(.secondary)
                 if myRolls.isEmpty {
                     Text("Rolls show up here once they have developed frames.")
                         .font(.mono(10)).foregroundStyle(.secondary)
                 } else {
-                    ForEach(myRolls, id: \.number) { roll in rollRow(roll) }
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 14) {
+                        ForEach(myRolls, id: \.number) { roll in rollTile(roll) }
+                    }
                 }
-                Text("Public rolls are on your profile for anyone to see and like, until you make them private. Private takes a roll off the server; links to it stop working.")
-                    .font(.mono(9)).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "lock.open.fill").foregroundStyle(accent)
+                    Text("Public: on your profile for anyone to see and like.")
+                }
+                .font(.mono(9)).foregroundStyle(.secondary)
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "lock.fill")
+                    Text("Private: only on this phone. Tap the lock to switch; making a roll private takes it off the server, and links to it stop working.")
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .font(.mono(9)).foregroundStyle(.secondary)
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("SIGN-INS").font(.mono(9, .semibold)).foregroundStyle(.secondary)
-                Text(signInsLine(me)).font(.mono(11, .bold)).foregroundStyle(.white)
-                if !me.has("apple") {
-                    AppleSignInButton(onError: { note = $0.uppercased() })
-                }
-                if SocialSignIn.googleAvailable, !me.has("google") {
-                    ProviderButton(provider: "google", onError: { note = $0.uppercased() })
-                }
-                if SocialSignIn.facebookAvailable, !me.has("facebook") {
-                    ProviderButton(provider: "facebook", onError: { note = $0.uppercased() })
+        }
+    }
+
+    /// At the end of the profile: other ways to sign in, and deleting the account.
+    @ViewBuilder private var accountFooter: some View {
+        if let me = account.me, account.isSignedIn {
+            let others = [("apple", true), ("google", SocialSignIn.googleAvailable), ("facebook", SocialSignIn.facebookAvailable)]
+                .filter { $0.1 && !me.has($0.0) }.map { $0.0 }
+            if !others.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("ADD A SIGN-IN").font(.mono(9, .semibold)).foregroundStyle(.secondary)
+                    ForEach(others, id: \.self) { provider in
+                        if provider == "apple" {
+                            AppleSignInButton(onError: { note = $0.uppercased() })
+                        } else {
+                            ProviderButton(provider: provider, onError: { note = $0.uppercased() })
+                        }
+                    }
                 }
             }
 
             HStack(spacing: 6) {
-                chip("SIGN OUT", selected: false) { Task { await account.signOut() } }
                 Spacer(minLength: 0)
                 Button {
                     if confirmDeleteAccount { deleteAccount() } else { confirmDeleteAccount = true }
@@ -230,7 +261,12 @@ struct ProfileSheet: View {
                     .font(.mono(9)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-        } else {
+        }
+    }
+
+    /// Signed out: what an account is for, and the sign-in buttons.
+    @ViewBuilder private var signedOutSection: some View {
+        if !(account.me != nil && account.isSignedIn) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("PUBLIC PROFILE").font(.mono(9, .semibold)).foregroundStyle(.secondary)
                 Text("Sign in to put rolls on a public profile people can open from your shares, and to like frames in other people's rolls. Not needed for the camera or for sharing links.")
@@ -264,23 +300,57 @@ struct ProfileSheet: View {
         }
     }
 
-    private func rollRow(_ roll: Roll) -> some View {
+    /// Your account, in the top corner across from your headshot: how you're signed in,
+    /// and signing out.
+    private func signInCorner(_ me: Account.Me) -> some View {
+        VStack(alignment: .trailing, spacing: 6) {
+            Text("SIGNED IN WITH").font(.mono(9, .semibold)).foregroundStyle(.secondary)
+            HStack(spacing: 5) {
+                if me.has("apple") { Image(systemName: "apple.logo").font(.system(size: 12, weight: .semibold)) }
+                Text(signInsLine(me)).font(.mono(11, .bold))
+            }
+            .foregroundStyle(.white)
+            chip("SIGN OUT", selected: false) { Task { await account.signOut() } }
+        }
+    }
+
+    /// A roll on your profile: its cover (tap to see its photos), its name, and a lock:
+    /// closed is private, open is public. Tap the lock to switch.
+    private func rollTile(_ roll: Roll) -> some View {
         let record = records[roll.number]
         let isPublic = record?.onProfile == true
-        let status = busy[roll.number]
-            ?? (isPublic ? "PUBLIC" : record != nil ? "SHARED BY LINK" : "PRIVATE")
-        return HStack(spacing: 10) {
-            thumb(roll)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(roll.title.uppercased()).font(.mono(11, .bold)).foregroundStyle(.white).lineLimit(1)
-                Text(status).font(.mono(9)).foregroundStyle(isPublic ? accent : .secondary).lineLimit(1)
+        let working = busy[roll.number]
+        return VStack(alignment: .leading, spacing: 5) {
+            Button { openRoll = RollRef(number: roll.number) } label: {
+                thumb(roll)
             }
-            Spacer(minLength: 0)
-            HStack(spacing: 4) {
-                chip("PUBLIC", selected: isPublic) { makePublic(roll) }
-                chip("PRIVATE", selected: !isPublic && record == nil) { makePrivate(roll) }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Open \(roll.title)")
+            .overlay(alignment: .topTrailing) {
+                Button {
+                    if isPublic { makePrivate(roll) } else { makePublic(roll) }
+                } label: {
+                    Group {
+                        if working != nil {
+                            ProgressView().controlSize(.mini).tint(.white)
+                        } else {
+                            Image(systemName: isPublic ? "lock.open.fill" : "lock.fill")
+                                .font(.system(size: 12, weight: .bold))
+                        }
+                    }
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(isPublic ? accent : Color.black.opacity(0.6)))
+                    .foregroundStyle(isPublic ? .black : .white)
+                    .padding(5)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(working != nil)
+                .accessibilityLabel(isPublic ? "Public. Make \(roll.title) private" : "Private. Make \(roll.title) public")
             }
-            .disabled(busy[roll.number] != nil)
+            Text(roll.title.uppercased()).font(.mono(10, .bold)).foregroundStyle(.white).lineLimit(1)
+            Text(working ?? (isPublic ? "PUBLIC" : record != nil ? "SHARED BY LINK" : "PRIVATE"))
+                .font(.mono(8)).foregroundStyle(isPublic ? accent : .secondary).lineLimit(1)
         }
     }
 
@@ -288,15 +358,13 @@ struct ProfileSheet: View {
         let developed = RollStore.frames(of: roll.number).filter { !RollStore.isPending(roll: roll.number, frame: $0) }
         let first = roll.cover.flatMap { developed.contains($0) ? $0 : nil } ?? developed.first
         let image = first.flatMap { UIImage(contentsOfFile: RollStore.thumbURL(roll: roll.number, frame: $0).path) }
-        return Group {
-            if let image {
-                Image(uiImage: image).resizable().scaledToFill()
-            } else {
-                Color(white: 0.15)
+        return Color(white: 0.15)
+            .aspectRatio(3 / 4, contentMode: .fit)
+            .overlay {
+                if let image { Image(uiImage: image).resizable().scaledToFill() }
             }
-        }
-        .frame(width: 36, height: 48)
-        .clipShape(RoundedRectangle(cornerRadius: 4))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .contentShape(RoundedRectangle(cornerRadius: 6))
     }
 
     private func loadRolls() {
@@ -488,4 +556,10 @@ struct ProfileAvatar: View {
         .frame(width: size, height: size)
         .clipShape(Circle())
     }
+}
+
+/// A roll to open from your profile.
+private struct RollRef: Identifiable {
+    let number: Int
+    var id: Int { number }
 }
