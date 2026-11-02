@@ -9,7 +9,7 @@ import Foundation
 /// Until `host` is set, film links fall back to exposures://f/<code> and roll sharing
 /// is hidden.
 enum ShareLinks {
-    static let host = ""
+    static let host = "filmexposures.com"
 
     static var isConfigured: Bool { !host.isEmpty }
 
