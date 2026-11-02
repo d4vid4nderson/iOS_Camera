@@ -223,10 +223,12 @@ struct RollViewer: View {
             }
             if let shareRecord {
                 HStack(spacing: 8) {
-                    Text("SHARED · LINK WORKS UNTIL " + shareRecord.expiresAt.formatted(.dateTime.month(.abbreviated).day()).uppercased())
-                        .font(.mono(9, .semibold)).foregroundStyle(.secondary)
+                    Text(shareRecord.onProfile
+                         ? "PUBLIC · ON YOUR PROFILE"
+                         : "SHARED · LINK WORKS UNTIL " + shareRecord.expiresAt.formatted(.dateTime.month(.abbreviated).day()).uppercased())
+                        .font(.mono(9, .semibold)).foregroundStyle(shareRecord.onProfile ? accent : .secondary)
                     Spacer(minLength: 0)
-                    chip(unsharing ? "UNSHARING…" : "UNSHARE", selected: false) { unshare() }
+                    chip(unsharing ? "UNSHARING…" : shareRecord.onProfile ? "MAKE PRIVATE" : "UNSHARE", selected: false) { unshare() }
                         .disabled(unsharing)
                 }
             }

@@ -187,6 +187,11 @@ check(ShareLinks.rollID(from: URL(string: "https://exposures.example.workers.dev
 check(ShareLinks.rollID(from: URL(string: "exposures://r/AbCd234xyz")!) == "AbCd234xyz", "app roll links parse")
 check(ShareLinks.rollID(from: URL(string: "https://evil.example.com/r/AbCd234xyz")!, host: "exposures.example.workers.dev") == nil, "roll links from other sites are ignored")
 check(ShareLinks.rollID(from: URL(string: "exposures://r/short")!) == nil, "bad roll ids are rejected")
+check(ShareLinks.userID(from: URL(string: "https://exposures.example.workers.dev/u/AbCd234xyzQR")!, host: "exposures.example.workers.dev") == "AbCd234xyzQR", "web profile links parse")
+check(ShareLinks.userID(from: URL(string: "exposures://u/AbCd234xyzQR")!) == "AbCd234xyzQR", "app profile links parse")
+check(ShareLinks.userID(from: URL(string: "exposures://r/AbCd234xyz")!) == nil, "a roll link isn't a profile link")
+check(ShareLinks.rollID(from: URL(string: "exposures://u/AbCd234xyzQR")!) == nil, "a profile link isn't a roll link")
+check(ShareLinks.userID(from: URL(string: "https://evil.example.com/u/AbCd234xyzQR")!, host: "exposures.example.workers.dev") == nil, "profile links from other sites are ignored")
 
 // Roll names.
 var named = Roll(number: 7)

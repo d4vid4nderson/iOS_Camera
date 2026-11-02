@@ -62,6 +62,7 @@ struct ContentView: View {
     /// A film someone shared, waiting for "ADD".
     @State private var incomingFilm: FilmStock?
     @State private var incomingRoll: IncomingRoll?
+    @State private var incomingUser: IncomingUser?
     @State private var showingProfile = false
     @State private var profile = Profile.load()
     @State private var confirmingDelete = false
@@ -133,10 +134,13 @@ struct ContentView: View {
             ActivityView(items: item.items).ignoresSafeArea()
         }
         .sheet(isPresented: $showingProfile) {
-            ProfileSheet(accent: accent) { profile = $0 }
+            ProfileSheet(camera: camera, accent: accent) { profile = $0 }
         }
         .fullScreenCover(item: $incomingRoll) { ref in
             SharedRollView(rollID: ref.id, camera: camera, accent: accent)
+        }
+        .fullScreenCover(item: $incomingUser) { user in
+            UserProfileView(userID: user.id, camera: camera, accent: accent)
         }
         .onOpenURL { url in
             if let film = FilmCode.film(from: url) {
@@ -144,6 +148,10 @@ struct ContentView: View {
             } else if let id = ShareLinks.rollID(from: url) {
                 showingPrint = false
                 incomingRoll = IncomingRoll(id: id)
+            } else if let id = ShareLinks.userID(from: url) {
+                showingPrint = false
+                showingProfile = false
+                incomingUser = IncomingUser(id: id)
             } else {
                 camera.message = "That link didn't work."
             }
