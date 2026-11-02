@@ -214,6 +214,7 @@ final class CameraModel: NSObject, ObservableObject {
         renderer.border = border
         renderer.borderWidth = borderWidth
         updateTiltSteering()
+        lastPrint = RollStore.latestThumbnail()
     }
 
     // MARK: - Lifecycle
@@ -585,6 +586,7 @@ final class CameraModel: NSObject, ObservableObject {
 
         roll.expose(film: self.stock.name)
         let frameRoll = roll
+        let frameNumber = roll.frames
         developing += 1
         shutterBlink = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { self.shutterBlink = false }
@@ -614,20 +616,26 @@ final class CameraModel: NSObject, ObservableObject {
             let processor = PhotoCaptureProcessor(stock: stock, stampText: stampText, finish: finish) { [weak self] result in
                 guard let self else { return }
                 self.sessionQueue.async { self.inFlight[id] = nil }
-                DispatchQueue.main.async { self.finish(result, roll: frameRoll) }
+                DispatchQueue.main.async { self.finish(result, roll: frameRoll, frame: frameNumber) }
             }
             self.inFlight[id] = processor
             self.photoOutput.capturePhoto(with: settings, delegate: processor)
         }
     }
 
-    private func finish(_ result: Result<Darkroom.Print, Error>, roll frameRoll: Roll) {
+    private func finish(_ result: Result<Darkroom.Print, Error>, roll frameRoll: Roll, frame: Int) {
         switch result {
         case .success(let print):
             lastPrint = print.thumbnail
             let previous = saveChain
             saveChain = Task {
                 await previous?.value
+                // The app's own read-only copy for the roll viewer, kept whatever Photos allows.
+                do {
+                    try RollStore.save(print.jpeg, roll: frameRoll, frame: frame)
+                } catch {
+                    await MainActor.run { self.message = "Couldn't keep this frame in your roll: \(error.localizedDescription)" }
+                }
                 do {
                     let outcome = try await RollAlbums.save(print.jpeg, to: frameRoll)
                     if case .savedUnfiled = outcome {
