@@ -61,6 +61,9 @@ struct FilmStock: Identifiable, Hashable, Codable {
 
     /// A colour film: skips the black & white conversion and the print toning.
     var color: Bool = false
+    /// How much of the film's colour and tone to apply: 0 = the scene as shot, 1 = the
+    /// full look.
+    var strength: CGFloat = 1
     /// 0 = no colour, 1 = as seen, up to 1.6.
     var saturation: CGFloat = 1
     /// White balance: cool (-1) ... warm (+1), and green (-1) ... magenta (+1).
@@ -73,6 +76,9 @@ struct FilmStock: Identifiable, Hashable, Codable {
     var highlightAmount: CGFloat = 0
     /// Blues toward aqua (+) or navy (-).
     var aqua: CGFloat = 0
+    /// Colour unity (0...1) and the hue colours gather toward. See `ColorGrade.unify`.
+    var unify: CGFloat = 0
+    var unifyHue: CGFloat = 0.11
     /// RGB curves: each channel lifted (+) or lowered (-) in its shadows and highlights.
     var redShadows: CGFloat = 0
     var redHighlights: CGFloat = 0
@@ -88,7 +94,7 @@ struct FilmStock: Identifiable, Hashable, Codable {
         ColorGrade(saturation: Double(saturation),
                    shadowHue: Double(shadowHue), shadowAmount: Double(shadowAmount),
                    highlightHue: Double(highlightHue), highlightAmount: Double(highlightAmount),
-                   aqua: Double(aqua),
+                   aqua: Double(aqua), unify: Double(unify), unifyHue: Double(unifyHue),
                    redShadows: Double(redShadows), redHighlights: Double(redHighlights),
                    greenShadows: Double(greenShadows), greenHighlights: Double(greenHighlights),
                    blueShadows: Double(blueShadows), blueHighlights: Double(blueHighlights))
@@ -263,7 +269,7 @@ extension FilmStock {
         case id, name, iso, blurb, red, green, blue, contrast, blackLift, whitePoint
         case grain, grainSize, vignette, tone, toneAmount, bloom, edgeSoftness, exposure, key, fog
         case effect, effectAmount, effectX, effectY
-        case color, saturation, warmth, tint, shadowHue, shadowAmount, highlightHue, highlightAmount, aqua
+        case color, strength, saturation, warmth, tint, shadowHue, shadowAmount, highlightHue, highlightAmount, aqua, unify, unifyHue
         case redShadows, redHighlights, greenShadows, greenHighlights, blueShadows, blueHighlights, halation
     }
 
@@ -296,6 +302,7 @@ extension FilmStock {
         effectX = value(.effectX, 0.5)
         effectY = value(.effectY, 0.5)
         color = value(.color, false)
+        strength = value(.strength, 1)
         saturation = value(.saturation, 1)
         warmth = value(.warmth, 0)
         tint = value(.tint, 0)
@@ -304,6 +311,8 @@ extension FilmStock {
         highlightHue = value(.highlightHue, 0.1)
         highlightAmount = value(.highlightAmount, 0)
         aqua = value(.aqua, 0)
+        unify = value(.unify, 0)
+        unifyHue = value(.unifyHue, 0.11)
         redShadows = value(.redShadows, 0); redHighlights = value(.redHighlights, 0)
         greenShadows = value(.greenShadows, 0); greenHighlights = value(.greenHighlights, 0)
         blueShadows = value(.blueShadows, 0); blueHighlights = value(.blueHighlights, 0)
@@ -326,11 +335,13 @@ extension FilmStock {
         try c.encode(effectX, forKey: .effectX); try c.encode(effectY, forKey: .effectY)
         if color {
             try c.encode(color, forKey: .color)
+            try c.encode(strength, forKey: .strength)
             try c.encode(saturation, forKey: .saturation)
             try c.encode(warmth, forKey: .warmth); try c.encode(tint, forKey: .tint)
             try c.encode(shadowHue, forKey: .shadowHue); try c.encode(shadowAmount, forKey: .shadowAmount)
             try c.encode(highlightHue, forKey: .highlightHue); try c.encode(highlightAmount, forKey: .highlightAmount)
             try c.encode(aqua, forKey: .aqua)
+            try c.encode(unify, forKey: .unify); try c.encode(unifyHue, forKey: .unifyHue)
             try c.encode(redShadows, forKey: .redShadows); try c.encode(redHighlights, forKey: .redHighlights)
             try c.encode(greenShadows, forKey: .greenShadows); try c.encode(greenHighlights, forKey: .greenHighlights)
             try c.encode(blueShadows, forKey: .blueShadows); try c.encode(blueHighlights, forKey: .blueHighlights)
@@ -381,7 +392,8 @@ extension FilmStock {
 
     // Colour films. Original looks, tuned against reference photos: a warm portrait
     // negative (highlights well below white, warm mids, neutral shadows) and four
-    // cinematic grades. NORTH 400 matches a published blue-hour grade within a few levels.
+    // cinematic grades, kept subtle: STRENGTH starts at 70, and each tint stays in its
+    // own end of the tonal range so dim interiors aren't washed in one colour.
 
     /// Warm portrait negative: highlights that roll off below white, warm cream mids,
     /// near-neutral deep shadows, calm colour, fine grain.
@@ -389,12 +401,12 @@ extension FilmStock {
         id: "warm400", name: "WARM 400", iso: 400,
         blurb: "Warm skin, soft highlights",
         red: 0.33, green: 0.52, blue: 0.15,
-        contrast: 0.22, blackLift: 0.03, whitePoint: 0.86,
+        contrast: 0.22, blackLift: 0.03, whitePoint: 0.9,
         grain: 0.16, grainSize: 1.1,
         vignette: 0.2,
         bloom: 0.12,
-        color: true, saturation: 0.86, warmth: 0.3, tint: 0.04,
-        shadowHue: 0.5, shadowAmount: 0.12, highlightHue: 0.09, highlightAmount: 0.08,
+        color: true, strength: 0.7, saturation: 0.9, warmth: 0.3, tint: 0.04,
+        shadowHue: 0.5, shadowAmount: 0.12, highlightHue: 0.09, highlightAmount: 0.15,
         aqua: 0.25, redShadows: 0.1, redHighlights: 0.15, greenShadows: -0.1, greenHighlights: -0.05,
         blueShadows: -0.25, blueHighlights: -0.15,
         halation: 0.12)
@@ -405,13 +417,13 @@ extension FilmStock {
         id: "north400", name: "NORTH 400", iso: 400,
         blurb: "Blue shadows, a warm glow",
         red: 0.33, green: 0.52, blue: 0.15,
-        contrast: 0.35, blackLift: 0.035, whitePoint: 1.0,
+        contrast: 0.3, blackLift: 0.035, whitePoint: 1.0,
         grain: 0.22, grainSize: 1.3,
         vignette: 0.45,
         bloom: 0.25,
-        color: true, saturation: 0.82, warmth: -0.2,
-        shadowHue: 0.555, shadowAmount: 0.6, highlightHue: 0.1, highlightAmount: 0.4,
-        aqua: 0.45, redShadows: -0.2, blueShadows: 0.2)
+        color: true, strength: 0.7, saturation: 0.88, warmth: -0.1,
+        shadowHue: 0.555, shadowAmount: 0.55, highlightHue: 0.1, highlightAmount: 0.35,
+        aqua: 0.4, redShadows: -0.12, blueShadows: 0.12)
 
     /// Dusk turned teal-green: green lifted, blue held down in the highlights (so a
     /// violet sky goes pale gold), teal shadows.
@@ -423,8 +435,8 @@ extension FilmStock {
         grain: 0.3, grainSize: 1.5,
         vignette: 0.4,
         bloom: 0.3,
-        color: true, saturation: 0.9, warmth: 0.05, tint: -0.06,
-        shadowHue: 0.48, shadowAmount: 0.3, highlightHue: 0.13, highlightAmount: 0.22,
+        color: true, strength: 0.7, saturation: 0.9, warmth: 0.05, tint: -0.06,
+        shadowHue: 0.48, shadowAmount: 0.35, highlightHue: 0.13, highlightAmount: 0.25,
         aqua: 0.3, redShadows: -0.15, redHighlights: 0.1, greenShadows: 0.05, greenHighlights: 0.2,
         blueShadows: 0.1, blueHighlights: -0.4,
         halation: 0.2)
@@ -434,13 +446,13 @@ extension FilmStock {
         id: "tide200", name: "TIDE 200", iso: 200,
         blurb: "Teal water, orange light",
         red: 0.33, green: 0.52, blue: 0.15,
-        contrast: 0.62, blackLift: 0.01, whitePoint: 0.96,
+        contrast: 0.45, blackLift: 0.02, whitePoint: 0.96,
         grain: 0.18, grainSize: 1.2,
         vignette: 0.5,
         bloom: 0.15,
-        color: true, saturation: 1.08,
-        shadowHue: 0.52, shadowAmount: 0.42, highlightHue: 0.08, highlightAmount: 0.4,
-        aqua: 0.5, redShadows: -0.18, redHighlights: 0.15, blueShadows: 0.25, blueHighlights: -0.25,
+        color: true, strength: 0.7, saturation: 1.0,
+        shadowHue: 0.52, shadowAmount: 0.45, highlightHue: 0.08, highlightAmount: 0.4,
+        aqua: 0.4, redShadows: -0.15, redHighlights: 0.1, blueShadows: 0.15, blueHighlights: -0.15,
         halation: 0.15)
 
     /// Golden hour: rich contrast, warm highlights and mids, deep warm shadows.
@@ -448,14 +460,43 @@ extension FilmStock {
         id: "golden100", name: "GOLDEN 100", iso: 100,
         blurb: "Low sun, rich and warm",
         red: 0.33, green: 0.52, blue: 0.15,
-        contrast: 0.5, blackLift: 0.01, whitePoint: 0.95,
+        contrast: 0.35, blackLift: 0.02, whitePoint: 0.95,
         grain: 0.12, grainSize: 1.0,
         vignette: 0.45,
         bloom: 0.35,
-        color: true, saturation: 1.12, warmth: 0.45,
+        color: true, strength: 0.7, saturation: 1.04, warmth: 0.3,
         shadowHue: 0.06, shadowAmount: 0.2, highlightHue: 0.1, highlightAmount: 0.45,
-        redHighlights: 0.15, blueShadows: -0.15, blueHighlights: -0.3,
+        redHighlights: 0.1, blueShadows: -0.05, blueHighlights: -0.15,
         halation: 0.3)
+
+    /// Earth tones: every colour gathered into tan, khaki and olive, skies and greens
+    /// muted, whites kept clean, deep blacks. Moody window light, deserts, dark suits.
+    static let earth200 = FilmStock(
+        id: "earth200", name: "EARTH 200", iso: 200,
+        blurb: "Tan and olive, clean whites",
+        red: 0.33, green: 0.52, blue: 0.15,
+        contrast: 0.5, blackLift: 0.0, whitePoint: 0.97,
+        grain: 0.2, grainSize: 1.2,
+        vignette: 0.45,
+        bloom: 0.1, key: -0.1,
+        color: true, strength: 0.7, saturation: 0.85, warmth: 0.12,
+        shadowHue: 0.09, shadowAmount: 0.15,
+        aqua: 0, unify: 0.7, unifyHue: 0.105,
+        redShadows: 0.05, blueShadows: -0.1)
+
+    /// Bright and hazy: high key, soft contrast, warm tan mids, whites that open up,
+    /// colours gathered into the same earthy family.
+    static let meadow400 = FilmStock(
+        id: "meadow400", name: "MEADOW 400", iso: 400,
+        blurb: "Bright, hazy, sun-bleached",
+        red: 0.33, green: 0.52, blue: 0.15,
+        contrast: 0.22, blackLift: 0.04, whitePoint: 1.0,
+        grain: 0.22, grainSize: 1.3,
+        vignette: 0.2,
+        bloom: 0.35, exposure: 0.15, key: 0.3,
+        color: true, strength: 0.7, saturation: 0.7, warmth: 0.15,
+        unify: 0.75, unifyHue: 0.115,
+        halation: 0.1)
 
     static let noir = FilmStock(
         id: "noir", name: "NOIR 400", iso: 400,
@@ -574,7 +615,7 @@ extension FilmStock {
     /// separate shelves): everyday, colour, filters and emulsions, darkroom prints.
     static let all: [FilmStock] = [
         .classic400, .pan50, .frost400, .push3200, .noir,
-        .warm400, .golden100, .tide200, .dusk800, .north400,
+        .warm400, .golden100, .earth200, .meadow400, .tide200, .dusk800, .north400,
         .redFilter, .ortho, .infrared, .tintype,
         .lith, .sepia, .selenium, .platinum, .cyanotype, .expired,
     ]

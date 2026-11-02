@@ -770,6 +770,10 @@ const COLOR_FIELDS = [
   ['greenHighlights', -1, 1], ['blueShadows', -1, 1], ['blueHighlights', -1, 1],
   ['halation', 0, 1],
 ];
+// Version 3 adds how strongly the colour look applies.
+const V3_FIELDS = [['strength', 0, 1]];
+// Version 4 adds colour unity (a frame's colours gathered toward one hue).
+const V4_FIELDS = [['unify', 0, 1], ['unifyHue', 0, 1]];
 export const TONES = ['neutral', 'warm', 'cool', 'selenium', 'split', 'gold', 'platinum', 'cyanotype', 'tintype'];
 const TONE_NAMES = {
   warm: 'Sepia', cool: 'Cool', selenium: 'Selenium', split: 'Split', gold: 'Gold',
@@ -801,12 +805,13 @@ export function decodeFilm(code) {
   } catch {
     return null;
   }
-  if (bytes[0] !== 1 && bytes[0] !== 2) return null;
-  const isColor = bytes[0] === 2;
-  const packed = isColor ? FIELDS.concat(COLOR_FIELDS) : FIELDS;
+  if (![1, 2, 3, 4].includes(bytes[0])) return null;
+  const isColor = bytes[0] !== 1;
+  const packed = FIELDS.concat(
+    isColor ? COLOR_FIELDS : [], bytes[0] >= 3 ? V3_FIELDS : [], bytes[0] >= 4 ? V4_FIELDS : []);
   const fixed = 1 + packed.length + 2 + 2;
   if (bytes.length < fixed) return null;
-  const film = { color: isColor };
+  const film = { color: isColor, strength: 1, unify: 0 };
   packed.forEach(([name, lo, hi], i) => { film[name] = lo + (bytes[1 + i] / 255) * (hi - lo); });
   let at = 1 + packed.length;
   if (bytes[at] >= TONES.length || bytes[at + 1] >= EFFECTS.length) return null;
@@ -858,17 +863,20 @@ function colorScale(film, steps) {
   };
   const tint = (h) => { const c = hueRGB(h); const y = luma(...c); return c.map((v) => v - y); };
   const st = tint(film.shadowHue), ht = tint(film.highlightHue);
-  const gains = [1 + 0.12 * film.warmth + 0.04 * film.tint, 1 + 0.02 * film.warmth - 0.07 * film.tint, 1 - 0.14 * film.warmth + 0.04 * film.tint];
+  const gains = [1 + 0.07 * film.warmth + 0.03 * film.tint, 1 + 0.01 * film.warmth - 0.05 * film.tint, 1 - 0.08 * film.warmth + 0.03 * film.tint];
   const bends = [[film.redShadows, film.redHighlights], [film.greenShadows, film.greenHighlights], [film.blueShadows, film.blueHighlights]];
   return Array.from({ length: steps }, (_, i) => {
     const x = film.blackLift + (i / (steps - 1)) * (film.whitePoint - film.blackLift);
     let c = gains.map((k) => clamp(x * k));
-    c = c.map((v, j) => clamp(v + 0.12 * (bends[j][0] * 6.75 * v * (1 - v) ** 2 + bends[j][1] * 6.75 * v * v * (1 - v))));
+    c = c.map((v, j) => clamp(v + 0.08 * (bends[j][0] * 6.75 * v * (1 - v) ** 2 + bends[j][1] * 6.75 * v * v * (1 - v))));
     let y = luma(...c);
     c = c.map((v) => clamp(y + film.saturation * (v - y)));
     y = luma(...c);
-    const ws = film.shadowAmount * (1 - y) ** 2, wh = film.highlightAmount * y * y;
-    c = c.map((v, j) => clamp(v + 0.4 * (ws * st[j] + wh * ht[j])));
+    const ws = film.shadowAmount * Math.max(0, 1 - y / 0.5) ** 2, wh = film.highlightAmount * Math.max(0, (y - 0.5) / 0.5) ** 2;
+    c = c.map((v, j) => clamp(v + 0.3 * (ws * st[j] + wh * ht[j])));
+    // STRENGTH mixes the look back toward plain grey.
+    const g = i / (steps - 1);
+    c = c.map((v) => g + film.strength * (v - g));
     return `rgb(${c.map((v) => Math.round(v * 255)).join(',')})`;
   });
 }
@@ -878,9 +886,10 @@ function settingsList(film) {
   if (film.color) {
     const deg = (h) => `${Math.round(h * 360) % 360}°`;
     const signed = (v) => `${v > 0 ? '+' : ''}${Math.round(v * 100)}`;
-    const rows = [['Contrast', pct(film.contrast)], ['Saturation', pct(film.saturation)], ['Warmth', signed(film.warmth)]];
+    const rows = [['Strength', pct(film.strength)], ['Contrast', pct(film.contrast)], ['Saturation', pct(film.saturation)], ['Warmth', signed(film.warmth)]];
     if (film.shadowAmount > 0.02) rows.push(['Shadow color', `${deg(film.shadowHue)} ${pct(film.shadowAmount)}`]);
     if (film.highlightAmount > 0.02) rows.push(['Light color', `${deg(film.highlightHue)} ${pct(film.highlightAmount)}`]);
+    if (film.unify > 0.02) rows.push(['Unify', `${deg(film.unifyHue)} ${pct(film.unify)}`]);
     if (film.halation > 0.02) rows.push(['Halation', pct(film.halation)]);
     rows.push(['Grain', pct(film.grain)]);
     if (film.effect !== 'none') rows.push(['Effect', `${EFFECT_NAMES[film.effect]} ${pct(film.effectAmount)}`]);

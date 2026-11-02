@@ -12,7 +12,7 @@ func near(_ a: CGFloat, _ b: CGFloat, _ tol: CGFloat = 1e-6) -> Bool { abs(a - b
 // Built-in films: unique ids, sane values inside the ADJUST panel's ranges.
 let ids = FilmStock.all.map(\.id)
 check(Set(ids).count == ids.count, "film ids are unique")
-check(FilmStock.all.count == 15, "15 built-in films, got \(FilmStock.all.count)")
+check(FilmStock.all.count == 22, "22 built-in films (15 black & white, 7 colour), got \(FilmStock.all.count)")
 for f in FilmStock.all {
     check(!f.isCustom, "\(f.id) is not custom")
     check((0...1).contains(f.contrast), "\(f.id) contrast in range")
@@ -241,7 +241,20 @@ curves.greenHighlights = 1
 curves.blueHighlights = -1
 check(curves.map(0, 0, 0) == (0, 0, 0) && curves.map(1, 1, 1) == (1, 1, 1), "curves keep black and white")
 let lifted = curves.map(0.667, 0.667, 0.667)
-check(lifted.1 > 0.75 && lifted.2 < 0.6 && abs(lifted.0 - 0.667) < 1e-9, "green lifted, blue lowered in the highlights")
+check(lifted.1 > 0.72 && lifted.2 < 0.62 && abs(lifted.0 - 0.667) < 1e-9, "green lifted, blue lowered in the highlights")
+var midTone = ColorGrade()
+midTone.shadowAmount = 1; midTone.highlightAmount = 1
+let grey50 = midTone.map(0.5, 0.5, 0.5)
+check(abs(grey50.0 - 0.5) < 1e-9 && abs(grey50.2 - 0.5) < 1e-9, "split toning leaves mid-grey alone")
+var unity = ColorGrade()
+unity.unify = 1; unity.unifyHue = 0.105
+check(unity.map(1, 1, 1) == (1, 1, 1) && unity.map(0.5, 0.5, 0.5) == (0.5, 0.5, 0.5), "unify keeps greys and whites clean")
+let olive = unity.map(0.45, 0.5, 0.3)          // a green-olive, ~78°
+check(ColorGrade.hsv(olive.0, olive.1, olive.2).0 < ColorGrade.hsv(0.45, 0.5, 0.3).0, "unify pulls greens toward tan")
+let skyIn = (0.35, 0.55, 0.9), skyOut = unity.map(0.35, 0.55, 0.9)
+check(ColorGrade.hsv(skyOut.0, skyOut.1, skyOut.2).1 < ColorGrade.hsv(skyIn.0, skyIn.1, skyIn.2).1 * 0.4, "unify mutes a blue sky")
+check(abs(ColorGrade.hsv(skyOut.0, skyOut.1, skyOut.2).0 - ColorGrade.hsv(skyIn.0, skyIn.1, skyIn.2).0) < 0.01, "a far colour is muted, not turned green")
+check(abs(ColorGrade.luma(skyOut.0, skyOut.1, skyOut.2) - ColorGrade.luma(0.35, 0.55, 0.9)) < 0.01, "unify keeps brightness")
 
 var split = ColorGrade()
 split.shadowHue = 0.6; split.shadowAmount = 1      // blue
@@ -266,7 +279,7 @@ check(abs(skin.0 - 0.9) < 1e-9 && abs(skin.1 - 0.6) < 1e-9, "aqua leaves warm co
 check(plain.cubeData(size: 5).count == 5 * 5 * 5 * 4 * MemoryLayout<Float>.size, "colour cube size")
 
 let colorFilms = FilmStock.all.filter(\.color)
-check(colorFilms.count == 5, "five colour films")
+check(colorFilms.count == 7, "seven colour films")
 check(FilmStock.all.filter { !$0.color }.count == 15, "black & white films are unchanged")
 for film in colorFilms {
     check(film.shareCaption.hasPrefix("Color"), "\(film.id) reads as colour")
@@ -275,7 +288,8 @@ for film in colorFilms {
     for (name, a, b) in [("saturation", film.saturation, back.saturation), ("warmth", film.warmth, back.warmth),
                          ("shadow hue", film.shadowHue, back.shadowHue), ("highlights", film.highlightAmount, back.highlightAmount),
                          ("green high", film.greenHighlights, back.greenHighlights), ("blue high", film.blueHighlights, back.blueHighlights),
-                         ("halation", film.halation, back.halation), ("contrast", film.contrast, back.contrast)] {
+                         ("halation", film.halation, back.halation), ("contrast", film.contrast, back.contrast),
+                         ("strength", film.strength, back.strength), ("unify", film.unify, back.unify), ("unify hue", film.unifyHue, back.unifyHue)] {
         check(abs(a - b) < 0.01, "\(film.id) link keeps \(name)")
     }
     let json = try! JSONEncoder().encode(film)
@@ -283,6 +297,11 @@ for film in colorFilms {
     check(decoded == film, "\(film.id) saves and loads")
 }
 check(!FilmCode.film(from: FilmCode.url(for: .pan50)!)!.color, "black & white links stay black & white")
+for film in colorFilms { check(film.strength <= 0.75, "\(film.id) starts subtle (strength \(film.strength))") }
+var soft = FilmStock.tide200
+soft.strength = 0.3
+check(abs(FilmCode.film(from: FilmCode.url(for: soft)!)!.strength - 0.3) < 0.01, "a link keeps the film's strength")
+
 let oldSaved = try! JSONEncoder().encode(FilmStock.noir)
 check(!(try! JSONDecoder().decode(FilmStock.self, from: oldSaved)).color, "films saved before colour load as black & white")
 

@@ -45,12 +45,27 @@ enum FilmLook {
         image = image.applyingFilter("CILinearToSRGBToneCurve")
 
         // 2b. Colour: white balance before the curve, like the film's own colour response.
+        let natural = image
         if stock.color, stock.warmth != 0 || stock.tint != 0 {
             image = whiteBalance(image, warmth: stock.warmth, tint: stock.tint)
         }
 
         // 3. Characteristic curve: S-curve for contrast, mid-tone key, lifted blacks, dimmed whites.
         image = toneCurve(image, stock: stock)
+
+        // 3'. Colour: the grade (RGB curves, aqua blues, saturation, split toning), then
+        //     STRENGTH mixes the film's whole colour and tone back toward the scene as shot.
+        if stock.color {
+            image = grade(image, stock.grade)
+            let strength = min(max(stock.strength, 0), 1)
+            if strength < 1 {
+                let mix = CIFilter.dissolveTransition()
+                mix.inputImage = natural
+                mix.targetImage = image
+                mix.time = Float(strength)
+                image = mix.outputImage?.cropped(to: extent) ?? image
+            }
+        }
 
         // 3a. Uneven chemical fog (old / expired film): soft blotches lifting the shadows.
         if stock.fog > 0 {
@@ -70,10 +85,7 @@ enum FilmLook {
         image = LensFX.print(image, stock: stock)
 
         // 4. Black & white: print toning (split: separate ink, mid and paper colours).
-        //    Colour: the grade (RGB curves, aqua blues, saturation, split toning).
-        if stock.color {
-            image = grade(image, stock.grade)
-        } else if stock.toneAmount > 0, stock.tone != .neutral {
+        if !stock.color, stock.toneAmount > 0, stock.tone != .neutral {
             image = tone(image, toning: stock.tone, amount: stock.toneAmount)
         }
 
@@ -196,13 +208,13 @@ enum FilmLook {
     }
 
     /// White balance on gamma-encoded colour: warm adds red and takes blue, tint trades
-    /// green for magenta.
+    /// green for magenta. Kept gentle: it shifts whites too.
     private static func whiteBalance(_ image: CIImage, warmth w: CGFloat, tint t: CGFloat) -> CIImage {
         let matrix = CIFilter.colorMatrix()
         matrix.inputImage = image
-        matrix.rVector = CIVector(x: 1 + 0.12 * w + 0.04 * t, y: 0, z: 0, w: 0)
-        matrix.gVector = CIVector(x: 0, y: 1 + 0.02 * w - 0.07 * t, z: 0, w: 0)
-        matrix.bVector = CIVector(x: 0, y: 0, z: 1 - 0.14 * w + 0.04 * t, w: 0)
+        matrix.rVector = CIVector(x: 1 + 0.07 * w + 0.03 * t, y: 0, z: 0, w: 0)
+        matrix.gVector = CIVector(x: 0, y: 1 + 0.01 * w - 0.05 * t, z: 0, w: 0)
+        matrix.bVector = CIVector(x: 0, y: 0, z: 1 - 0.08 * w + 0.03 * t, w: 0)
         matrix.aVector = CIVector(x: 0, y: 0, z: 0, w: 1)
         return matrix.outputImage?.applyingFilter("CIColorClamp") ?? image
     }
