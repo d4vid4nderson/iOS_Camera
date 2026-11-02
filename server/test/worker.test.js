@@ -564,6 +564,8 @@ test('the support form limits each address to a few an hour', async () => {
   assert.equal((await support(e, good, { now: now + 61 * 60 * 1000 })).status, 200, 'the next hour is fine');
   await sweep(e, now + 2 * 60 * 60 * 1000);
   assert.ok(![...e.ROLLS.objects.keys()].some((k) => k.startsWith('support-rate/')), 'old counters are swept');
+});
+
 test('www sends people to the plain domain', async () => {
   const res = await route(new Request('https://www.filmexposures.com/r/AbCdEfGh23?x=1'), env());
   assert.equal(res.status, 301);
