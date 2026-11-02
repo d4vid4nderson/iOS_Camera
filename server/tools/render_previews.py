@@ -28,6 +28,7 @@ ROOT = Path(__file__).resolve().parents[2]
 # colour films on a coast at golden hour (sea, sky, warm rock, pines).
 SOURCES = {False: ROOT / 'server/tools/preview-bw.jpg', True: ROOT / 'server/tools/preview-color.jpg'}
 OUT = ROOT / 'server/public/films'
+THUMB = 420   # slide-mount thumbnails, px wide
 WIDTH = 1200
 RNG = np.random.default_rng(36)
 
@@ -313,7 +314,7 @@ def apply(film, srgb_img):
 
 
 def main():
-    OUT.mkdir(parents=True, exist_ok=True)
+    (OUT / 'thumbs').mkdir(parents=True, exist_ok=True)
     bases = {}
     for color, path in SOURCES.items():
         src = Image.open(path).convert('RGB')
@@ -326,7 +327,10 @@ def main():
     ramp = np.repeat(np.linspace(0, 1, 7, dtype=np.float32)[None, :, None], 3, -1)
     for film in films:
         out = apply(film, bases[bool(film['color'])])
-        Image.fromarray((out * 255 + 0.5).astype(np.uint8)).save(OUT / f"{film['id']}.jpg", quality=82, optimize=True, progressive=True)
+        img = Image.fromarray((out * 255 + 0.5).astype(np.uint8))
+        img.save(OUT / f"{film['id']}.jpg", quality=82, optimize=True, progressive=True)
+        # A small copy for the film's slide mount on the home page.
+        img.resize((THUMB, THUMB * 2 // 3), Image.LANCZOS).save(OUT / 'thumbs' / f"{film['id']}.jpg", quality=80, optimize=True, progressive=True)
         # The film's tone strip, like the app's cards: grey steps through the film, without
         # grain, glow or vignette.
         flat = dict(film, grain=0, vignette=0, fog=0, bloom=0, halation=0, edgeSoftness=0)
