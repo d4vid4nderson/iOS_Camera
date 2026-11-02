@@ -25,3 +25,9 @@ crons = ["17 4 * * *"]
 # (e.g. a public TestFlight invite). Both empty: pages say it's coming soon.
 APP_STORE_ID = ""
 APP_STORE_URL = ""
+# Sign in with Google: the app's iOS OAuth client ID from Google Cloud (comma-separate
+# several). Client IDs aren't secret. Empty: Google sign-in is refused.
+GOOGLE_CLIENT_IDS = ""
+# Facebook Login: the Meta app's App ID (not secret). Its App Secret goes in the
+# FACEBOOK_APP_SECRET repository secret; the deploy workflow hands it to the Worker.
+FACEBOOK_APP_ID = ""

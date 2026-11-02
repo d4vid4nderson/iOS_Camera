@@ -303,7 +303,7 @@ struct SharedRollView: View {
                 Text("SIGN IN TO LIKE FRAMES").font(.mono(15, .bold)).foregroundStyle(accent)
                 Text("One like per person, so likes mean something. Signing in also lets you put your own rolls on a public profile.")
                     .font(.mono(10)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                AppleSignInButton(onError: { message in
+                SignInButtons(onError: { message in
                     askingToSignIn = false
                     note = message.uppercased()
                 }, onSignedIn: {

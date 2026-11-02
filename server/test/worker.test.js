@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { route, sweep, decodeFilm, caption, storeURL, verifyAppleToken, TTL_DAYS } from '../src/worker.js';
+import { route, sweep, decodeFilm, caption, storeURL, verifyAppleToken, verifyGoogleToken, TTL_DAYS } from '../src/worker.js';
 
 /// In-memory stand-in for an R2 bucket (the calls the worker uses).
 class FakeBucket {
@@ -147,7 +147,7 @@ test('roll pages send people without the app to the App Store', async () => {
 // MARK: Accounts, public rolls and likes
 
 /// A stand-in for Apple: a signing key, its public half in env.APPLE_KEYS, and tokens.
-async function fakeApple() {
+async function fakeApple(defaults = { iss: 'https://appleid.apple.com', aud: 'com.davidanderson.retrocam' }) {
   const pair = await crypto.subtle.generateKey(
     { name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
     true, ['sign', 'verify']);
@@ -155,10 +155,7 @@ async function fakeApple() {
   const b64 = (v) => Buffer.from(typeof v === 'string' ? v : new Uint8Array(v)).toString('base64url');
   const sign = async (claims, kid = 'test-key') => {
     const head = b64(JSON.stringify({ alg: 'RS256', kid }));
-    const body = b64(JSON.stringify({
-      iss: 'https://appleid.apple.com', aud: 'com.davidanderson.retrocam',
-      exp: Math.floor(Date.now() / 1000) + 600, ...claims,
-    }));
+    const body = b64(JSON.stringify({ ...defaults, exp: Math.floor(Date.now() / 1000) + 600, ...claims }));
     const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', pair.privateKey, new TextEncoder().encode(`${head}.${body}`));
     return `${head}.${body}.${b64(sig)}`;
   };
@@ -313,4 +310,148 @@ test('deleting an account deletes everything it put on the server', async () => 
   assert.equal((await call(e, 'GET', '/api/me', { account: gone.token })).status, 401);
   // Signing in with the same Apple ID starts a fresh account.
   assert.notEqual((await signIn(e, apple, 'apple-gone')).me.id, gone.me.id);
+});
+
+// MARK: Google and Facebook
+
+const GOOGLE_CLIENT = '1234-abc.apps.googleusercontent.com';
+const GOOGLE_PHOTO = 'https://lh3.googleusercontent.com/a/photo=s96-c';
+const FB_PHOTO = 'https://scontent.xx.fbcdn.net/v/t1/photo.jpg';
+
+/// Everything at once: Apple, Google and Facebook stand-ins, and a fake network for photos
+/// and Facebook's Graph API.
+async function socialEnv() {
+  const apple = await fakeApple();
+  const google = await fakeApple({ iss: 'https://accounts.google.com', aud: GOOGLE_CLIENT });
+  const fetched = [];
+  const FETCH = async (href) => {
+    fetched.push(href);
+    const u = new URL(href);
+    if (u.hostname === 'lh3.googleusercontent.com') return new Response(jpeg(100));
+    if (u.hostname.endsWith('fbcdn.net')) return new Response(jpeg(120));
+    if (u.pathname.endsWith('/oauth/access_token')) {
+      return u.searchParams.get('code') === 'good-code' && u.searchParams.get('client_secret') === 'fb-secret'
+        ? Response.json({ access_token: 'fb-token' }) : new Response('{}', { status: 400 });
+    }
+    if (u.pathname.endsWith('/me') && u.searchParams.get('access_token') === 'fb-token') {
+      return Response.json({ id: '9876', name: 'Dave FB', picture: { data: { url: FB_PHOTO, is_silhouette: false } } });
+    }
+    return new Response('nope', { status: 404 });
+  };
+  const e = {
+    ...env(), APPLE_KEYS: apple.keys, GOOGLE_KEYS: google.keys, GOOGLE_CLIENT_IDS: `other-client, ${GOOGLE_CLIENT}`,
+    FACEBOOK_APP_ID: '1111', FACEBOOK_APP_SECRET: 'fb-secret', FETCH,
+  };
+  return { e, apple, google, fetched };
+}
+
+const googleIn = async (e, google, sub, extra = {}, account) => call(e, 'POST', '/api/auth/google', {
+  type: 'application/json', account,
+  body: JSON.stringify({ idToken: await google.sign({ sub, name: 'Dave G', picture: GOOGLE_PHOTO, ...extra }) }),
+});
+const facebookIn = (e, code = 'good-code', account) => call(e, 'POST', '/api/auth/facebook', {
+  type: 'application/json', account, body: JSON.stringify({ code }),
+});
+
+test('Google ID tokens are checked', async () => {
+  const { e, google, apple } = await socialEnv();
+  assert.ok(await verifyGoogleToken(await google.sign({ sub: 'g-1' }), e));
+  assert.ok(await verifyGoogleToken(await google.sign({ sub: 'g-1', iss: 'accounts.google.com' }), e));
+  assert.equal(await verifyGoogleToken(await google.sign({ sub: 'g-1', aud: 'someone-elses-client' }), e), null);
+  assert.equal(await verifyGoogleToken(await google.sign({ sub: 'g-1', exp: 1 }), e), null);
+  assert.equal(await verifyGoogleToken(await apple.sign({ sub: 'g-1' }), e), null, 'an Apple token is not a Google token');
+  assert.equal(await verifyGoogleToken(await google.sign({ sub: 'g-1' }), { ...e, GOOGLE_CLIENT_IDS: '' }), null, 'off until configured');
+});
+
+test('Google sign-in brings in the name and photo', async () => {
+  const { e, google, fetched } = await socialEnv();
+  const res = await googleIn(e, google, 'g-1');
+  assert.equal(res.status, 200);
+  const { token, me } = await res.json();
+  assert.equal(me.name, 'Dave G');
+  assert.deepEqual(me.logins, ['google']);
+  assert.equal(me.avatarSource, 'google');
+  assert.deepEqual(me.photos, ['google']);
+  assert.ok(fetched.includes('https://lh3.googleusercontent.com/a/photo=s600-c'), 'asks Google for a big photo');
+  assert.equal((await call(e, 'GET', `/u/${me.id}/avatar.jpg`)).status, 200);
+  // Same Google account, same Film Exposures account.
+  assert.equal((await (await googleIn(e, google, 'g-1')).json()).me.id, me.id);
+  assert.ok(token);
+});
+
+test('photos only come from the provider’s own image hosts', async () => {
+  const { e, google, fetched } = await socialEnv();
+  const { me } = await (await googleIn(e, google, 'g-2', { picture: 'https://evil.example.com/x.jpg' })).json();
+  assert.equal(me.avatar, null);
+  assert.ok(!fetched.some((h) => h.includes('evil.example.com')));
+});
+
+test('Facebook sign-in swaps the code on the server', async () => {
+  const { e } = await socialEnv();
+  assert.equal((await facebookIn(e, 'bad-code')).status, 401);
+  const { me } = await (await facebookIn(e)).json();
+  assert.equal(me.name, 'Dave FB');
+  assert.deepEqual(me.logins, ['facebook']);
+  assert.equal(me.avatarSource, 'facebook');
+  assert.equal((await facebookIn({ ...e, FACEBOOK_APP_SECRET: '' })).status, 503, 'off until configured');
+
+  // Facebook sends people back to the web; the server hands the code to the app.
+  const back = await call(e, 'GET', '/auth/facebook/callback?code=abc&state=xyz');
+  assert.equal(back.status, 302);
+  assert.equal(back.headers.get('location'), 'exposures://auth/facebook?code=abc&state=xyz');
+});
+
+test('your own photo wins, and you can go back to a provider’s', async () => {
+  const { e, google } = await socialEnv();
+  const { token: account } = await (await googleIn(e, google, 'g-1')).json();
+  let me = await (await call(e, 'PUT', '/api/me/avatar', { account, body: jpeg(80) })).json();
+  assert.equal(me.avatarSource, 'own');
+  // Signing in with Google again doesn't replace it.
+  me = (await (await googleIn(e, google, 'g-1')).json()).me;
+  assert.equal(me.avatarSource, 'own');
+  me = await (await call(e, 'POST', '/api/me/avatar/use', { account, type: 'application/json', body: '{"provider":"google"}' })).json();
+  assert.equal(me.avatarSource, 'google');
+  assert.equal(e.ROLLS.objects.get(`users/${me.id}/avatar.jpg`).length, 100, 'Google’s photo is back');
+  assert.equal((await call(e, 'POST', '/api/me/avatar/use', { account, type: 'application/json', body: '{"provider":"facebook"}' })).status, 404);
+});
+
+test('sign-ins can be added to one account, but not stolen from another', async () => {
+  const { e, apple, google } = await socialEnv();
+  const { token: account, me } = await signIn(e, apple, 'apple-1', '@david');
+  assert.deepEqual(me.logins, ['apple']);
+  // Signed in with Apple, add Google and Facebook.
+  const added = await (await googleIn(e, google, 'g-1', {}, account)).json();
+  assert.equal(added.token, null, 'no new session when adding a sign-in');
+  assert.equal(added.me.id, me.id);
+  assert.equal(added.me.name, '@david', 'keeps the name you already had');
+  assert.equal(added.me.avatarSource, 'google', 'no headshot yet, so Google’s photo is used');
+  assert.deepEqual((await (await facebookIn(e, 'good-code', account)).json()).me.logins, ['apple', 'google', 'facebook']);
+  // Each now signs in to the same account.
+  assert.equal((await (await googleIn(e, google, 'g-1')).json()).me.id, me.id);
+  assert.equal((await (await facebookIn(e)).json()).me.id, me.id);
+
+  // Someone else can't add your Google account to theirs.
+  const other = await signIn(e, apple, 'apple-2');
+  const res = await googleIn(e, google, 'g-1', {}, other.token);
+  assert.equal(res.status, 409);
+
+  // Deleting the account frees all three.
+  await call(e, 'DELETE', '/api/me', { account });
+  assert.notEqual((await (await googleIn(e, google, 'g-1')).json()).me.id, me.id);
+  assert.ok(![...e.ROLLS.objects.keys()].some((k) => k.startsWith(`users/${me.id}`)));
+});
+
+test('accounts made before Google and Facebook still work', async () => {
+  const { e, apple } = await socialEnv();
+  const { me } = await signIn(e, apple, 'apple-old');
+  // An account record from the first version: one appleKey, no logins.
+  const record = JSON.parse(new TextDecoder().decode(e.ROLLS.objects.get(`users/${me.id}.json`)));
+  record.appleKey = record.logins.apple;
+  delete record.logins;
+  await e.ROLLS.put(`users/${me.id}.json`, JSON.stringify(record));
+  const again = await signIn(e, apple, 'apple-old');
+  assert.equal(again.me.id, me.id);
+  assert.deepEqual(again.me.logins, ['apple']);
+  await call(e, 'DELETE', '/api/me', { account: again.token });
+  assert.ok(![...e.ROLLS.objects.keys()].some((k) => k.startsWith('accounts/')), 'its Apple sign-in is freed');
 });

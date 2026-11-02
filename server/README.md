@@ -60,6 +60,32 @@ Deleting an account (Profile -> DELETE ACCOUNT) deletes its profile, headshot, l
 every roll shared while signed in. Before App Review, the server should also revoke the
 person's Apple token on deletion, which needs a Sign in with Apple key; that isn't set up yet.
 
+## Google and Facebook sign-in
+
+Both are optional, and the app hides each until it's set up. Apple's rules let an app offer
+Google or Facebook only alongside Sign in with Apple, which is already there. The first time
+someone signs in, the photo from that account becomes their headshot, unless they've already
+chosen one. Their own photo always wins over it, and USE GOOGLE PHOTO or USE FACEBOOK PHOTO
+switches back.
+
+**Google**
+1. In Google Cloud Console, go to APIs & Services, then OAuth consent screen, and set up an
+   external app (name it Film Exposures).
+2. Go to Credentials, then Create credentials, then OAuth client ID, and choose **iOS** with
+   bundle ID `com.davidanderson.retrocam`.
+3. The client ID (`…apps.googleusercontent.com`) isn't secret. Put it in
+   `SocialSignIn.googleClientID` in the app, and in `GOOGLE_CLIENT_IDS` in `wrangler.toml`.
+
+**Facebook**
+1. At developers.facebook.com, create an app (type: Consumer) and add **Facebook Login**.
+2. Under Facebook Login, then Settings, add this Valid OAuth Redirect URI:
+   `https://<your host>/auth/facebook/callback`.
+3. The App ID isn't secret. Put it in `SocialSignIn.facebookAppID` and in `FACEBOOK_APP_ID`
+   in `wrangler.toml`.
+4. The **App Secret** is secret. Put it only in the `FACEBOOK_APP_SECRET` repository secret.
+   The deploy workflow hands it to the Worker.
+5. Switch the app to Live mode, which needs a privacy policy URL.
+
 ## Tests
 
 ```
