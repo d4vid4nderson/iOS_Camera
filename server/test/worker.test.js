@@ -493,6 +493,79 @@ test('version 4 colour codes carry unify', () => {
   assert.equal(v4.iso, 200);
 });
 
+// MARK: Website
+
+test('the website has its pages, linked from every page', async () => {
+  const e = env();
+  for (const [path, words] of [['/', /A film camera/], ['/privacy', /Privacy policy/], ['/terms', /Terms of use/], ['/support', /How can we help/]]) {
+    const res = await call(e, 'GET', path);
+    assert.equal(res.status, 200, path);
+    const page = await res.text();
+    assert.match(page, words, path);
+    assert.match(page, /href="\/privacy"/, `${path} links the privacy policy`);
+    assert.match(page, /href="\/terms"/, `${path} links the terms`);
+    assert.match(page, /href="\/support"/, `${path} links support`);
+    assert.match(page, /© \d{4} Film Exposures/, `${path} has the copyright line`);
+    assert.doesNotMatch(page, /@gmail|@moregroup|mailto:/, `${path} shows no email address`);
+  }
+});
+
+const support = (e, fields, { ip = '1.2.3.4', now } = {}) => route(new Request(ORIGIN + '/api/support', {
+  method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', 'cf-connecting-ip': ip },
+  body: new URLSearchParams(fields).toString(),
+}), e, now);
+const good = { email: 'someone@example.com', name: 'Sam', topic: 'Report a problem', message: 'The develop timer never fires.' };
+
+test('the support form stores messages for the inbox', async () => {
+  const e = { ...env(), ADMIN_TOKEN: 'inbox-password' };
+  const res = await support(e, good);
+  assert.equal(res.status, 200);
+  assert.match(await res.text(), /Your message has been sent/);
+  const stored = [...e.ROLLS.objects.keys()].filter((k) => k.startsWith('support/'));
+  assert.equal(stored.length, 1);
+
+  // The inbox needs the password.
+  assert.equal((await call(e, 'GET', '/api/admin/support')).status, 401);
+  assert.equal((await call(e, 'GET', '/api/admin/support', { token: 'wrong' })).status, 401);
+  const { messages } = await (await call(e, 'GET', '/api/admin/support', { token: 'inbox-password' })).json();
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0].email, 'someone@example.com');
+  assert.equal(messages[0].topic, 'Report a problem');
+
+  // Done moves it out of the inbox.
+  assert.equal((await call(e, 'DELETE', `/api/admin/support/${messages[0].id}`, { token: 'inbox-password' })).status, 200);
+  assert.equal((await (await call(e, 'GET', '/api/admin/support', { token: 'inbox-password' })).json()).messages.length, 0);
+  assert.ok(e.ROLLS.objects.has(`support-done/${messages[0].id}.json`));
+
+  assert.equal((await call(env(), 'GET', '/api/admin/support', { token: 'x' })).status, 503, 'no inbox until the password is set');
+  assert.equal((await call(e, 'GET', '/admin')).status, 200);
+});
+
+test('the support form checks what it gets', async () => {
+  const e = env();
+  assert.equal((await support(e, { ...good, email: 'not-an-email' })).status, 400);
+  assert.equal((await support(e, { ...good, message: 'hi' })).status, 400);
+  // A bot fills the hidden field: thanked, not stored.
+  const bot = await support(e, { ...good, website: 'http://spam.example' });
+  assert.equal(bot.status, 200);
+  assert.ok(![...e.ROLLS.objects.keys()].some((k) => k.startsWith('support/')));
+  // An odd topic is filed under "Something else"; HTML in messages is kept as text.
+  await support(e, { ...good, topic: '<script>', message: '<b>bold</b> request here' });
+  const saved = JSON.parse(new TextDecoder().decode([...e.ROLLS.objects.entries()].find(([k]) => k.startsWith('support/'))[1]));
+  assert.equal(saved.topic, 'Something else');
+});
+
+test('the support form limits each address to a few an hour', async () => {
+  const e = env();
+  const now = Date.UTC(2026, 10, 2, 15, 10);
+  for (let i = 0; i < 5; i++) assert.equal((await support(e, good, { now: now + i })).status, 200);
+  assert.equal((await support(e, good, { now: now + 9 })).status, 400, 'sixth in the hour');
+  assert.equal((await support(e, good, { ip: '5.6.7.8', now: now + 10 })).status, 200, 'someone else can still write');
+  assert.equal((await support(e, good, { now: now + 61 * 60 * 1000 })).status, 200, 'the next hour is fine');
+  await sweep(e, now + 2 * 60 * 60 * 1000);
+  assert.ok(![...e.ROLLS.objects.keys()].some((k) => k.startsWith('support-rate/')), 'old counters are swept');
+});
+
 test('www sends people to the plain domain', async () => {
   const res = await route(new Request('https://www.filmexposures.com/r/AbCdEfGh23?x=1'), env());
   assert.equal(res.status, 301);

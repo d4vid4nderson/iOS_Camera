@@ -106,6 +106,16 @@ struct ProfileSheet: View {
                         .font(.mono(10)).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+
+                // The website's policies and support form (App Review asks for these in the app).
+                HStack(spacing: 16) {
+                    Link("PRIVACY", destination: URL(string: "https://filmexposures.com/privacy")!)
+                    Link("TERMS", destination: URL(string: "https://filmexposures.com/terms")!)
+                    Link("SUPPORT", destination: URL(string: "https://filmexposures.com/support")!)
+                }
+                .font(.mono(9, .semibold))
+                .tint(Color(white: 0.55))
+                .padding(.top, 6)
             }
             .padding(20)
         }
@@ -356,7 +366,7 @@ struct ProfileSheet: View {
 
                     There's no place here for nudity or sexual content, violence, hate, harassment, spam, or photos of people who didn't agree to be shared. Reported rolls are hidden and reviewed, and accounts that break these rules are removed.
 
-                    Only post photos you took.
+                    Only post photos you took. The full terms are at filmexposures.com/terms.
                     """)
                     .font(.mono(10)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

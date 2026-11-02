@@ -24,11 +24,17 @@
 //   PUT|DELETE /api/me/avatar               your headshot (JPEG)             (account)
 //   POST /api/me/terms                      agree to the rules for public rolls (account)
 //   GET  /u/<id>                            a profile page; /u/<id>/profile.json for the app
+//   GET  /privacy, /terms, /support         the website's policy pages and support form
+//   POST /api/support                       a support message (stored; no email address is published)
+//   GET  /admin                             the support inbox (password: the ADMIN_TOKEN secret)
+//   GET|DELETE /api/admin/support[/<id>]    read / clear support messages (Bearer ADMIN_TOKEN)
 //   GET  /.well-known/apple-app-site-association   lets these links open the app
 //
 // "(account)" means an X-Account header with the session token from /api/auth/*.
 // Link-shared rolls are deleted 30 days after they're shared (checked on every read, and swept
 // daily). Rolls on a profile stay until they're taken off it or deleted.
+
+import { SITE_CSS, siteHeader, siteFooter, homeBody, privacyBody, termsBody, supportBody, inboxBody, SUPPORT_TOPICS } from './site.js';
 
 export const APP_ID = 'RN599658F9.com.davidanderson.retrocam';
 export const TTL_DAYS = 30;
@@ -75,6 +81,22 @@ export async function route(request, env, now = Date.now()) {
     });
   }
   if (path === '/' && method === 'GET') return html(200, homePage(env));
+  if (path === '/privacy' && method === 'GET') {
+    return html(200, layout({ title: 'Privacy policy · Film Exposures', description: 'What Film Exposures collects, and the choices you have.', env, body: privacyBody() }));
+  }
+  if (path === '/terms' && method === 'GET') {
+    return html(200, layout({ title: 'Terms of use · Film Exposures', description: 'The terms for using Film Exposures.', env, body: termsBody() }));
+  }
+  if (path === '/support' && method === 'GET') {
+    return html(200, layout({ title: 'Support · Film Exposures', description: 'Get help with Film Exposures.', env,
+      body: supportBody({ sent: url.searchParams.get('sent') === '1' }) }));
+  }
+  if (path === '/api/support' && method === 'POST') return submitSupport(request, env, now);
+  if (path === '/admin' && method === 'GET') {
+    return html(200, layout({ title: 'Support inbox · Film Exposures', description: 'Support inbox', env, body: inboxBody(), noindex: true }));
+  }
+  if (path === '/api/admin/support' && method === 'GET') return listSupport(request, env);
+  if ((m = path.match(/^\/api\/admin\/support\/([A-Za-z0-9-]{8,64})$/)) && method === 'DELETE') return closeSupport(request, env, m[1]);
 
   if ((m = path.match(/^\/f\/([A-Za-z0-9_-]{4,200})$/)) && method === 'GET') {
     const film = decodeFilm(m[1]);
@@ -274,6 +296,80 @@ async function liveRoll(env, id, now) {
     return null;
   }
   return meta.status === 'live' ? meta : null;
+}
+
+// MARK: Support form
+
+export const SUPPORT_PER_HOUR = 5;
+
+/// A support message from the website's form (or JSON). Stored for the inbox; the
+/// sender's email is kept only to reply. A filled-in hidden field marks a bot: it's
+/// thanked and dropped. Each address can send a handful an hour.
+async function submitSupport(request, env, now) {
+  const type = request.headers.get('content-type') || '';
+  const isForm = !type.includes('application/json');
+  let fields = {};
+  if (isForm) {
+    try { fields = Object.fromEntries((await request.formData()).entries()); } catch { fields = {}; }
+  } else {
+    fields = (await readJSON(request)) || {};
+  }
+  const back = (problem) => isForm
+    ? html(problem ? 400 : 200, layout({ title: 'Support · Film Exposures', description: 'Get help with Film Exposures.', env,
+        body: supportBody({ sent: !problem, error: problem || '' }) }))
+    : json(problem ? 400 : 200, problem ? { error: problem } : { ok: true });
+
+  if (fields.website) return back('');   // the hidden field: a bot
+  const email = clean(fields.email, 200);
+  const name = clean(fields.name, 80);
+  const topic = SUPPORT_TOPICS.includes(fields.topic) ? fields.topic : 'Something else';
+  const message = typeof fields.message === 'string' ? fields.message.replace(/\u0000/g, '').trim().slice(0, 4000) : '';
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return back('Please give an email address we can reply to.');
+  if (message.length < 10) return back('Please tell us a little more (at least 10 characters).');
+
+  const ip = request.headers.get('cf-connecting-ip') || 'unknown';
+  const hour = Math.floor(now / (60 * 60 * 1000));
+  const rateKey = `support-rate/${hour}/${(await sha256(`${ip}:${hour}`)).slice(0, 32)}`;
+  const sentThisHour = Number(await (await env.ROLLS.get(rateKey))?.text() || 0);
+  if (sentThisHour >= SUPPORT_PER_HOUR) return back('Too many messages from here in the last hour. Please try again later.');
+  await env.ROLLS.put(rateKey, String(sentThisHour + 1));
+
+  const id = `${now}-${randomID(8)}`;
+  await env.ROLLS.put(`support/${id}.json`, JSON.stringify({ id, at: new Date(now).toISOString(), email, name, topic, message }));
+  return back('');
+}
+
+async function adminOnly(request, env, handler) {
+  if (!env.ADMIN_TOKEN) return json(503, { error: 'not set up' });
+  const header = request.headers.get('authorization') || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
+  if (!token || (await sha256(token)) !== (await sha256(env.ADMIN_TOKEN))) return json(401, { error: 'unauthorised' });
+  return handler();
+}
+
+async function listSupport(request, env) {
+  return adminOnly(request, env, async () => {
+    const messages = [];
+    for await (const keys of listKeys(env, 'support/')) {
+      for (const key of keys) {
+        const object = await env.ROLLS.get(key);
+        if (object) messages.push(JSON.parse(await object.text()));
+      }
+    }
+    messages.sort((a, b) => (a.at < b.at ? 1 : -1));
+    return json(200, { messages: messages.slice(0, 200) });
+  });
+}
+
+async function closeSupport(request, env, id) {
+  return adminOnly(request, env, async () => {
+    const object = await env.ROLLS.get(`support/${id}.json`);
+    if (object) {
+      await env.ROLLS.put(`support-done/${id}.json`, await object.text());
+      await env.ROLLS.delete(`support/${id}.json`);
+    }
+    return json(200, { ok: true });
+  });
 }
 
 // MARK: Public rolls and likes
@@ -674,6 +770,12 @@ function base64url(value) {
 }
 
 export async function sweep(env, now = Date.now()) {
+  // Support rate-limit counters older than the current hour.
+  const hour = Math.floor(now / (60 * 60 * 1000));
+  for await (const keys of listKeys(env, 'support-rate/')) {
+    const old = keys.filter((k) => Number(k.split('/')[1]) < hour);
+    if (old.length) await env.ROLLS.delete(old);
+  }
   let cursor;
   let removed = 0;
   do {
@@ -991,9 +1093,11 @@ function profilePage(profile, url, env) {
 }
 
 function homePage(env) {
-  return layout({ title: 'Film Exposures', description: 'A film camera for your iPhone.', env, body: `
-    <p class="eyebrow">FILM EXPOSURES</p><h1>A film camera for your iPhone.</h1>
-    <p class="muted">Shoot rolls of 36, develop them later, and share your films.</p>${storeButton(env)}` });
+  return layout({
+    title: 'Film Exposures · A film camera for your iPhone',
+    description: 'Shoot rolls of 36 on black & white and color films, develop them later, and share your films.',
+    env, wide: true, body: homeBody(esc(storeURL(env))),
+  });
 }
 
 function messagePage(message, env) {
@@ -1013,42 +1117,20 @@ function storeButton(env) {
   return store ? `<a class="button" href="${esc(store)}">Get Film Exposures</a>` : '';
 }
 
-function layout({ title, description, image, url, body, env, appArgument }) {
+function layout({ title, description, image, url, body, env, appArgument, wide = false, noindex = false }) {
   const appID = env?.APP_STORE_ID ? String(env.APP_STORE_ID).replace(/\D/g, '') : '';
   return `<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)}</title>
 <meta name="description" content="${esc(description)}">
+<meta name="theme-color" content="#0e0e0f">
+${noindex ? '<meta name="robots" content="noindex">' : ''}
+<meta property="og:site_name" content="Film Exposures">
 <meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description)}">
 ${url ? `<meta property="og:url" content="${esc(url)}">` : ''}
 ${appID ? `<meta name="apple-itunes-app" content="app-id=${appID}${appArgument ? `, app-argument=${esc(appArgument)}` : ''}">` : ''}
 ${image ? `<meta property="og:image" content="${esc(image)}"><meta name="twitter:card" content="summary_large_image">` : '<meta name="twitter:card" content="summary">'}
-<style>
-:root{--bg:#0e0e0f;--fg:#f2f0ec;--muted:#8c8a86;--line:#2a2a2b;--accent:#e8762e}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif}
-main{max-width:640px;margin:0 auto;padding:32px 16px 56px}
-.eyebrow{font-size:12px;letter-spacing:.08em;color:var(--muted);font-weight:600;margin:0 0 12px}
-h1{font-size:44px;line-height:1.05;letter-spacing:-.02em;margin:0 0 8px}
-.muted{color:var(--muted)}.small{font-size:13px}
-.strip{display:flex;gap:4px;margin:24px 0}.strip i{flex:1;height:56px;border-radius:6px}
-.settings{list-style:none;padding:0;margin:0 0 24px;border-top:1px solid var(--line)}
-.settings li{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line)}
-.settings span{color:var(--muted)}
-.button{display:block;text-align:center;padding:14px;border-radius:999px;margin:10px 0;text-decoration:none;color:var(--fg);background:#1d1d1e;font-weight:600}
-.button.primary{background:var(--accent);color:#111}
-.who{display:flex;align-items:center;gap:10px;margin-bottom:16px;font-weight:600;color:var(--fg);text-decoration:none}
-a{color:var(--fg)}
-.profile-head{display:flex;align-items:center;gap:16px;margin-bottom:20px}.profile-head .avatar{width:72px;height:72px}
-.profile-head h1{font-size:32px;margin:0}
-.rolls{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:20px 0}
-.rolls a{text-decoration:none;color:var(--fg)}.rolls img{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:10px;display:block;background:#1d1d1e}
-.rolls b{display:block;font-size:14px;margin-top:6px}.rolls span{font-size:12px;color:var(--muted)}
-.avatar{width:40px;height:40px;border-radius:50%;object-fit:cover}
-.card{width:100%;display:block;border-radius:14px;margin:20px 0 8px}
-.button.disabled{color:var(--muted);background:transparent;border:1px solid var(--line)}
-.report{margin-top:32px;color:var(--muted)}.report form{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
-select,button{font:inherit;padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:#1d1d1e;color:var(--fg)}
-</style></head><body><main>${body}</main></body></html>`;
+<style>${SITE_CSS}</style></head><body>${siteHeader()}<main${wide ? ' class="wide"' : ''}>${body}</main>${siteFooter()}</body></html>`;
 }
 
 // MARK: Helpers
