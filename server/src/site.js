@@ -68,14 +68,16 @@ select,button,input,textarea{font:inherit;color:var(--fg)}
 .viewer-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
 .viewer h2{margin:0 0 4px}.viewer-head p{margin:0}.viewer .eyebrow{margin:0 0 6px}
 .close,.viewer-foot button{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--panel2);cursor:pointer;font-size:16px;flex:none}
-.compare{--split:50%;position:relative;margin:14px 0 10px;border-radius:12px;overflow:hidden;aspect-ratio:3/2;background:#000;user-select:none}
+.compare{--split:50%;position:relative;margin:14px 0 10px;border-radius:12px;overflow:hidden;aspect-ratio:3/2;background:#000;user-select:none;-webkit-user-select:none;touch-action:none;cursor:ew-resize}
+.compare img{-webkit-user-drag:none;pointer-events:none}
 .compare img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
 .compare .after{clip-path:inset(0 0 0 var(--split))}
 .compare .handle{position:absolute;top:0;bottom:0;left:var(--split);width:2px;margin-left:-1px;background:var(--fg);pointer-events:none}
 .compare .handle span{position:absolute;top:50%;left:50%;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;background:var(--fg);box-shadow:0 2px 10px rgba(0,0,0,.5)}
 .compare .tag{position:absolute;top:10px;font:700 11px/1 var(--mono);letter-spacing:.1em;padding:6px 8px;border-radius:6px;background:rgba(0,0,0,.55);pointer-events:none}
 .compare .tag.left{left:10px}.compare .tag.right{right:10px;color:var(--accent)}
-.compare input[type=range]{position:absolute;inset:0;width:100%;height:100%;opacity:0;margin:0;cursor:ew-resize}
+.compare input[type=range]{position:absolute;inset:0;width:100%;height:100%;opacity:0;margin:0;pointer-events:none}
+.compare:focus-within .handle span{outline:2px solid var(--accent);outline-offset:2px}
 .viewer-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:center}
 /* Long documents */
 .doc p,.doc li{color:#d4d1cb}.doc ul{padding-left:20px}.doc li{margin:6px 0}
@@ -164,6 +166,19 @@ function filmViewer() {
     dialog.showModal();
   }));
   slider.addEventListener('input', () => set(slider.value));
+  // Drag (or tap) anywhere on the photo, with a finger or a mouse. The range input stays
+  // for the keyboard and screen readers.
+  let dragging = false;
+  const follow = (e) => {
+    const box = compare.getBoundingClientRect();
+    const v = Math.min(100, Math.max(0, ((e.clientX - box.left) / box.width) * 100));
+    slider.value = v; set(v);
+  };
+  compare.addEventListener('pointerdown', (e) => { dragging = true; compare.setPointerCapture(e.pointerId); follow(e); e.preventDefault(); });
+  compare.addEventListener('pointermove', (e) => { if (dragging) follow(e); });
+  const stop = () => { dragging = false; };
+  compare.addEventListener('pointerup', stop);
+  compare.addEventListener('pointercancel', stop);
   document.getElementById('prev').onclick = () => show(index - 1);
   document.getElementById('next').onclick = () => show(index + 1);
   document.getElementById('viewer-close').onclick = () => dialog.close();
