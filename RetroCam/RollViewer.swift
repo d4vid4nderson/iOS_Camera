@@ -18,6 +18,8 @@ struct RollViewer: View {
     /// Open on the roll in the camera (from the frame counter), even before its first
     /// frame; otherwise on the newest roll with frames (from the last print).
     var opensInCamera = false
+    /// Open on this roll instead (from your profile).
+    var opensOnRoll: Int? = nil
     @Environment(\.dismiss) private var dismiss
 
     @State private var rolls: [Roll] = []
@@ -586,7 +588,9 @@ struct RollViewer: View {
             rolls.insert(camera.roll, at: 0)
         }
         if selected == nil || !rolls.contains(where: { $0.number == selected }) {
-            if opensInCamera {
+            if let start = opensOnRoll, rolls.contains(where: { $0.number == start }) {
+                selected = start
+            } else if opensInCamera {
                 selected = camera.roll.number
             } else {
                 selected = rolls.first(where: { !RollStore.frames(of: $0.number).isEmpty })?.number ?? camera.roll.number
