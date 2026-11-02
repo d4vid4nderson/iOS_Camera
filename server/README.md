@@ -5,7 +5,7 @@ A small Cloudflare Worker behind Exposures' share links.
 | Link | What it does |
 |---|---|
 | `https://<host>/f/<code>` | A shared film. The whole recipe is in the link, so nothing is stored. It opens Exposures and offers to add the film; without the app, it shows a page about the film. |
-| `https://<host>/r/<id>` | A shared roll. Its photos are stored in R2 for 30 days, or until the sharer taps UNSHARE. It opens in Exposures' viewer, or as a web page. |
+| `https://<host>/r/<id>` | A shared roll. Its photos are stored in R2 for 30 days, or until the sharer taps UNSHARE. It opens in Exposures' viewer. Without the app, the web page shows the roll's card and asks people to get Exposures to see the whole roll. |
 
 Rolls with 3 reports are hidden until reviewed. Reports are stored under `reports/<id>/` in the bucket.
 
@@ -20,6 +20,7 @@ Rolls with 3 reports are hidden until reviewed. Reports are stored under `report
    - `CLOUDFLARE_ACCOUNT_ID`: shown in the Cloudflare dashboard's right sidebar (*Account ID*)
 6. **Deploy:** go to *Actions*, then *Share server*, then *Run workflow*. When it finishes, open `https://exposures.<subdomain>.workers.dev/`; you should see the Exposures page.
 7. **Set the address in the app:** `ShareLinks.host` in `RetroCam/ShareLinks.swift`.
+8. **App Store button:** set `APP_STORE_ID` in `wrangler.toml` to the app's Apple ID (App Store Connect → App Information → Apple ID, a 10-digit number). Or set `APP_STORE_URL` to a public TestFlight link while testing. Until one is set, the pages say Exposures is coming soon.
 
 ## Links that open the app directly (Universal Links)
 

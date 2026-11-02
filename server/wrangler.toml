@@ -17,5 +17,8 @@ bucket_name = "exposures-rolls"
 crons = ["17 4 * * *"]
 
 [vars]
-# App Store page for the "Get Exposures" button; empty hides the button.
+# The app's Apple ID (App Store Connect -> App Information -> Apple ID), for the
+# "Get Exposures" buttons and Safari's app banner. Or set APP_STORE_URL to a full link
+# (e.g. a public TestFlight invite). Both empty: pages say it's coming soon.
+APP_STORE_ID = ""
 APP_STORE_URL = ""

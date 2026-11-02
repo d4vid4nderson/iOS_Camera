@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { route, sweep, decodeFilm, caption, TTL_DAYS } from '../src/worker.js';
+import { route, sweep, decodeFilm, caption, storeURL, TTL_DAYS } from '../src/worker.js';
 
 /// In-memory stand-in for an R2 bucket (the calls the worker uses).
 class FakeBucket {
@@ -86,6 +86,9 @@ test('a roll uploads, publishes, shows and unshares', async () => {
   const page = await (await call(e, 'GET', `/r/${id}`)).text();
   assert.match(page, /Roll 02 &lt;b&gt;/, 'titles are escaped');
   assert.match(page, /og:image/);
+  assert.match(page, new RegExp(`exposures://r/${id}`), 'opens in the app');
+  assert.doesNotMatch(page, /frame-01\.jpg/, 'the web page is a teaser, not the roll');
+  assert.match(page, /coming soon to the App Store/);
   const meta = await (await call(e, 'GET', `/r/${id}/roll.json`)).json();
   assert.equal(meta.frames.length, 2);
   assert.equal(meta.film.code, PAN50);
@@ -127,4 +130,15 @@ test('rejects bad roll requests', async () => {
   const e = env();
   assert.equal((await call(e, 'POST', '/api/rolls', { type: 'application/json', body: JSON.stringify({ frames: 40 }) })).status, 400);
   assert.equal((await call(e, 'POST', '/api/rolls', { type: 'application/json', body: 'nope' })).status, 400);
+});
+
+test('roll pages send people without the app to the App Store', async () => {
+  const e = { ...env(), APP_STORE_ID: '6740000000' };
+  assert.equal(storeURL(e), 'https://apps.apple.com/app/id6740000000');
+  const { id, token } = await shareRoll(e, 1);
+  await call(e, 'PUT', `/api/rolls/${id}/frame-01.jpg`, { body: jpeg(), token });
+  await call(e, 'POST', `/api/rolls/${id}/publish`, { token });
+  const page = await (await call(e, 'GET', `/r/${id}`)).text();
+  assert.match(page, /Get Exposures to see the whole roll/);
+  assert.match(page, /apple-itunes-app" content="app-id=6740000000, app-argument=https:/);
 });

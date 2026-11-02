@@ -1,7 +1,7 @@
 // Exposures share links.
 //
 //   GET  /f/<code>                  a shared film: the whole recipe is in <code>, nothing is stored
-//   GET  /r/<id>                    a shared roll: web page to look through the frames
+//   GET  /r/<id>                    a shared roll: a teaser page that asks people to get the app
 //   GET  /r/<id>/roll.json          the roll's details, for the app's viewer
 //   GET  /r/<id>/<file>.jpg         a frame, the card or the sharer's headshot
 //   POST /api/rolls                 start sharing a roll -> { id, token, url, expiresAt }
@@ -364,36 +364,35 @@ function filmPage(film, code, url, env) {
 }
 
 function rollPage(meta, url, env) {
+  // On the web a roll is a teaser: its card (the first frames) and who shot it. The whole
+  // roll opens in the app, so people without it are asked to get it.
   const base = `/r/${meta.id}`;
-  const frames = Array.from({ length: meta.frames }, (_, i) =>
-    `<a href="#f${i + 1}"><img loading="lazy" src="${base}/${frameName(i + 1)}" alt="Frame ${i + 1}"></a>`).join('');
-  const big = Array.from({ length: meta.frames }, (_, i) =>
-    `<figure id="f${i + 1}"><img loading="lazy" src="${base}/${frameName(i + 1)}" alt="Frame ${i + 1}"><figcaption>${String(i + 1).padStart(2, '0')}</figcaption></figure>`).join('');
   const who = meta.sharer.name ? esc(meta.sharer.name) : 'Someone';
   const avatar = meta.sharer.avatar ? `<img class="avatar" src="${base}/avatar.jpg" alt="">` : '';
-  const film = meta.film.name
-    ? `<p class="muted">Shot on ${esc(meta.film.name)}${meta.shotAt ? ` · ${esc(meta.shotAt)}` : ''}</p>` : '';
-  const loadFilm = meta.film.code
-    ? `<a class="button" href="exposures://f/${meta.film.code}">Load ${esc(meta.film.name || 'this film')} in Exposures</a>` : '';
+  const frames = `${meta.frames} ${meta.frames === 1 ? 'frame' : 'frames'}`;
+  const film = meta.film.name ? ` · shot on ${esc(meta.film.name)}` : '';
+  const store = storeURL(env);
+  const get = store
+    ? `<a class="button primary" href="${esc(store)}">Get Exposures to see the whole roll</a>`
+    : '<p class="button disabled">Exposures is coming soon to the App Store</p>';
   return layout({
     title: `${meta.title} · ${who} on Exposures`,
-    description: `${meta.frames} frames${meta.film.name ? ` shot on ${meta.film.name}` : ''}`,
-    image: `${url.origin}${base}/card.jpg`, url: url.href, env,
+    description: `${meta.frames} frames${meta.film.name ? ` shot on ${meta.film.name}` : ''}. Open it in Exposures.`,
+    image: `${url.origin}${base}/card.jpg`, url: url.href, env, appArgument: url.href,
     body: `
-      <div class="who">${avatar}<span>${who}</span></div>
+      <div class="who">${avatar}<span>${who} shared a roll</span></div>
       <h1>${esc(meta.title)}</h1>
-      ${film}
-      <div class="grid">${frames}</div>
-      <a class="button primary" href="exposures://r/${meta.id}">Open in Exposures</a>
-      ${loadFilm}
-      ${storeButton(env)}
-      <div class="frames">${big}</div>
+      <p class="muted">${frames}${film}</p>
+      <img class="card" src="${base}/card.jpg" alt="${esc(meta.title)}">
+      ${get}
+      <a class="button" href="exposures://r/${meta.id}">Already have Exposures? Open the roll</a>
+      <p class="small muted">Swipe through every frame and load the film it was shot on, right in the app.</p>
       <details class="report"><summary>Report this roll</summary>
         <form method="post" action="/api/rolls/${meta.id}/report">
           <select name="reason"><option>Nudity or sexual content</option><option>Violence or abuse</option><option>Hate or harassment</option><option>Spam</option><option>Something else</option></select>
           <button type="submit">Send report</button>
         </form></details>
-      <p class="small muted">Shared rolls disappear ${new Date(meta.expiresAt).toUTCString().slice(5, 16)}.</p>`,
+      <p class="small muted">Shared rolls disappear ${new Date(meta.expiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}.</p>`,
   });
 }
 
@@ -408,17 +407,27 @@ function messagePage(message, env) {
     <p class="eyebrow">EXPOSURES</p><h1>${esc(message)}</h1>${storeButton(env)}` });
 }
 
-function storeButton(env) {
-  return env.APP_STORE_URL ? `<a class="button" href="${esc(env.APP_STORE_URL)}">Get Exposures</a>` : '';
+/// The App Store page: APP_STORE_ID (the app's Apple ID, from App Store Connect), or a full
+/// APP_STORE_URL (e.g. a public TestFlight link). Empty until the app is listed.
+export function storeURL(env) {
+  if (env.APP_STORE_ID) return `https://apps.apple.com/app/id${String(env.APP_STORE_ID).replace(/\D/g, '')}`;
+  return env.APP_STORE_URL || '';
 }
 
-function layout({ title, description, image, url, body }) {
+function storeButton(env) {
+  const store = storeURL(env);
+  return store ? `<a class="button" href="${esc(store)}">Get Exposures</a>` : '';
+}
+
+function layout({ title, description, image, url, body, env, appArgument }) {
+  const appID = env?.APP_STORE_ID ? String(env.APP_STORE_ID).replace(/\D/g, '') : '';
   return `<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)}</title>
 <meta name="description" content="${esc(description)}">
 <meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description)}">
 ${url ? `<meta property="og:url" content="${esc(url)}">` : ''}
+${appID ? `<meta name="apple-itunes-app" content="app-id=${appID}${appArgument ? `, app-argument=${esc(appArgument)}` : ''}">` : ''}
 ${image ? `<meta property="og:image" content="${esc(image)}"><meta name="twitter:card" content="summary_large_image">` : '<meta name="twitter:card" content="summary">'}
 <style>
 :root{--bg:#0e0e0f;--fg:#f2f0ec;--muted:#8c8a86;--line:#2a2a2b;--accent:#e8762e}
@@ -435,10 +444,8 @@ h1{font-size:44px;line-height:1.05;letter-spacing:-.02em;margin:0 0 8px}
 .button.primary{background:var(--accent);color:#111}
 .who{display:flex;align-items:center;gap:10px;margin-bottom:16px;font-weight:600}
 .avatar{width:40px;height:40px;border-radius:50%;object-fit:cover}
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:20px 0}
-.grid img{width:100%;aspect-ratio:3/4;object-fit:cover;display:block;border-radius:4px}
-.frames figure{margin:28px 0}.frames img{width:100%;display:block;border-radius:6px}
-.frames figcaption{font:12px ui-monospace,monospace;color:var(--muted);margin-top:6px}
+.card{width:100%;display:block;border-radius:14px;margin:20px 0 8px}
+.button.disabled{color:var(--muted);background:transparent;border:1px solid var(--line)}
 .report{margin-top:32px;color:var(--muted)}.report form{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
 select,button{font:inherit;padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:#1d1d1e;color:var(--fg)}
 </style></head><body><main>${body}</main></body></html>`;
