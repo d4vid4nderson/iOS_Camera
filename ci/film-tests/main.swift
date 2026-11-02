@@ -1,5 +1,5 @@
 // Tests for the film model and library, compiled with swiftc in CI (no simulator needed):
-//   swiftc RetroCam/FilmStock.swift RetroCam/FilmLibrary.swift RetroCam/Roll.swift ci/film-tests/main.swift
+//   swiftc RetroCam/FilmStock.swift RetroCam/FilmLibrary.swift RetroCam/Roll.swift RetroCam/FilmCode.swift ci/film-tests/main.swift
 import CoreGraphics
 import Foundation
 
@@ -118,5 +118,39 @@ check(Roll.load(from: rollDefaults) == Roll(number: 1), "fresh install starts on
 roll.save(to: rollDefaults)
 check(Roll.load(from: rollDefaults) == roll, "roll survives save/load")
 rollDefaults.removePersistentDomain(forName: rollSuite)
+
+// Developing: instant, at roll end, or 9:00 the morning after the roll is finished.
+var utc = Calendar(identifier: .gregorian)
+utc.timeZone = TimeZone(identifier: "UTC")!
+let finishedAt = Date(timeIntervalSince1970: 1_793_000_000)          // 07:13 UTC, a Sunday
+check(DevelopMode.instant.readyDate(finished: nil, calendar: utc) == .distantPast, "instant is always ready")
+check(DevelopMode.rollEnd.readyDate(finished: nil, calendar: utc) == nil, "roll-end waits for the roll")
+check(DevelopMode.rollEnd.readyDate(finished: finishedAt, calendar: utc) == finishedAt, "roll-end ready when finished")
+let morning = DevelopMode.nextMorning.readyDate(finished: finishedAt, calendar: utc)!
+let parts = utc.dateComponents([.hour, .minute], from: morning)
+check(parts.hour == DevelopMode.labHour && parts.minute == 0 && morning > finishedAt
+      && morning.timeIntervalSince(finishedAt) < 2 * 86_400, "next morning is 9:00 the next day")
+var later = Roll(number: 3)
+later.expose(film: "NOIR 400", develop: .rollEnd)
+check(later.developMode == .rollEnd && !later.isDeveloped(), "unfinished roll-end roll is undeveloped")
+later.finish(at: finishedAt)
+check(later.isDeveloped(at: finishedAt), "finished roll-end roll develops")
+let oldJSON = #"{"number":2,"frames":5}"#.data(using: .utf8)!
+let oldRoll = try! JSONDecoder().decode(Roll.self, from: oldJSON)
+check(oldRoll.develop == .instant && oldRoll.finishedAt == nil && oldRoll.frames == 5, "older saved rolls still load")
+
+// Film recipe links: round trip, new id, and junk rejected.
+var recipe = FilmStock.lith
+recipe.name = "MY LITH"; recipe.effect = .swirl; recipe.effectAmount = 0.7; recipe.contrast = 0.81
+let link = FilmCode.url(for: recipe)!
+check(link.scheme == "exposures" && link.absoluteString.count < 1500, "film link is compact (\(link.absoluteString.count) chars)")
+let received = FilmCode.film(from: link)!
+check(received.isCustom && received.id != recipe.id && received.name == "MY LITH", "received film is a new custom film")
+check(near(received.contrast, 0.81) && received.effect == .swirl && received.tone == recipe.tone, "every setting survives the link")
+check(FilmCode.film(from: URL(string: "exposures://film?d=garbage")!) == nil, "damaged links are rejected")
+check(FilmCode.film(from: URL(string: "https://example.com/film?d=abc")!) == nil, "other links are ignored")
+var shareLib = FilmLibrary()
+shareLib.add(received)
+check(shareLib.original(id: received.id) != nil && shareLib.all.last?.id == received.id, "shared film added to the picker")
 
 if failures == 0 { print("film tests: all passed") } else { print("film tests: \(failures) failed"); exit(1) }
