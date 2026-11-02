@@ -8,16 +8,28 @@ private extension Font {
 }
 
 /// Your profile: the headshot and name that go on cards you share, and what film cards
-/// show. Opened from your photo in the top-right corner of the camera. Kept on this
-/// phone only.
+/// show. Opened from your photo in the top-right corner of the camera.
+///
+/// Signed in with Apple (once sharing is set up), it's also your public profile: choose
+/// which rolls are public, see your profile as others do, sign out or delete the account.
 struct ProfileSheet: View {
+    @ObservedObject var camera: CameraModel
     let accent: Color
     var onChange: (Profile) -> Void = { _ in }
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var account = Account.shared
     @State private var profile = Profile.load()
     @State private var nameDraft = Profile.load().name
     @State private var pickerItem: PhotosPickerItem?
     @State private var working = false
+
+    @State private var myRolls: [Roll] = []
+    @State private var records: [Int: RollShare.Record] = [:]
+    @State private var busy: [Int: String] = [:]
+    @State private var askingTerms: Roll?
+    @State private var note: String?
+    @State private var viewingMine: IncomingUser?
+    @State private var confirmDeleteAccount = false
 
     var body: some View {
         ScrollView {
@@ -41,6 +53,7 @@ struct ProfileSheet: View {
                                 Profile.removeHeadshot()
                                 profile.photo = nil
                                 onChange(profile)
+                                syncAccount(avatarChanged: true)
                             }
                         }
                     }
@@ -82,12 +95,22 @@ struct ProfileSheet: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Text("Kept on this phone. Your photo and name only appear on film and roll cards you share.")
-                    .font(.mono(10)).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                if ShareLinks.isConfigured {
+                    accountSection
+                } else {
+                    Text("Kept on this phone. Your photo and name only appear on film and roll cards you share.")
+                        .font(.mono(10)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .padding(20)
         }
+        .overlay { if let roll = askingTerms { termsCard(roll) } }
+        .fullScreenCover(item: $viewingMine) { me in
+            UserProfileView(userID: me.id, camera: camera, accent: accent)
+        }
+        .onAppear(perform: loadRolls)
+        .task { await account.refresh() }
         .scrollDismissesKeyboard(.interactively)
         .presentationDetents([.medium, .large])
         .presentationBackground(Color(white: 0.09))
@@ -104,6 +127,7 @@ struct ProfileSheet: View {
                     if let headshot {
                         profile.photo = headshot
                         onChange(profile)
+                        syncAccount(avatarChanged: true)
                     }
                 }
                 pickerItem = nil
@@ -112,12 +136,224 @@ struct ProfileSheet: View {
         }
     }
 
+    // MARK: Account and public rolls
+
+    @ViewBuilder private var accountSection: some View {
+        if let note {
+            Text(note).font(.mono(10, .semibold)).foregroundStyle(accent)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        if let me = account.me, account.isSignedIn {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("PUBLIC PROFILE").font(.mono(9, .semibold)).foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    chip("VIEW MY PROFILE", selected: true) { viewingMine = IncomingUser(id: me.id) }
+                    ShareLink(item: me.url) { chipText("SHARE LINK", selected: false) }
+                        .buttonStyle(.plain)
+                }
+                Text(profile.showOnCards
+                     ? "Your name and headshot show on your profile."
+                     : "Your name and headshot are hidden, here and on cards. Choose SHOW above to put them on your profile.")
+                    .font(.mono(9)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("YOUR ROLLS").font(.mono(9, .semibold)).foregroundStyle(.secondary)
+                if myRolls.isEmpty {
+                    Text("Rolls show up here once they have developed frames.")
+                        .font(.mono(10)).foregroundStyle(.secondary)
+                } else {
+                    ForEach(myRolls, id: \.number) { roll in rollRow(roll) }
+                }
+                Text("Public rolls are on your profile for anyone to see and like, until you make them private. Private takes a roll off the server; links to it stop working.")
+                    .font(.mono(9)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack(spacing: 6) {
+                chip("SIGN OUT", selected: false) { Task { await account.signOut() } }
+                Spacer(minLength: 0)
+                Button {
+                    if confirmDeleteAccount { deleteAccount() } else { confirmDeleteAccount = true }
+                } label: {
+                    Text(confirmDeleteAccount ? "TAP AGAIN TO DELETE ACCOUNT" : "DELETE ACCOUNT")
+                        .font(.mono(10, .bold))
+                        .padding(.horizontal, 10).padding(.vertical, 7)
+                        .background(Capsule().fill(Color.red.opacity(confirmDeleteAccount ? 0.2 : 0.1)))
+                        .foregroundStyle(Color(red: 1, green: 0.45, blue: 0.4))
+                }
+                .buttonStyle(.plain)
+                .disabled(account.working)
+            }
+            if confirmDeleteAccount {
+                Text("Deletes your profile, your likes and every roll you shared while signed in from the server. Your rolls stay on this phone.")
+                    .font(.mono(9)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("PUBLIC PROFILE").font(.mono(9, .semibold)).foregroundStyle(.secondary)
+                Text("Sign in to put rolls on a public profile people can open from your shares, and to like frames in other people's rolls. Not needed for the camera or for sharing links.")
+                    .font(.mono(10)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                AppleSignInButton(onError: { note = $0.uppercased() }, onSignedIn: { note = nil; loadRolls() })
+            }
+        }
+    }
+
+    private func rollRow(_ roll: Roll) -> some View {
+        let record = records[roll.number]
+        let isPublic = record?.onProfile == true
+        let status = busy[roll.number]
+            ?? (isPublic ? "PUBLIC" : record != nil ? "SHARED BY LINK" : "PRIVATE")
+        return HStack(spacing: 10) {
+            thumb(roll)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(roll.title.uppercased()).font(.mono(11, .bold)).foregroundStyle(.white).lineLimit(1)
+                Text(status).font(.mono(9)).foregroundStyle(isPublic ? accent : .secondary).lineLimit(1)
+            }
+            Spacer(minLength: 0)
+            HStack(spacing: 4) {
+                chip("PUBLIC", selected: isPublic) { makePublic(roll) }
+                chip("PRIVATE", selected: !isPublic && record == nil) { makePrivate(roll) }
+            }
+            .disabled(busy[roll.number] != nil)
+        }
+    }
+
+    private func thumb(_ roll: Roll) -> some View {
+        let first = RollStore.frames(of: roll.number).first { !RollStore.isPending(roll: roll.number, frame: $0) }
+        let image = first.flatMap { UIImage(contentsOfFile: RollStore.thumbURL(roll: roll.number, frame: $0).path) }
+        return Group {
+            if let image {
+                Image(uiImage: image).resizable().scaledToFill()
+            } else {
+                Color(white: 0.15)
+            }
+        }
+        .frame(width: 36, height: 48)
+        .clipShape(RoundedRectangle(cornerRadius: 4))
+    }
+
+    private func loadRolls() {
+        myRolls = RollStore.rolls().filter { roll in
+            RollStore.frames(of: roll.number).contains { !RollStore.isPending(roll: roll.number, frame: $0) }
+        }
+        records = Dictionary(uniqueKeysWithValues: myRolls.compactMap { roll in
+            RollShare.record(for: roll.number).map { (roll.number, $0) }
+        })
+    }
+
+    private func makePublic(_ roll: Roll) {
+        guard records[roll.number]?.onProfile != true else { return }
+        guard account.me?.termsAccepted == true else {
+            withAnimation(.snappy(duration: 0.15)) { askingTerms = roll }
+            return
+        }
+        busy[roll.number] = "PUTTING ON PROFILE…"
+        note = nil
+        Task {
+            do {
+                let record = try await RollShare.makePublic(roll: roll, film: camera.film(ofRoll: roll.number), profile: profile) { done, total in
+                    busy[roll.number] = "UPLOADING \(done)/\(total)"
+                }
+                records[roll.number] = record
+            } catch RollShare.ProfileError.terms {
+                await account.refresh()
+                askingTerms = roll
+            } catch {
+                note = error.localizedDescription.uppercased()
+            }
+            busy[roll.number] = nil
+        }
+    }
+
+    private func makePrivate(_ roll: Roll) {
+        guard records[roll.number] != nil else { return }
+        busy[roll.number] = "MAKING PRIVATE…"
+        note = nil
+        Task {
+            do {
+                try await RollShare.unshare(roll: roll.number)
+                records[roll.number] = nil
+            } catch {
+                note = error.localizedDescription.uppercased()
+            }
+            busy[roll.number] = nil
+        }
+    }
+
+    private func deleteAccount() {
+        Task {
+            do {
+                try await account.deleteAccount()
+                confirmDeleteAccount = false
+                note = "ACCOUNT DELETED"
+                loadRolls()
+            } catch {
+                note = error.localizedDescription.uppercased()
+            }
+        }
+    }
+
+    /// The rules for public rolls (App Review asks for these before people post).
+    private func termsCard(_ roll: Roll) -> some View {
+        ZStack {
+            Color.black.opacity(0.6).ignoresSafeArea()
+                .onTapGesture { withAnimation(.snappy(duration: 0.15)) { askingTerms = nil } }
+            VStack(alignment: .leading, spacing: 12) {
+                Text("BEFORE YOU GO PUBLIC").font(.mono(15, .bold)).foregroundStyle(accent)
+                Text("""
+                    Public rolls can be seen, liked and reported by anyone.
+
+                    There's no place here for nudity or sexual content, violence, hate, harassment, spam, or photos of people who didn't agree to be shared. Reported rolls are hidden and reviewed, and accounts that break these rules are removed.
+
+                    Only post photos you took.
+                    """)
+                    .font(.mono(10)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button {
+                    askingTerms = nil
+                    Task {
+                        do {
+                            try await account.acceptTerms()
+                            makePublic(roll)
+                        } catch {
+                            note = error.localizedDescription.uppercased()
+                        }
+                    }
+                } label: {
+                    Text("I AGREE · MAKE IT PUBLIC")
+                        .font(.mono(11, .bold)).frame(maxWidth: .infinity).padding(.vertical, 11)
+                        .background(Capsule().fill(accent.opacity(0.18)))
+                        .overlay(Capsule().stroke(accent, lineWidth: 1))
+                        .foregroundStyle(accent)
+                }
+                .buttonStyle(.plain)
+                Button { withAnimation(.snappy(duration: 0.15)) { askingTerms = nil } } label: {
+                    Text("CANCEL").font(.mono(11, .bold)).frame(maxWidth: .infinity).padding(.vertical, 11)
+                        .foregroundStyle(Color(white: 0.55))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(18)
+            .background(RoundedRectangle(cornerRadius: 18).fill(Color(white: 0.11)))
+            .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color(white: 0.2), lineWidth: 1))
+            .padding(.horizontal, 22)
+        }
+        .transition(.opacity)
+    }
+
+    // MARK: Settings
+
     private func save() {
         let name = Profile.cleanName(nameDraft)
         guard name != profile.name else { return }
         profile.name = name
         profile.saveSettings()
         onChange(profile)
+        syncAccount(avatarChanged: false)
     }
 
     private func setPhotoCards(_ on: Bool) {
@@ -130,6 +366,14 @@ struct ProfileSheet: View {
         profile.showOnCards = show
         profile.saveSettings()
         onChange(profile)
+        syncAccount(avatarChanged: show)
+    }
+
+    /// Keep the public profile's name and headshot in step with this one.
+    private func syncAccount(avatarChanged: Bool) {
+        guard account.isSignedIn else { return }
+        let current = profile
+        Task { await account.syncProfile(current, avatarChanged: avatarChanged) }
     }
 
     private func chip(_ text: String, selected: Bool, action: @escaping () -> Void) -> some View {

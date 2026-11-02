@@ -2,7 +2,8 @@ import UIKit
 import Vision
 
 /// Who's sharing: a headshot and a name for share cards ("@david", "David Anderson").
-/// Kept on this phone only; nothing is uploaded.
+/// Kept on this phone; it only goes to the server on cards you share, and on your public
+/// profile when you're signed in (see Account).
 struct Profile: Equatable {
     var name: String = ""
     var photo: UIImage?

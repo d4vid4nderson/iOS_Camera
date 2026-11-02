@@ -9,16 +9,32 @@
 //   POST /api/rolls/<id>/publish    make it visible                     (Bearer token)
 //   DELETE /api/rolls/<id>          unshare: delete everything          (Bearer token, or admin)
 //   POST /api/rolls/<id>/report     report a roll; 3 reports hide it until reviewed
+//   POST /api/rolls/<id>/visibility { public }   put a roll on your profile, or take it off (account)
+//   GET  /api/rolls/<id>/likes      { counts: { "<frame>": n }, mine: [frame] }  (account optional)
+//   PUT|DELETE /api/rolls/<id>/frames/<n>/like   like or unlike a frame          (account)
+//
+//   POST /api/auth/apple { identityToken }  Sign in with Apple -> { token, me }
+//   POST /api/auth/signout                  forget this session              (account)
+//   GET|PUT|DELETE /api/me                  your profile: { name } / delete your account (account)
+//   PUT|DELETE /api/me/avatar               your headshot (JPEG)             (account)
+//   POST /api/me/terms                      agree to the rules for public rolls (account)
+//   GET  /u/<id>                            a profile page; /u/<id>/profile.json for the app
 //   GET  /.well-known/apple-app-site-association   lets these links open the app
 //
-// Rolls are deleted 30 days after they're shared (checked on every read, and swept daily).
+// "(account)" means an X-Account header with the session token from /api/auth/apple.
+// Link-shared rolls are deleted 30 days after they're shared (checked on every read, and swept
+// daily). Rolls on a profile stay until they're taken off it or deleted.
 
 export const APP_ID = 'RN599658F9.com.davidanderson.retrocam';
 export const TTL_DAYS = 30;
 export const MAX_FRAMES = 36;
 export const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 export const HIDE_AFTER_REPORTS = 3;
+export const APPLE_ISSUER = 'https://appleid.apple.com';
+export const APPLE_AUDIENCE = 'com.davidanderson.retrocam';
 const DAY = 24 * 60 * 60 * 1000;
+const ROLL = '([A-Za-z0-9]{10})';
+const USER = '([A-Za-z0-9]{12})';
 
 export default {
   async fetch(request, env) {
@@ -42,7 +58,7 @@ export async function route(request, env, now = Date.now()) {
 
   if (path === '/.well-known/apple-app-site-association' || path === '/apple-app-site-association') {
     return json(200, {
-      applinks: { details: [{ appIDs: [APP_ID], components: [{ '/': '/f/*' }, { '/': '/r/*' }] }] },
+      applinks: { details: [{ appIDs: [APP_ID], components: [{ '/': '/f/*' }, { '/': '/r/*' }, { '/': '/u/*' }] }] },
     });
   }
   if (path === '/' && method === 'GET') return html(200, homePage(env));
@@ -66,16 +82,55 @@ export async function route(request, env, now = Date.now()) {
   if ((m = path.match(/^\/api\/rolls\/([A-Za-z0-9]{10})\/report$/)) && method === 'POST') {
     return reportRoll(request, env, m[1], now);
   }
+  if ((m = path.match(new RegExp(`^/api/rolls/${ROLL}/visibility$`))) && method === 'POST') {
+    return setVisibility(request, env, m[1], url, now);
+  }
+  if ((m = path.match(new RegExp(`^/api/rolls/${ROLL}/likes$`))) && method === 'GET') {
+    return listLikes(request, env, m[1], now);
+  }
+  if ((m = path.match(new RegExp(`^/api/rolls/${ROLL}/frames/(\\d{1,2})/like$`))) && (method === 'PUT' || method === 'DELETE')) {
+    return likeFrame(request, env, m[1], Number(m[2]), method === 'PUT', now);
+  }
+
+  if (path === '/api/auth/apple' && method === 'POST') return signInWithApple(request, env, url, now);
+  if (path === '/api/auth/signout' && method === 'POST') return signOut(request, env);
+  if (path === '/api/me' && method === 'GET') return withUser(request, env, (user) => json(200, mePayload(user, url)));
+  if (path === '/api/me' && method === 'PUT') return updateMe(request, env, url);
+  if (path === '/api/me' && method === 'DELETE') return deleteAccount(request, env);
+  if (path === '/api/me/avatar' && (method === 'PUT' || method === 'DELETE')) return updateAvatar(request, env, url, method === 'PUT');
+  if (path === '/api/me/terms' && method === 'POST') {
+    return withUser(request, env, async (user) => {
+      user.termsAt = user.termsAt || now;
+      await putUser(env, user);
+      return json(200, mePayload(user, url));
+    });
+  }
+
+  if ((m = path.match(new RegExp(`^/u/${USER}$`))) && method === 'GET') {
+    const profile = await publicProfile(env, m[1], url, now);
+    if (!profile) return html(404, messagePage('There is no profile here.', env));
+    return html(200, profilePage(profile, url, env));
+  }
+  if ((m = path.match(new RegExp(`^/u/${USER}/profile\\.json$`))) && method === 'GET') {
+    const profile = await publicProfile(env, m[1], url, now);
+    if (!profile) return json(404, { error: 'gone' });
+    return json(200, profile);
+  }
+  if ((m = path.match(new RegExp(`^/u/${USER}/avatar\\.jpg$`))) && method === 'GET') {
+    const object = await env.ROLLS.get(`users/${m[1]}/avatar.jpg`);
+    if (!object) return text(404, 'Not found');
+    return new Response(object.body, { headers: { 'content-type': 'image/jpeg', 'cache-control': 'public, max-age=300' } });
+  }
 
   if ((m = path.match(/^\/r\/([A-Za-z0-9]{10})$/)) && method === 'GET') {
     const meta = await liveRoll(env, m[1], now);
     if (!meta) return html(404, messagePage('This roll has expired or was unshared.', env));
-    return html(200, rollPage(meta, url, env));
+    return html(200, rollPage(await rollPayload(env, meta, url), meta, url, env));
   }
   if ((m = path.match(/^\/r\/([A-Za-z0-9]{10})\/roll\.json$/)) && method === 'GET') {
     const meta = await liveRoll(env, m[1], now);
     if (!meta) return json(404, { error: 'gone' });
-    return json(200, publicMeta(meta, url));
+    return json(200, await rollPayload(env, meta, url));
   }
   if ((m = path.match(/^\/r\/([A-Za-z0-9]{10})\/(frame-\d{2}\.jpg|card\.jpg|avatar\.jpg)$/)) && method === 'GET') {
     const meta = await liveRoll(env, m[1], now);
@@ -97,6 +152,7 @@ async function createRoll(request, env, url, now) {
   if (!body) return json(400, { error: 'Expected JSON' });
   const frames = Number(body.frames);
   if (!Number.isInteger(frames) || frames < 1 || frames > MAX_FRAMES) return json(400, { error: 'frames must be 1-36' });
+  const user = await currentUser(request, env);
   const id = randomID(10);
   const token = randomHex(32);
   const meta = {
@@ -118,8 +174,12 @@ async function createRoll(request, env, url, now) {
     shotAt: clean(body.shotAt, 40),
     tokenHash: await sha256(token),
     reports: 0,
+    owner: null,
+    public: false,
   };
+  if (user) own(meta, user);
   await putMeta(env, meta);
+  if (user) await env.ROLLS.put(`users/${user.id}/rolls/${id}`, '1');
   return json(201, { id, token, url: `${url.origin}/r/${id}`, expiresAt: new Date(meta.expiresAt).toISOString() });
 }
 
@@ -191,6 +251,253 @@ async function liveRoll(env, id, now) {
   return meta.status === 'live' ? meta : null;
 }
 
+// MARK: Public rolls and likes
+
+/// Put a roll on its owner's profile (it stops expiring), or take it off (it expires 30 days
+/// from now, like a link share). Signing in claims a roll shared before you had an account:
+/// send the roll's own token too.
+async function setVisibility(request, env, id, url, now) {
+  const user = await currentUser(request, env);
+  if (!user) return json(401, { error: 'sign in first' });
+  const meta = await getMeta(env, id);
+  if (!meta || expired(meta, now)) return json(404, { error: 'gone' });
+  if (meta.owner !== user.id) {
+    if (meta.owner || !(await authorised(request, meta, env))) return json(403, { error: 'not your roll' });
+    own(meta, user);
+    await env.ROLLS.put(`users/${user.id}/rolls/${id}`, '1');
+  }
+  const body = (await readJSON(request)) || {};
+  if (body.public) {
+    if (!user.termsAt) return json(403, { error: 'terms' });
+    meta.public = true;
+    meta.expiresAt = null;
+  } else {
+    meta.public = false;
+    meta.expiresAt = now + TTL_DAYS * DAY;
+  }
+  await putMeta(env, meta);
+  return json(200, { public: meta.public, expiresAt: meta.expiresAt == null ? null : new Date(meta.expiresAt).toISOString() });
+}
+
+async function listLikes(request, env, id, now) {
+  const meta = await liveRoll(env, id, now);
+  if (!meta) return json(404, { error: 'gone' });
+  const user = await currentUser(request, env);
+  const counts = {};
+  const mine = [];
+  for await (const keys of listKeys(env, `likes/${id}/`)) {
+    for (const key of keys) {
+      const [, , frame, liker] = key.split('/');
+      const n = Number(frame);
+      counts[n] = (counts[n] || 0) + 1;
+      if (user && liker === user.id) mine.push(n);
+    }
+  }
+  return json(200, { counts, mine: mine.sort((a, b) => a - b) });
+}
+
+async function likeFrame(request, env, id, frame, on, now) {
+  const user = await currentUser(request, env);
+  if (!user) return json(401, { error: 'sign in first' });
+  const meta = await liveRoll(env, id, now);
+  if (!meta) return json(404, { error: 'gone' });
+  if (frame < 1 || frame > meta.frames) return json(400, { error: 'frame out of range' });
+  const nn = String(frame).padStart(2, '0');
+  // One object per like, so two people liking at once can't overwrite each other.
+  const keys = [`likes/${id}/${nn}/${user.id}`, `users/${user.id}/likes/${id}/${nn}`];
+  if (on) {
+    for (const key of keys) await env.ROLLS.put(key, '1');
+  } else {
+    await env.ROLLS.delete(keys);
+  }
+  let count = 0;
+  for await (const page of listKeys(env, `likes/${id}/${nn}/`)) count += page.length;
+  return json(200, { frame, liked: on, count });
+}
+
+// MARK: Accounts (Sign in with Apple)
+
+async function signInWithApple(request, env, url, now) {
+  const body = await readJSON(request);
+  const claims = body?.identityToken ? await verifyAppleToken(String(body.identityToken), env, now) : null;
+  if (!claims) return json(401, { error: 'Sign in with Apple could not be verified.' });
+  const appleKey = await sha256(`apple:${claims.sub}`);
+  const link = await env.ROLLS.get(`accounts/${appleKey}.json`);
+  let user = link ? await getUser(env, JSON.parse(await link.text()).id) : null;
+  if (!user) {
+    user = { id: randomID(12), name: clean(body.name, 24), avatar: 0, createdAt: now, termsAt: null, appleKey };
+    await putUser(env, user);
+    await env.ROLLS.put(`accounts/${appleKey}.json`, JSON.stringify({ id: user.id }));
+  }
+  const token = randomHex(32);
+  const hash = await sha256(token);
+  await env.ROLLS.put(`sessions/${hash}.json`, JSON.stringify({ id: user.id, createdAt: now }));
+  await env.ROLLS.put(`users/${user.id}/sessions/${hash}`, '1');
+  return json(200, { token, me: mePayload(user, url) });
+}
+
+async function signOut(request, env) {
+  const token = request.headers.get('x-account') || '';
+  if (!token) return json(200, { ok: true });
+  const hash = await sha256(token);
+  const session = await env.ROLLS.get(`sessions/${hash}.json`);
+  if (session) {
+    const { id } = JSON.parse(await session.text());
+    await env.ROLLS.delete([`sessions/${hash}.json`, `users/${id}/sessions/${hash}`]);
+  }
+  return json(200, { ok: true });
+}
+
+async function updateMe(request, env, url) {
+  return withUser(request, env, async (user) => {
+    const body = await readJSON(request);
+    if (!body) return json(400, { error: 'Expected JSON' });
+    if (typeof body.name === 'string') user.name = clean(body.name, 24);
+    await putUser(env, user);
+    return json(200, mePayload(user, url));
+  });
+}
+
+async function updateAvatar(request, env, url, upload) {
+  return withUser(request, env, async (user) => {
+    if (upload) {
+      const bytes = await request.arrayBuffer();
+      if (bytes.byteLength === 0 || bytes.byteLength > MAX_IMAGE_BYTES) return json(413, { error: 'image too large' });
+      const head = new Uint8Array(bytes, 0, 3);
+      if (head[0] !== 0xff || head[1] !== 0xd8 || head[2] !== 0xff) return json(415, { error: 'JPEG only' });
+      await env.ROLLS.put(`users/${user.id}/avatar.jpg`, bytes, { httpMetadata: { contentType: 'image/jpeg' } });
+      user.avatar = (user.avatar || 0) + 1;   // a version, so caches pick up a new headshot
+    } else {
+      await env.ROLLS.delete(`users/${user.id}/avatar.jpg`);
+      user.avatar = 0;
+    }
+    await putUser(env, user);
+    return json(200, mePayload(user, url));
+  });
+}
+
+/// Delete an account and everything it put on the server: its rolls (public or not), its
+/// likes, its headshot and its sessions.
+async function deleteAccount(request, env) {
+  return withUser(request, env, async (user) => {
+    for await (const keys of listKeys(env, `users/${user.id}/`)) {
+      for (const key of keys) {
+        const parts = key.split('/');
+        if (parts[2] === 'rolls') await deleteRoll(env, parts[3]);
+        else if (parts[2] === 'likes') await env.ROLLS.delete(`likes/${parts[3]}/${parts[4]}/${user.id}`);
+        else if (parts[2] === 'sessions') await env.ROLLS.delete(`sessions/${parts[3]}.json`);
+      }
+    }
+    await deletePrefix(env, `users/${user.id}/`);
+    await env.ROLLS.delete([`users/${user.id}.json`, `accounts/${user.appleKey}.json`]);
+    return json(200, { ok: true });
+  });
+}
+
+/// Someone's public rolls, newest first (hidden and expired ones left out).
+async function publicProfile(env, id, url, now) {
+  const user = await getUser(env, id);
+  if (!user) return null;
+  const rolls = [];
+  for await (const keys of listKeys(env, `users/${id}/rolls/`)) {
+    for (const key of keys) {
+      const meta = await getMeta(env, key.split('/')[3]);
+      if (!meta || !meta.public || meta.status !== 'live' || expired(meta, now)) continue;
+      const base = `${url.origin}/r/${meta.id}`;
+      rolls.push({
+        id: meta.id, title: meta.title, film: meta.film.name || null, frames: meta.frames, shotAt: meta.shotAt,
+        cover: `${base}/frame-01.jpg`, card: `${base}/card.jpg`, url: base, createdAt: meta.createdAt,
+      });
+    }
+  }
+  rolls.sort((a, b) => b.createdAt - a.createdAt);
+  return { ...mePayload(user, url), termsAccepted: undefined, rolls: rolls.map(({ createdAt, ...r }) => r) };
+}
+
+function mePayload(user, url) {
+  return {
+    id: user.id,
+    name: user.name || null,
+    avatar: user.avatar ? `${url.origin}/u/${user.id}/avatar.jpg?v=${user.avatar}` : null,
+    url: `${url.origin}/u/${user.id}`,
+    termsAccepted: Boolean(user.termsAt),
+  };
+}
+
+function own(meta, user) {
+  meta.owner = user.id;
+  meta.sharer.id = user.id;   // so blocking the person blocks every roll they share
+}
+
+const getUser = async (env, id) => {
+  const object = await env.ROLLS.get(`users/${id}.json`);
+  return object ? JSON.parse(await object.text()) : null;
+};
+const putUser = (env, user) => env.ROLLS.put(`users/${user.id}.json`, JSON.stringify(user));
+
+/// The signed-in account from the X-Account header, or null.
+async function currentUser(request, env) {
+  const token = request.headers.get('x-account') || '';
+  if (!/^[0-9a-f]{64}$/.test(token)) return null;
+  const session = await env.ROLLS.get(`sessions/${await sha256(token)}.json`);
+  if (!session) return null;
+  return getUser(env, JSON.parse(await session.text()).id);
+}
+
+async function withUser(request, env, handler) {
+  const user = await currentUser(request, env);
+  if (!user) return json(401, { error: 'sign in first' });
+  return handler(user);
+}
+
+let appleKeyCache = { keys: null, at: 0 };
+
+/// Apple's public keys for checking identity tokens (APPLE_KEYS overrides them in tests).
+async function appleKeys(env, now) {
+  if (env.APPLE_KEYS) return env.APPLE_KEYS;
+  if (appleKeyCache.keys && now - appleKeyCache.at < 60 * 60 * 1000) return appleKeyCache.keys;
+  const res = await fetch('https://appleid.apple.com/auth/keys');
+  if (!res.ok) return appleKeyCache.keys || [];
+  appleKeyCache = { keys: (await res.json()).keys || [], at: now };
+  return appleKeyCache.keys;
+}
+
+/// The claims of a Sign in with Apple identity token, if Apple signed it for this app and
+/// it hasn't expired; otherwise null.
+export async function verifyAppleToken(token, env, now = Date.now()) {
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  let header, claims;
+  try {
+    header = JSON.parse(new TextDecoder().decode(base64url(parts[0])));
+    claims = JSON.parse(new TextDecoder().decode(base64url(parts[1])));
+  } catch {
+    return null;
+  }
+  if (header.alg !== 'RS256') return null;
+  const jwk = (await appleKeys(env, now)).find((k) => k.kid === header.kid);
+  if (!jwk) return null;
+  try {
+    const key = await crypto.subtle.importKey('jwk', { kty: jwk.kty, n: jwk.n, e: jwk.e },
+      { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+    const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, base64url(parts[2]),
+      new TextEncoder().encode(`${parts[0]}.${parts[1]}`));
+    if (!ok) return null;
+  } catch {
+    return null;
+  }
+  const audience = env.APPLE_AUDIENCE || APPLE_AUDIENCE;
+  const audOK = Array.isArray(claims.aud) ? claims.aud.includes(audience) : claims.aud === audience;
+  if (claims.iss !== APPLE_ISSUER || !audOK || typeof claims.sub !== 'string' || !claims.sub) return null;
+  if (typeof claims.exp !== 'number' || claims.exp * 1000 <= now) return null;
+  return claims;
+}
+
+function base64url(value) {
+  const b64 = value.replace(/-/g, '+').replace(/_/g, '/');
+  return Uint8Array.from(atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4)), (c) => c.charCodeAt(0));
+}
+
 export async function sweep(env, now = Date.now()) {
   let cursor;
   let removed = 0;
@@ -209,32 +516,58 @@ export async function sweep(env, now = Date.now()) {
 }
 
 async function deleteRoll(env, id) {
-  let cursor;
-  do {
-    const page = await env.ROLLS.list({ prefix: `rolls/${id}/`, cursor });
-    const keys = page.objects.map((o) => o.key);
-    if (keys.length) await env.ROLLS.delete(keys);
-    cursor = page.truncated ? page.cursor : undefined;
-  } while (cursor);
+  const meta = await getMeta(env, id);
+  await deletePrefix(env, `rolls/${id}/`);
+  // Likes go with the roll; the likers' own lists are tidied when they're read or deleted.
+  await deletePrefix(env, `likes/${id}/`);
+  if (meta?.owner) await env.ROLLS.delete(`users/${meta.owner}/rolls/${id}`);
   await env.ROLLS.delete(`meta/${id}.json`);
 }
 
-function publicMeta(meta, url) {
+async function deletePrefix(env, prefix) {
+  for await (const keys of listKeys(env, prefix)) {
+    if (keys.length) await env.ROLLS.delete(keys);
+  }
+}
+
+/// Every key under a prefix, a page at a time.
+async function* listKeys(env, prefix) {
+  let cursor;
+  do {
+    const page = await env.ROLLS.list({ prefix, cursor });
+    yield page.objects.map((o) => o.key);
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+}
+
+/// A roll as the app and the page show it. A roll that belongs to an account shows that
+/// account's current name and headshot, and links to its profile.
+async function rollPayload(env, meta, url) {
   const base = `${url.origin}/r/${meta.id}`;
+  let sharer = { id: meta.sharer.id, name: meta.sharer.name, avatar: meta.sharer.avatar ? `${base}/avatar.jpg` : null, profile: null };
+  const owner = meta.owner ? await getUser(env, meta.owner) : null;
+  if (owner) {
+    sharer = {
+      id: owner.id, name: owner.name || null,
+      avatar: owner.avatar ? `${url.origin}/u/${owner.id}/avatar.jpg?v=${owner.avatar}` : null,
+      profile: `${url.origin}/u/${owner.id}`,
+    };
+  }
   return {
     id: meta.id,
     title: meta.title,
     film: meta.film,
-    sharer: { id: meta.sharer.id, name: meta.sharer.name, avatar: meta.sharer.avatar ? `${base}/avatar.jpg` : null },
+    sharer,
     shotAt: meta.shotAt,
     frames: Array.from({ length: meta.frames }, (_, i) => `${base}/${frameName(i + 1)}`),
     card: `${base}/card.jpg`,
-    expiresAt: new Date(meta.expiresAt).toISOString(),
+    public: Boolean(meta.public && owner),
+    expiresAt: meta.expiresAt == null ? null : new Date(meta.expiresAt).toISOString(),
   };
 }
 
 const frameName = (n) => `frame-${String(n).padStart(2, '0')}.jpg`;
-const expired = (meta, now) => now >= meta.expiresAt;
+const expired = (meta, now) => meta.expiresAt != null && now >= meta.expiresAt;
 const getMeta = async (env, id) => {
   const object = await env.ROLLS.get(`meta/${id}.json`);
   return object ? JSON.parse(await object.text()) : null;
@@ -363,12 +696,18 @@ function filmPage(film, code, url, env) {
   });
 }
 
-function rollPage(meta, url, env) {
+function rollPage(roll, meta, url, env) {
   // On the web a roll is a teaser: its card (the first frames) and who shot it. The whole
   // roll opens in the app, so people without it are asked to get it.
   const base = `/r/${meta.id}`;
-  const who = meta.sharer.name ? esc(meta.sharer.name) : 'Someone';
-  const avatar = meta.sharer.avatar ? `<img class="avatar" src="${base}/avatar.jpg" alt="">` : '';
+  const who = roll.sharer.name ? esc(roll.sharer.name) : 'Someone';
+  const avatar = roll.sharer.avatar ? `<img class="avatar" src="${esc(roll.sharer.avatar)}" alt="">` : '';
+  const whoLine = roll.sharer.profile
+    ? `<a class="who" href="${esc(roll.sharer.profile)}">${avatar}<span>${who} shared a roll</span></a>`
+    : `<div class="who">${avatar}<span>${who} shared a roll</span></div>`;
+  const lifetime = roll.public
+    ? `On <a href="${esc(roll.sharer.profile)}">${who}'s profile</a>.`
+    : `Shared rolls disappear ${new Date(meta.expiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}.`;
   const frames = `${meta.frames} ${meta.frames === 1 ? 'frame' : 'frames'}`;
   const film = meta.film.name ? ` · shot on ${esc(meta.film.name)}` : '';
   const store = storeURL(env);
@@ -380,7 +719,7 @@ function rollPage(meta, url, env) {
     description: `${meta.frames} frames${meta.film.name ? ` shot on ${meta.film.name}` : ''}. Open it in Film Exposures.`,
     image: `${url.origin}${base}/card.jpg`, url: url.href, env, appArgument: url.href,
     body: `
-      <div class="who">${avatar}<span>${who} shared a roll</span></div>
+      ${whoLine}
       <h1>${esc(meta.title)}</h1>
       <p class="muted">${frames}${film}</p>
       <img class="card" src="${base}/card.jpg" alt="${esc(meta.title)}">
@@ -392,7 +731,27 @@ function rollPage(meta, url, env) {
           <select name="reason"><option>Nudity or sexual content</option><option>Violence or abuse</option><option>Hate or harassment</option><option>Spam</option><option>Something else</option></select>
           <button type="submit">Send report</button>
         </form></details>
-      <p class="small muted">Shared rolls disappear ${new Date(meta.expiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}.</p>`,
+      <p class="small muted">${lifetime}</p>`,
+  });
+}
+
+function profilePage(profile, url, env) {
+  const who = profile.name ? esc(profile.name) : 'A Film Exposures photographer';
+  const avatar = profile.avatar ? `<img class="avatar" src="${esc(profile.avatar)}" alt="">` : '';
+  const tiles = profile.rolls.map((r) => `<a href="/r/${r.id}"><img src="${esc(r.cover)}" alt="" loading="lazy">
+      <b>${esc(r.title)}</b><span>${r.frames} ${r.frames === 1 ? 'frame' : 'frames'}${r.film ? ` · ${esc(r.film)}` : ''}</span></a>`).join('');
+  const store = storeURL(env);
+  return layout({
+    title: `${profile.name || 'Profile'} on Film Exposures`,
+    description: `${profile.rolls.length} ${profile.rolls.length === 1 ? 'roll' : 'rolls'} of film on Film Exposures.`,
+    image: profile.rolls[0]?.card, url: url.href, env, appArgument: url.href,
+    body: `
+      <p class="eyebrow">FILM EXPOSURES · PROFILE</p>
+      <div class="profile-head">${avatar}<div><h1>${who}</h1>
+        <p class="muted">${profile.rolls.length} ${profile.rolls.length === 1 ? 'roll' : 'rolls'}</p></div></div>
+      ${profile.rolls.length ? `<div class="rolls">${tiles}</div>` : '<p class="muted">No public rolls yet.</p>'}
+      ${store ? `<a class="button primary" href="${esc(store)}">Get Film Exposures</a>` : '<p class="button disabled">Film Exposures is coming soon to the App Store</p>'}
+      <a class="button" href="exposures://u/${profile.id}">Already have Film Exposures? Open the profile</a>`,
   });
 }
 
@@ -442,7 +801,13 @@ h1{font-size:44px;line-height:1.05;letter-spacing:-.02em;margin:0 0 8px}
 .settings span{color:var(--muted)}
 .button{display:block;text-align:center;padding:14px;border-radius:999px;margin:10px 0;text-decoration:none;color:var(--fg);background:#1d1d1e;font-weight:600}
 .button.primary{background:var(--accent);color:#111}
-.who{display:flex;align-items:center;gap:10px;margin-bottom:16px;font-weight:600}
+.who{display:flex;align-items:center;gap:10px;margin-bottom:16px;font-weight:600;color:var(--fg);text-decoration:none}
+a{color:var(--fg)}
+.profile-head{display:flex;align-items:center;gap:16px;margin-bottom:20px}.profile-head .avatar{width:72px;height:72px}
+.profile-head h1{font-size:32px;margin:0}
+.rolls{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:20px 0}
+.rolls a{text-decoration:none;color:var(--fg)}.rolls img{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:10px;display:block;background:#1d1d1e}
+.rolls b{display:block;font-size:14px;margin-top:6px}.rolls span{font-size:12px;color:var(--muted)}
 .avatar{width:40px;height:40px;border-radius:50%;object-fit:cover}
 .card{width:100%;display:block;border-radius:14px;margin:20px 0 8px}
 .button.disabled{color:var(--muted);background:transparent;border:1px solid var(--line)}

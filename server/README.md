@@ -39,6 +39,27 @@ Until this is done, a tapped link opens the web page first, and its *Open in Fil
 3. Replace the `PROVISIONING_PROFILE` repository secret with the base64 of the new profile: `base64 -i profile.mobileprovision | pbcopy`.
 4. Then add the app's `applinks:<host>` entitlement. Adding it before the profile has the capability makes TestFlight builds fail.
 
+## Accounts: public profiles and likes (Sign in with Apple)
+
+Signed in with Apple, people can put rolls on a public profile (`/u/<id>`, which never
+expires until they make a roll private) and like frames in other people's rolls. The server
+checks Apple's identity token itself (against appleid.apple.com/auth/keys), so there's no
+extra secret to add. To switch it on in the app:
+
+1. In the Apple Developer site, open Identifiers -> `com.davidanderson.retrocam` and tick
+   **Sign in with Apple**. Save.
+2. Profiles -> your App Store profile for the app -> Edit -> Save (it now includes Sign in
+   with Apple) -> Download. Put the new profile, base64-encoded, in the
+   `PROVISIONING_PROFILE` repository secret, as before.
+3. Ask for the `com.apple.developer.applesignin` entitlement to be added to the app. Do this
+   *after* step 2: a signed build fails if the entitlement isn't in the profile.
+
+Until then the Sign in with Apple button shows an error and everything else works.
+
+Deleting an account (Profile -> DELETE ACCOUNT) deletes its profile, headshot, likes and
+every roll shared while signed in. Before App Review, the server should also revoke the
+person's Apple token on deletion, which needs a Sign in with Apple key; that isn't set up yet.
+
 ## Tests
 
 ```
