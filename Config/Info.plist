@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Keys Xcode can't generate from build settings. Everything else is generated
+	     (GENERATE_INFOPLIST_FILE = YES) and merged with this file. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.davidanderson.retrocam.film</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>mono36</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

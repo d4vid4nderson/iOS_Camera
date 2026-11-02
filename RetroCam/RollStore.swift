@@ -8,7 +8,9 @@ import UniformTypeIdentifiers
 ///
 ///   Application Support/Rolls/007/frame-01.jpg   screen-sharp copy (2048 px long side)
 ///                                 thumb-01.jpg   grid thumbnail (480 px)
-///                                 roll.json      the roll's number, film and start date
+///                                 roll.json      the roll's number, film, dates, develop mode
+///                                 full-01.jpg    full-resolution frame waiting to develop
+///                                                (deleted once it's in Photos)
 enum RollStore {
     private static let previewSize = 2048
     private static let thumbSize = 480
@@ -28,6 +30,37 @@ enum RollStore {
 
     static func thumbURL(roll: Int, frame: Int) -> URL {
         folder(for: roll).appendingPathComponent(String(format: "thumb-%02d.jpg", frame))
+    }
+
+    static func pendingURL(roll: Int, frame: Int) -> URL {
+        folder(for: roll).appendingPathComponent(String(format: "full-%02d.jpg", frame))
+    }
+
+    /// A frame shot on a develop-later roll that hasn't developed yet.
+    static func isPending(roll: Int, frame: Int) -> Bool {
+        FileManager.default.fileExists(atPath: pendingURL(roll: roll, frame: frame).path)
+    }
+
+    /// Keep the full-resolution frame until its roll develops.
+    static func savePending(_ jpeg: Data, roll: Int, frame: Int) throws {
+        try FileManager.default.createDirectory(at: folder(for: roll), withIntermediateDirectories: true)
+        try jpeg.write(to: pendingURL(roll: roll, frame: frame), options: .atomic)
+    }
+
+    static func pendingFrames(of number: Int) -> [Int] {
+        frames(of: number).filter { isPending(roll: number, frame: $0) }
+    }
+
+    static func clearPending(roll: Int, frame: Int) {
+        try? FileManager.default.removeItem(at: pendingURL(roll: roll, frame: frame))
+    }
+
+    /// Record the roll's latest details (e.g. when it was finished).
+    static func updateInfo(_ roll: Roll) {
+        let folder = folder(for: roll.number)
+        guard FileManager.default.fileExists(atPath: folder.path),
+              let info = try? JSONEncoder().encode(roll) else { return }
+        try? info.write(to: folder.appendingPathComponent("roll.json"), options: .atomic)
     }
 
     /// Keep a copy of a developed frame. Runs off the main thread.
@@ -68,7 +101,7 @@ enum RollStore {
     /// The newest frame's thumbnail, for the button next to the shutter at launch.
     static func latestThumbnail() -> UIImage? {
         for roll in rolls() {
-            if let last = frames(of: roll.number).last,
+            if let last = frames(of: roll.number).last(where: { !isPending(roll: roll.number, frame: $0) }),
                let image = UIImage(contentsOfFile: thumbURL(roll: roll.number, frame: last).path) {
                 return image
             }
