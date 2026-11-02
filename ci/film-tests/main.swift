@@ -60,6 +60,13 @@ let partial = #"{"id":"custom-old","name":"OLD ONE","contrast":0.9}"#.data(using
 let old = try! decoder.decode(FilmStock.self, from: partial)
 check(old.name == "OLD ONE" && near(old.contrast, 0.9) && old.tone == .neutral && old.fog == 0, "partial film decodes with defaults")
 check(old.isCustom, "custom prefix recognised")
+check(old.effect == .none && near(old.effectAmount, 0.5) && near(old.effectX, 0.5), "old films decode with no effect")
+var fx = FilmStock.frost400
+fx.effect = .swirl; fx.effectAmount = 0.8; fx.effectX = 0.2; fx.effectY = 0.7
+let fxBack = try! decoder.decode(FilmStock.self, from: encoder.encode(fx))
+check(fxBack == fx, "effect settings survive encode/decode")
+check(LensEffect.swirl.usesCenter && !LensEffect.drag.usesCenter && LensEffect.halftone.isPrintEffect, "effect kinds")
+check(Set(LensEffect.allCases.map(\.label)).count == LensEffect.allCases.count, "effect labels unique")
 
 // Library: edits, save, update, rename, delete.
 var lib = FilmLibrary()

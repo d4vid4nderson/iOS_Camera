@@ -22,6 +22,8 @@ enum FilmLook {
         if stock.edgeSoftness > 0 {
             lens = softenEdges(lens, amount: stock.edgeSoftness)
         }
+        // 0b. Lens effects (FX): fisheye, swirl, tilt-shift, zoom, drag, double, prism...
+        lens = LensFX.lens(lens, stock: stock)
 
         // 1. Spectral response -> monochrome (in Core Image's linear working space).
         let mix = CIVector(x: stock.red, y: stock.green, z: stock.blue, w: 0)
@@ -48,6 +50,9 @@ enum FilmLook {
         if stock.bloom > 0 {
             image = bloom(image, amount: stock.bloom)
         }
+
+        // 3c. Print effects (FX): halftone dots, etched lines.
+        image = LensFX.print(image, stock: stock)
 
         // 4. Print toning (split: separate ink, mid and paper colours).
         if stock.toneAmount > 0, stock.tone != .neutral {
