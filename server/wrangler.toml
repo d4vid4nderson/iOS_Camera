@@ -7,6 +7,9 @@ name = "exposures"
 main = "src/worker.js"
 compatibility_date = "2025-09-01"
 workers_dev = true
+# Once filmexposures.com is in this Cloudflare account (see README), uncomment to serve
+# the links there instead of the workers.dev address:
+# routes = [{ pattern = "filmexposures.com", custom_domain = true }]
 
 [[r2_buckets]]
 binding = "ROLLS"

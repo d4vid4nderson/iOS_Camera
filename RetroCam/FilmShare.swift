@@ -2,7 +2,7 @@ import UIKit
 
 /// Sharing a film's recipe: the film's card (a frame you shot on it, or its tone scale)
 /// and its link, handed straight to the share sheet. Scanning the card's code or tapping
-/// the link opens Exposures and offers to add the film, every setting included.
+/// the link opens Film Exposures and offers to add the film, every setting included.
 enum FilmShare {
     /// The card and link for the share sheet, or nil if the film can't be packed into a
     /// link. Reads frames from disk: call it off the main thread.

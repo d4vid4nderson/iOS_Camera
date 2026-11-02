@@ -1,4 +1,4 @@
-// Exposures share links.
+// Film Exposures share links.
 //
 //   GET  /f/<code>                  a shared film: the whole recipe is in <code>, nothing is stored
 //   GET  /r/<id>                    a shared roll: a teaser page that asks people to get the app
@@ -346,18 +346,18 @@ function settingsList(film) {
 // MARK: Pages
 
 function filmPage(film, code, url, env) {
-  const title = `${film.name} · Exposures film`;
+  const title = `${film.name} · a film on Film Exposures`;
   const strip = toneScale(film).map((c) => `<i style="background:${c}"></i>`).join('');
   const rows = settingsList(film).map(([k, v]) => `<li><span>${esc(k)}</span><b>${esc(v)}</b></li>`).join('');
   return layout({
     title, description: caption(film), url: url.href, env,
     body: `
-      <p class="eyebrow">EXPOSURES · SHARED FILM</p>
+      <p class="eyebrow">FILM EXPOSURES · SHARED FILM</p>
       <h1>${esc(film.name)}</h1>
       <p class="muted">${esc(caption(film))}</p>
       <div class="strip">${strip}</div>
       <ul class="settings">${rows}</ul>
-      <a class="button primary" href="exposures://f/${code}">Load this film in Exposures</a>
+      <a class="button primary" href="exposures://f/${code}">Load this film in Film Exposures</a>
       ${storeButton(env)}
       <p class="small muted">Every setting comes with it: curve, filter, toning, grain, vignette and effects.</p>`,
   });
@@ -373,11 +373,11 @@ function rollPage(meta, url, env) {
   const film = meta.film.name ? ` · shot on ${esc(meta.film.name)}` : '';
   const store = storeURL(env);
   const get = store
-    ? `<a class="button primary" href="${esc(store)}">Get Exposures to see the whole roll</a>`
-    : '<p class="button disabled">Exposures is coming soon to the App Store</p>';
+    ? `<a class="button primary" href="${esc(store)}">Get Film Exposures to see the whole roll</a>`
+    : '<p class="button disabled">Film Exposures is coming soon to the App Store</p>';
   return layout({
-    title: `${meta.title} · ${who} on Exposures`,
-    description: `${meta.frames} frames${meta.film.name ? ` shot on ${meta.film.name}` : ''}. Open it in Exposures.`,
+    title: `${meta.title} · ${who} on Film Exposures`,
+    description: `${meta.frames} frames${meta.film.name ? ` shot on ${meta.film.name}` : ''}. Open it in Film Exposures.`,
     image: `${url.origin}${base}/card.jpg`, url: url.href, env, appArgument: url.href,
     body: `
       <div class="who">${avatar}<span>${who} shared a roll</span></div>
@@ -385,7 +385,7 @@ function rollPage(meta, url, env) {
       <p class="muted">${frames}${film}</p>
       <img class="card" src="${base}/card.jpg" alt="${esc(meta.title)}">
       ${get}
-      <a class="button" href="exposures://r/${meta.id}">Already have Exposures? Open the roll</a>
+      <a class="button" href="exposures://r/${meta.id}">Already have Film Exposures? Open the roll</a>
       <p class="small muted">Swipe through every frame and load the film it was shot on, right in the app.</p>
       <details class="report"><summary>Report this roll</summary>
         <form method="post" action="/api/rolls/${meta.id}/report">
@@ -397,14 +397,14 @@ function rollPage(meta, url, env) {
 }
 
 function homePage(env) {
-  return layout({ title: 'Exposures', description: 'A film camera for your iPhone.', env, body: `
-    <p class="eyebrow">EXPOSURES</p><h1>A film camera for your iPhone.</h1>
+  return layout({ title: 'Film Exposures', description: 'A film camera for your iPhone.', env, body: `
+    <p class="eyebrow">FILM EXPOSURES</p><h1>A film camera for your iPhone.</h1>
     <p class="muted">Shoot rolls of 36, develop them later, and share your films.</p>${storeButton(env)}` });
 }
 
 function messagePage(message, env) {
-  return layout({ title: 'Exposures', description: message, env, body: `
-    <p class="eyebrow">EXPOSURES</p><h1>${esc(message)}</h1>${storeButton(env)}` });
+  return layout({ title: 'Film Exposures', description: message, env, body: `
+    <p class="eyebrow">FILM EXPOSURES</p><h1>${esc(message)}</h1>${storeButton(env)}` });
 }
 
 /// The App Store page: APP_STORE_ID (the app's Apple ID, from App Store Connect), or a full
@@ -416,7 +416,7 @@ export function storeURL(env) {
 
 function storeButton(env) {
   const store = storeURL(env);
-  return store ? `<a class="button" href="${esc(store)}">Get Exposures</a>` : '';
+  return store ? `<a class="button" href="${esc(store)}">Get Film Exposures</a>` : '';
 }
 
 function layout({ title, description, image, url, body, env, appArgument }) {

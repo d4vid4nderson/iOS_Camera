@@ -60,7 +60,7 @@ enum RollCard {
             FilmCodeCard.drawCode(modules, in: codeRect, ink: ink, paper: background, context: cg)
 
             let mark = UIFont.systemFont(ofSize: 22, weight: .semibold)
-            let markWidth = ("EXPOSURES" as NSString).size(withAttributes: [.font: mark, .kern: 1]).width
+            let markWidth = ("FILM EXPOSURES" as NSString).size(withAttributes: [.font: mark, .kern: 1]).width
             var x = margin
             var lineY = size.height - margin - mark.lineHeight
             if let sharer {
@@ -77,7 +77,7 @@ enum RollCard {
                     lineY = avatarRect.midY - mark.lineHeight / 2
                 }
             }
-            FilmCodeCard.draw("EXPOSURES", font: mark, color: sharer == nil ? ink : muted, at: CGPoint(x: x, y: lineY), kern: 1)
+            FilmCodeCard.draw("FILM EXPOSURES", font: mark, color: sharer == nil ? ink : muted, at: CGPoint(x: x, y: lineY), kern: 1)
             FilmCodeCard.draw("Tap the link to see the roll", font: .systemFont(ofSize: 22, weight: .regular), color: muted,
                               at: CGPoint(x: x + markWidth + 12, y: lineY))
         }

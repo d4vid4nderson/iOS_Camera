@@ -626,7 +626,7 @@ final class CameraModel: NSObject, ObservableObject {
         return library.current(id: id)
     }
 
-    /// Delete a roll from Exposures; with `deletingPhotos`, its album and photos in Photos
+    /// Delete a roll from Film Exposures; with `deletingPhotos`, its album and photos in Photos
     /// too (iOS asks first). Deleting the roll that's in the camera loads a fresh one.
     func deleteRoll(_ number: Int, deletingPhotos: Bool) {
         guard developing == 0 else {

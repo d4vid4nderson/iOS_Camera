@@ -358,7 +358,7 @@ struct RollViewer: View {
                 Text(deleteDetail(target))
                     .font(.mono(10)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                cardButton("DELETE FROM EXPOSURES", destructive: false) {
+                cardButton("DELETE FROM FILM EXPOSURES", destructive: false) {
                     camera.deleteRoll(target.number, deletingPhotos: false)
                     deleting = nil
                 }
@@ -382,7 +382,7 @@ struct RollViewer: View {
         let stored = RollStore.frames(of: target.number)
         let waiting = RollStore.pendingFrames(of: target.number).count
         var lines = ["\(stored.count) \(stored.count == 1 ? "frame" : "frames"). Can't be undone."]
-        lines.append("DELETE FROM EXPOSURES keeps the photos in Photos, in the album \"\(target.albumTitle)\".")
+        lines.append("DELETE FROM FILM EXPOSURES keeps the photos in Photos, in the album \"\(target.albumTitle)\".")
         lines.append("DELETE ROLL + ITS PHOTOS also removes that album and its photos from Photos. iOS asks you to confirm.")
         if waiting > 0 {
             lines.append("\(waiting) \(waiting == 1 ? "frame hasn't" : "frames haven't") developed yet and will be lost.")
@@ -431,7 +431,7 @@ struct RollViewer: View {
                 Text("SHARE \(name)?").font(.mono(15, .bold)).foregroundStyle(accent)
                 Text("""
                     Uploads its \(count) developed \(count == 1 ? "frame" : "frames") so anyone with the link can look through them, \
-                    in Exposures or on the web, for \(RollShare.lifetimeDays) days. Unshare any time to delete them.
+                    in Film Exposures or on the web, for \(RollShare.lifetimeDays) days. Unshare any time to delete them.
 
                     Only share photos you'd post publicly. Nudity, violence and hateful content are removed, and people can report or block you.
                     """)

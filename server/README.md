@@ -1,11 +1,11 @@
-# Exposures share server
+# Film Exposures share server
 
-A small Cloudflare Worker behind Exposures' share links.
+A small Cloudflare Worker behind Film Exposures' share links.
 
 | Link | What it does |
 |---|---|
-| `https://<host>/f/<code>` | A shared film. The whole recipe is in the link, so nothing is stored. It opens Exposures and offers to add the film; without the app, it shows a page about the film. |
-| `https://<host>/r/<id>` | A shared roll. Its photos are stored in R2 for 30 days, or until the sharer taps UNSHARE. It opens in Exposures' viewer. Without the app, the web page shows the roll's card and asks people to get Exposures to see the whole roll. |
+| `https://<host>/f/<code>` | A shared film. The whole recipe is in the link, so nothing is stored. It opens Film Exposures and offers to add the film; without the app, it shows a page about the film. |
+| `https://<host>/r/<id>` | A shared roll. Its photos are stored in R2 for 30 days, or until the sharer taps UNSHARE. It opens in Film Exposures' viewer. Without the app, the web page shows the roll's card and asks people to get Film Exposures to see the whole roll. |
 
 Rolls with 3 reports are hidden until reviewed. Reports are stored under `reports/<id>/` in the bucket.
 
@@ -18,13 +18,21 @@ Rolls with 3 reports are hidden until reviewed. Reports are stored under `report
 5. **Add two GitHub repository secrets** (*Settings → Secrets and variables → Actions*). Don't paste the token anywhere else.
    - `CLOUDFLARE_API_TOKEN`: the token from step 4
    - `CLOUDFLARE_ACCOUNT_ID`: shown in the Cloudflare dashboard's right sidebar (*Account ID*)
-6. **Deploy:** go to *Actions*, then *Share server*, then *Run workflow*. When it finishes, open `https://exposures.<subdomain>.workers.dev/`; you should see the Exposures page.
+6. **Deploy:** go to *Actions*, then *Share server*, then *Run workflow*. When it finishes, open `https://exposures.<subdomain>.workers.dev/`; you should see the Film Exposures page.
 7. **Set the address in the app:** `ShareLinks.host` in `RetroCam/ShareLinks.swift`.
-8. **App Store button:** set `APP_STORE_ID` in `wrangler.toml` to the app's Apple ID (App Store Connect → App Information → Apple ID, a 10-digit number). Or set `APP_STORE_URL` to a public TestFlight link while testing. Until one is set, the pages say Exposures is coming soon.
+8. **App Store button:** set `APP_STORE_ID` in `wrangler.toml` to the app's Apple ID (App Store Connect → App Information → Apple ID, a 10-digit number). Or set `APP_STORE_URL` to a public TestFlight link while testing. Until one is set, the pages say Film Exposures is coming soon.
+
+## Your own address: filmexposures.com
+
+Do this before sharing any links for real: links made on the workers.dev address keep pointing there.
+
+1. Buy the domain through Cloudflare (*Domain Registration → Register Domains*). It then lives in the same account, and Cloudflare charges the registry's price with no markup. If you buy it elsewhere, add it to Cloudflare (*Add a domain*) and switch its nameservers to the two Cloudflare gives you.
+2. In `wrangler.toml`, uncomment the `routes` line, then run the *Share server* workflow again.
+3. Set `ShareLinks.host` to `filmexposures.com`.
 
 ## Links that open the app directly (Universal Links)
 
-Until this is done, a tapped link opens the web page first, and its *Open in Exposures* button opens the app.
+Until this is done, a tapped link opens the web page first, and its *Open in Film Exposures* button opens the app.
 
 1. In the Apple Developer site, go to *Certificates, IDs & Profiles*, then *Identifiers*, then `com.davidanderson.retrocam`, and tick **Associated Domains**. Save.
 2. Under *Profiles*, edit the App Store profile, save it so it picks up the new capability, and download it.
