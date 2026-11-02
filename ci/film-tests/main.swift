@@ -1,5 +1,5 @@
 // Tests for the film model and library, compiled with swiftc in CI (no simulator needed):
-//   swiftc RetroCam/FilmStock.swift RetroCam/FilmLibrary.swift RetroCam/Roll.swift RetroCam/FilmCode.swift ci/film-tests/main.swift
+//   swiftc RetroCam/ColorGrade.swift RetroCam/FilmStock.swift RetroCam/FilmLibrary.swift RetroCam/Roll.swift RetroCam/FilmCode.swift ci/film-tests/main.swift
 import CoreGraphics
 import Foundation
 
@@ -225,5 +225,63 @@ check(FilmStock.selenium.shareCaption.hasPrefix("Selenium toned"), "selenium fil
 check(FilmStock.expired.shareCaption.hasPrefix("Black & white"), "a light tint still reads as black & white")
 check(FilmStock.push3200.shareCaption.hasSuffix("Heavy grain"), "push film is heavy grain")
 for film in FilmStock.all { check(film.shareCaption.contains("ISO \(film.iso)"), "\(film.id) caption has its ISO") }
+
+// MARK: Colour films
+
+let plain = ColorGrade()
+check(plain.isIdentity, "a default grade changes nothing")
+for (r, g, b) in [(0.0, 0.0, 0.0), (1.0, 1.0, 1.0), (0.2, 0.5, 0.8), (0.9, 0.4, 0.1)] {
+    let out = plain.map(r, g, b)
+    check(abs(out.0 - r) < 1e-9 && abs(out.1 - g) < 1e-9 && abs(out.2 - b) < 1e-9, "identity grade keeps (\(r), \(g), \(b))")
+}
+var curves = ColorGrade()
+curves.greenHighlights = 1
+curves.blueHighlights = -1
+check(curves.map(0, 0, 0) == (0, 0, 0) && curves.map(1, 1, 1) == (1, 1, 1), "curves keep black and white")
+let lifted = curves.map(0.667, 0.667, 0.667)
+check(lifted.1 > 0.75 && lifted.2 < 0.6 && abs(lifted.0 - 0.667) < 1e-9, "green lifted, blue lowered in the highlights")
+
+var split = ColorGrade()
+split.shadowHue = 0.6; split.shadowAmount = 1      // blue
+split.highlightHue = 0.1; split.highlightAmount = 1  // orange
+let dark = split.map(0.15, 0.15, 0.15), light = split.map(0.85, 0.85, 0.85)
+check(dark.2 > dark.0, "shadows lean blue")
+check(light.0 > light.2, "highlights lean orange")
+check(abs(ColorGrade.luma(dark.0, dark.1, dark.2) - 0.15) < 0.02, "split toning keeps brightness")
+
+var mono = ColorGrade()
+mono.saturation = 0
+let grey = mono.map(0.9, 0.3, 0.2)
+check(abs(grey.0 - grey.1) < 1e-9 && abs(grey.1 - grey.2) < 1e-9, "no saturation is grey")
+
+var aquaGrade = ColorGrade()
+aquaGrade.aqua = 1
+let sky = aquaGrade.map(0.3, 0.5, 0.9)
+check(ColorGrade.hsv(sky.0, sky.1, sky.2).0 < ColorGrade.hsv(0.3, 0.5, 0.9).0, "blues move toward aqua")
+let skin = aquaGrade.map(0.9, 0.6, 0.45)
+check(abs(skin.0 - 0.9) < 1e-9 && abs(skin.1 - 0.6) < 1e-9, "aqua leaves warm colours alone")
+
+check(plain.cubeData(size: 5).count == 5 * 5 * 5 * 4 * MemoryLayout<Float>.size, "colour cube size")
+
+let colorFilms = FilmStock.all.filter(\.color)
+check(colorFilms.count == 5, "five colour films")
+check(FilmStock.all.filter { !$0.color }.count == 15, "black & white films are unchanged")
+for film in colorFilms {
+    check(film.shareCaption.hasPrefix("Color"), "\(film.id) reads as colour")
+    let back = FilmCode.film(from: FilmCode.url(for: film)!)!
+    check(back.color, "\(film.id) link keeps it a colour film")
+    for (name, a, b) in [("saturation", film.saturation, back.saturation), ("warmth", film.warmth, back.warmth),
+                         ("shadow hue", film.shadowHue, back.shadowHue), ("highlights", film.highlightAmount, back.highlightAmount),
+                         ("green high", film.greenHighlights, back.greenHighlights), ("blue high", film.blueHighlights, back.blueHighlights),
+                         ("halation", film.halation, back.halation), ("contrast", film.contrast, back.contrast)] {
+        check(abs(a - b) < 0.01, "\(film.id) link keeps \(name)")
+    }
+    let json = try! JSONEncoder().encode(film)
+    let decoded = try! JSONDecoder().decode(FilmStock.self, from: json)
+    check(decoded == film, "\(film.id) saves and loads")
+}
+check(!FilmCode.film(from: FilmCode.url(for: .pan50)!)!.color, "black & white links stay black & white")
+let oldSaved = try! JSONEncoder().encode(FilmStock.noir)
+check(!(try! JSONDecoder().decode(FilmStock.self, from: oldSaved)).color, "films saved before colour load as black & white")
 
 if failures == 0 { print("film tests: all passed") } else { print("film tests: \(failures) failed"); exit(1) }

@@ -52,6 +52,8 @@ struct ContentView: View {
     @State private var openPanel: SettingPanel?
     /// Which setting the ADJUST panel's dial is editing.
     @State private var adjusting: AdjustParam = .contrast
+    /// Which shelf the film picker shows: colour films or black & white.
+    @State private var colorShelf = false
     /// Saving or renaming a film: shows the name card.
     @State private var naming: FilmNaming?
     @State private var filmName = ""
@@ -363,6 +365,7 @@ struct ContentView: View {
 
             switch panel {
             case .film:
+                filmShelfSwitch
                 stockPicker
                 filmActions(camera.stock)
             case .adjust: adjustPanel
@@ -551,11 +554,39 @@ struct ContentView: View {
         .animation(.snappy(duration: 0.2), value: camera.border == .none)
     }
 
+    /// B&W | COLOR: which films the picker below shows (your own films sit with their kind).
+    private var filmShelfSwitch: some View {
+        HStack(spacing: 6) {
+            ForEach([false, true], id: \.self) { color in
+                let on = colorShelf == color
+                Button {
+                    withAnimation(.snappy(duration: 0.2)) { colorShelf = color }
+                } label: {
+                    Text(color ? "COLOR" : "B&W")
+                        .font(.mono(10, .bold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 7)
+                        .background(Capsule().fill(on ? accent.opacity(0.18) : Color(white: 0.15)))
+                        .overlay(Capsule().stroke(on ? accent : .clear, lineWidth: 1))
+                        .foregroundStyle(on ? accent : .white)
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
+        }
+        .sensoryFeedback(.selection, trigger: colorShelf)
+        .onAppear { colorShelf = camera.stock.color }
+        // Loading a film (or a roll that brings its film back) shows that film's shelf.
+        .onChange(of: camera.stock.id) { _, _ in colorShelf = camera.stock.color }
+    }
+
+    private var shelfFilms: [FilmStock] { camera.library.all.filter { $0.color == colorShelf } }
+
     private var stockPicker: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    ForEach(camera.library.all) { stock in
+                    ForEach(shelfFilms) { stock in
                         canister(stock)
                             .id(stock.id)
                             .onTapGesture {
@@ -570,6 +601,12 @@ struct ContentView: View {
             }
             .edgeFade(Self.scrollInset)
             .onAppear { proxy.scrollTo(camera.stock.id, anchor: .center) }
+            .onChange(of: colorShelf) { _, _ in
+                // The loaded film if it's on this shelf, else the start of the shelf.
+                if let first = shelfFilms.first {
+                    proxy.scrollTo(shelfFilms.contains { $0.id == camera.stock.id } ? camera.stock.id : first.id, anchor: .center)
+                }
+            }
         }
         .padding(.horizontal, -Self.panelPadding)
         .sensoryFeedback(.selection, trigger: camera.stock.id)
@@ -856,7 +893,7 @@ struct ContentView: View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 18) {
-                    ForEach(AdjustParam.allCases) { param in
+                    ForEach(AdjustParam.cases(for: camera.stock)) { param in
                         let on = param == adjusting
                         Button {
                             withAnimation(.snappy(duration: 0.2)) { adjusting = param }
@@ -877,7 +914,14 @@ struct ContentView: View {
                 .padding(.horizontal, Self.scrollInset)
             }
             .edgeFade(Self.scrollInset)
-            .onAppear { proxy.scrollTo(adjusting, anchor: .center) }
+            .onAppear {
+                if !AdjustParam.cases(for: camera.stock).contains(adjusting) { adjusting = .contrast }
+                proxy.scrollTo(adjusting, anchor: .center)
+            }
+            .onChange(of: camera.stock.color) { _, _ in
+                // Colour and black & white films have different settings.
+                if !AdjustParam.cases(for: camera.stock).contains(adjusting) { adjusting = .contrast }
+            }
             .onChange(of: adjusting) { _, param in
                 withAnimation(.snappy(duration: 0.25)) { proxy.scrollTo(param, anchor: .center) }
             }
@@ -1087,6 +1131,23 @@ private extension View {
 /// The film settings the ADJUST panel edits, with each one's dial scale.
 private enum AdjustParam: String, CaseIterable, Identifiable {
     case filter, contrast, key, fade, whites, tone, toneAmount, glow, grainSize, vignette, softness, fog
+    // Colour films.
+    case saturation, warmth, tint, shadowHue, shadowAmount, highlightHue, highlightAmount, aqua
+    case redShadows, redHighlights, greenShadows, greenHighlights, blueShadows, blueHighlights, halation
+
+    /// The settings a film has, in panel order: black & white films have a filter and
+    /// toning; colour films have white balance, a grade and halation.
+    static func cases(for stock: FilmStock) -> [AdjustParam] {
+        if stock.color {
+            return [.contrast, .key, .fade, .whites,
+                    .saturation, .warmth, .tint,
+                    .shadowHue, .shadowAmount, .highlightHue, .highlightAmount, .aqua,
+                    .redShadows, .redHighlights, .greenShadows, .greenHighlights, .blueShadows, .blueHighlights,
+                    .glow, .halation, .grainSize, .vignette, .softness, .fog]
+        }
+        return [.filter, .contrast, .key, .fade, .whites, .tone, .toneAmount,
+                .glow, .grainSize, .vignette, .softness, .fog]
+    }
 
     var id: String { rawValue }
 
@@ -1104,6 +1165,21 @@ private enum AdjustParam: String, CaseIterable, Identifiable {
         case .vignette: return "VIGNETTE"
         case .softness: return "SOFTNESS"
         case .fog: return "FOG"
+        case .saturation: return "SATURATION"
+        case .warmth: return "WARMTH"
+        case .tint: return "TINT"
+        case .shadowHue: return "SHADOW COLOR"
+        case .shadowAmount: return "SHADOW %"
+        case .highlightHue: return "LIGHT COLOR"
+        case .highlightAmount: return "LIGHT %"
+        case .aqua: return "BLUES"
+        case .redShadows: return "RED LOW"
+        case .redHighlights: return "RED HIGH"
+        case .greenShadows: return "GREEN LOW"
+        case .greenHighlights: return "GREEN HIGH"
+        case .blueShadows: return "BLUE LOW"
+        case .blueHighlights: return "BLUE HIGH"
+        case .halation: return "HALATION"
         }
     }
 
@@ -1120,6 +1196,21 @@ private enum AdjustParam: String, CaseIterable, Identifiable {
         case .vignette: return \.vignette
         case .softness: return \.edgeSoftness
         case .fog: return \.fog
+        case .saturation: return \.saturation
+        case .warmth: return \.warmth
+        case .tint: return \.tint
+        case .shadowHue: return \.shadowHue
+        case .shadowAmount: return \.shadowAmount
+        case .highlightHue: return \.highlightHue
+        case .highlightAmount: return \.highlightAmount
+        case .aqua: return \.aqua
+        case .redShadows: return \.redShadows
+        case .redHighlights: return \.redHighlights
+        case .greenShadows: return \.greenShadows
+        case .greenHighlights: return \.greenHighlights
+        case .blueShadows: return \.blueShadows
+        case .blueHighlights: return \.blueHighlights
+        case .halation: return \.halation
         }
     }
 
@@ -1130,15 +1221,23 @@ private enum AdjustParam: String, CaseIterable, Identifiable {
         case .whites: return 0.75...1
         case .grainSize: return 0.6...3.0
         case .vignette: return 0...1.2
+        case .saturation: return 0...1.6
+        case .warmth, .tint, .aqua, .redShadows, .redHighlights, .greenShadows, .greenHighlights,
+             .blueShadows, .blueHighlights: return -1...1
         default: return 0...1
         }
     }
+
+    /// Bipolar settings (cool…warm, lower…lift) read with a sign; hues in degrees.
+    private var isSigned: Bool { range.lowerBound < 0 && self != .key }
+    private var isHue: Bool { self == .shadowHue || self == .highlightHue }
 
     var step: Double {
         switch self {
         case .key: return 0.1
         case .fade, .whites: return 0.01
         case .grainSize: return 0.1
+        case .shadowHue, .highlightHue: return 1.0 / 72   // 5°
         default: return 0.05
         }
     }
@@ -1146,6 +1245,7 @@ private enum AdjustParam: String, CaseIterable, Identifiable {
     var majorEvery: Int {
         switch self {
         case .key, .fade, .whites: return 5
+        case .shadowHue, .highlightHue: return 6               // every 30°
         default: return 4
         }
     }
@@ -1157,7 +1257,11 @@ private enum AdjustParam: String, CaseIterable, Identifiable {
             let n = Int((v * 10).rounded())
             return n == 0 ? "0" : String(format: "%+d", n)
         case .grainSize: return String(format: "%.1f", v)
-        default: return "\(Int((v * 100).rounded()))"
+        default:
+            if isHue { return "\(Int((v * 360).rounded()) % 360)°" }
+            let n = Int((v * 100).rounded())
+            if isSigned { return n == 0 ? "0" : String(format: "%+d", n) }
+            return "\(n)"
         }
     }
 }

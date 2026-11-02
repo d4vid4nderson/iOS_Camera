@@ -455,3 +455,20 @@ test('accounts made before Google and Facebook still work', async () => {
   await call(e, 'DELETE', '/api/me', { account: again.token });
   assert.ok(![...e.ROLLS.objects.keys()].some((k) => k.startsWith('accounts/')), 'its Apple sign-in is freed');
 });
+
+test('colour film links decode like the app', async () => {
+  // A version-2 code: the black & white settings, then the colour ones, tone, effect, ISO, name.
+  const bytes = [2, ...Array(18).fill(128), ...Array(15).fill(128), 0, 0, 0x01, 0x90, ...new TextEncoder().encode('TIDE 200')];
+  const code = Buffer.from(bytes).toString('base64url');
+  const film = decodeFilm(code);
+  assert.equal(film.color, true);
+  assert.equal(film.name, 'TIDE 200');
+  assert.equal(film.iso, 400);
+  assert.ok(Math.abs(film.saturation - 0.8) < 0.01);
+  assert.match(caption(film), /^Color · ISO 400/);
+  const page = await (await call(env(), 'GET', `/f/${code}`)).text();
+  assert.match(page, /TIDE 200/);
+  assert.match(page, /Saturation/);
+  assert.equal(decodeFilm(Buffer.from([3, ...bytes.slice(1)]).toString('base64url')), null, 'unknown versions are refused');
+  assert.equal(decodeFilm(Buffer.from(bytes.slice(0, 30)).toString('base64url')), null, 'short colour codes are refused');
+});
