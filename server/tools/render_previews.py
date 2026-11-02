@@ -24,7 +24,9 @@ import numpy as np
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[2]
-SOURCE = ROOT / 'server/tools/preview-source.jpg'
+# Black & white films are shown on an Italian street (whites, plaster, ivy, shutters);
+# colour films on a coast at golden hour (sea, sky, warm rock, pines).
+SOURCES = {False: ROOT / 'server/tools/preview-bw.jpg', True: ROOT / 'server/tools/preview-color.jpg'}
 OUT = ROOT / 'server/public/films'
 WIDTH = 1200
 RNG = np.random.default_rng(36)
@@ -312,15 +314,18 @@ def apply(film, srgb_img):
 
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
-    src = Image.open(SOURCE).convert('RGB')
-    src = src.resize((WIDTH, round(src.height * WIDTH / src.width)), Image.LANCZOS)
-    src.save(OUT / 'before.jpg', quality=84, optimize=True, progressive=True)
-    base = np.asarray(src).astype(np.float32) / 255
+    bases = {}
+    for color, path in SOURCES.items():
+        src = Image.open(path).convert('RGB')
+        src = src.resize((WIDTH, round(src.height * WIDTH / src.width)), Image.LANCZOS)
+        src = src.crop((0, 0, WIDTH, WIDTH * 2 // 3))   # 3:2, like the viewer
+        src.save(OUT / f"before-{'color' if color else 'bw'}.jpg", quality=82, optimize=True, progressive=True)
+        bases[color] = np.asarray(src).astype(np.float32) / 255
     films = read_films()
     index = []
     ramp = np.repeat(np.linspace(0, 1, 7, dtype=np.float32)[None, :, None], 3, -1)
     for film in films:
-        out = apply(film, base)
+        out = apply(film, bases[bool(film['color'])])
         Image.fromarray((out * 255 + 0.5).astype(np.uint8)).save(OUT / f"{film['id']}.jpg", quality=82, optimize=True, progressive=True)
         # The film's tone strip, like the app's cards: grey steps through the film, without
         # grain, glow or vignette.
