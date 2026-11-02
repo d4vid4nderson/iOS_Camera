@@ -34,18 +34,18 @@ export const FILM_PREVIEWS = [
   ]
  },
  {
-  "id": "frost400",
-  "name": "FROST 400",
-  "blurb": "Hazy and airy, soft-cornered lens",
-  "iso": 400,
+  "id": "silver100",
+  "name": "SILVER 100",
+  "blurb": "Bright and crisp, fine sharp grain",
+  "iso": 100,
   "color": false,
   "tones": [
-   "#0f0f0f",
-   "#373737",
-   "#656565",
-   "#979797",
-   "#c7c7c7",
-   "#ebebeb",
+   "#000000",
+   "#222222",
+   "#515151",
+   "#8d8d8d",
+   "#c6c6c6",
+   "#eaeaea",
    "#ffffff"
   ]
  },
@@ -79,6 +79,38 @@ export const FILM_PREVIEWS = [
    "#acacac",
    "#dddddd",
    "#ffffff"
+  ]
+ },
+ {
+  "id": "matte400",
+  "name": "MATTE 400",
+  "blurb": "Faded blacks, soft highlights",
+  "iso": 400,
+  "color": false,
+  "tones": [
+   "#292929",
+   "#444444",
+   "#646464",
+   "#898989",
+   "#adadad",
+   "#cccccc",
+   "#e5e5e5"
+  ]
+ },
+ {
+  "id": "expired",
+  "name": "EXPIRED 200",
+  "blurb": "Foggy, flat and grainy. Out of date in '98",
+  "iso": 200,
+  "color": false,
+  "tones": [
+   "#272420",
+   "#47433d",
+   "#69635c",
+   "#8a847c",
+   "#aaa49c",
+   "#c7c2ba",
+   "#e2ddd6"
   ]
  },
  {
@@ -191,166 +223,6 @@ export const FILM_PREVIEWS = [
    "#b1b2b1",
    "#dedad5",
    "#fffef3"
-  ]
- },
- {
-  "id": "red25",
-  "name": "RED FILTER",
-  "blurb": "Dramatic dark skies, glowing skin",
-  "iso": 100,
-  "color": false,
-  "tones": [
-   "#000000",
-   "#202020",
-   "#4a4a4a",
-   "#808080",
-   "#b5b5b5",
-   "#dfdfdf",
-   "#ffffff"
-  ]
- },
- {
-  "id": "ortho",
-  "name": "ORTHO 80",
-  "blurb": "Red-blind. Dark lips, moody portraits",
-  "iso": 80,
-  "color": false,
-  "tones": [
-   "#04060c",
-   "#212731",
-   "#474f5e",
-   "#788291",
-   "#abb5c1",
-   "#d5dee5",
-   "#f7ffff"
-  ]
- },
- {
-  "id": "infrared",
-  "name": "INFRARED",
-  "blurb": "White leaves, black skies, dreamy glow",
-  "iso": 200,
-  "color": false,
-  "tones": [
-   "#050505",
-   "#2c2c2c",
-   "#5e5e5e",
-   "#999999",
-   "#cfcfcf",
-   "#efefef",
-   "#ffffff"
-  ]
- },
- {
-  "id": "tintype",
-  "name": "TINTYPE",
-  "blurb": "Wet plate: blue-only, metal-brown, dark edges",
-  "iso": 1,
-  "color": false,
-  "tones": [
-   "#14100c",
-   "#29231d",
-   "#473f35",
-   "#706658",
-   "#9a907d",
-   "#b9b09b",
-   "#d1c8b2"
-  ]
- },
- {
-  "id": "lith",
-  "name": "LITH PRINT",
-  "blurb": "Harsh, grainy, peach lights over cold blacks",
-  "iso": 400,
-  "color": false,
-  "tones": [
-   "#00030b",
-   "#101018",
-   "#333035",
-   "#7d716e",
-   "#c4b0a2",
-   "#ead3be",
-   "#ffe5cc"
-  ]
- },
- {
-  "id": "sepia",
-  "name": "DARKROOM SEPIA",
-  "blurb": "Faded fibre print, warm toned",
-  "iso": 200,
-  "color": false,
-  "tones": [
-   "#191109",
-   "#3d2f1f",
-   "#65513a",
-   "#90795d",
-   "#b7a184",
-   "#d8c5a8",
-   "#f3e4cb"
-  ]
- },
- {
-  "id": "selenium",
-  "name": "SELENIUM",
-  "blurb": "Rich purple-brown blacks, crisp whites",
-  "iso": 100,
-  "color": false,
-  "tones": [
-   "#0a0009",
-   "#241822",
-   "#4a3c46",
-   "#80737b",
-   "#b7aeb2",
-   "#e0dcdd",
-   "#fffffc"
-  ]
- },
- {
-  "id": "platinum",
-  "name": "PLATINUM",
-  "blurb": "Soft, long tones on warm matte paper",
-  "iso": 25,
-  "color": false,
-  "tones": [
-   "#1a1612",
-   "#413930",
-   "#685d50",
-   "#8e8272",
-   "#b2a595",
-   "#d2c6b6",
-   "#eee5d5"
-  ]
- },
- {
-  "id": "cyanotype",
-  "name": "CYANOTYPE",
-  "blurb": "Prussian-blue sun print",
-  "iso": 12,
-  "color": false,
-  "tones": [
-   "#072252",
-   "#113668",
-   "#275283",
-   "#4e79a3",
-   "#83a5c1",
-   "#b5cbd9",
-   "#e3ebec"
-  ]
- },
- {
-  "id": "expired",
-  "name": "EXPIRED 200",
-  "blurb": "Foggy, flat and grainy. Out of date in '98",
-  "iso": 200,
-  "color": false,
-  "tones": [
-   "#272420",
-   "#47433d",
-   "#69635c",
-   "#8a847c",
-   "#aaa49c",
-   "#c7c2ba",
-   "#e2ddd6"
   ]
  }
 ];

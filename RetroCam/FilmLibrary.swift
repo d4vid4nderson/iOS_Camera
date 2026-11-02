@@ -22,7 +22,7 @@ struct FilmLibrary: Equatable {
 
     /// The film including any adjustments.
     func current(id: String) -> FilmStock? {
-        edits[id] ?? original(id: id)
+        original(id: id).map { edits[id] ?? $0 }
     }
 
     func isEdited(id: String) -> Bool { edits[id] != nil }

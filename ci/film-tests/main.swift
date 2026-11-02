@@ -12,7 +12,8 @@ func near(_ a: CGFloat, _ b: CGFloat, _ tol: CGFloat = 1e-6) -> Bool { abs(a - b
 // Built-in films: unique ids, sane values inside the ADJUST panel's ranges.
 let ids = FilmStock.all.map(\.id)
 check(Set(ids).count == ids.count, "film ids are unique")
-check(FilmStock.all.count == 22, "22 built-in films (15 black & white, 7 colour), got \(FilmStock.all.count)")
+check(FilmStock.all.count == 14, "14 built-in films, got \(FilmStock.all.count)")
+check(FilmStock.all.filter { !$0.color }.count == 7, "7 black & white films")
 for f in FilmStock.all {
     check(!f.isCustom, "\(f.id) is not custom")
     check((0...1).contains(f.contrast), "\(f.id) contrast in range")
@@ -43,9 +44,6 @@ for c in ColorFilter.allCases {
     check(near(w.r + w.g + w.b, 1, 0.011), "\(c) weights sum to 1")
     check(ColorFilter.matching(red: w.r, green: w.g, blue: w.b) == c, "\(c) matches itself")
 }
-check(FilmStock.redFilter.colorFilter == .red, "RED FILTER uses the red filter")
-check(FilmStock.ortho.colorFilter == .ortho, "ORTHO is orthochromatic")
-check(FilmStock.infrared.colorFilter == .infrared, "INFRARED uses the IR mix")
 var mixed = FilmStock.classic400
 mixed.apply(.orange)
 check(mixed.colorFilter == .orange, "apply(filter) sets the weights")
@@ -61,7 +59,7 @@ let old = try! decoder.decode(FilmStock.self, from: partial)
 check(old.name == "OLD ONE" && near(old.contrast, 0.9) && old.tone == .neutral && old.fog == 0, "partial film decodes with defaults")
 check(old.isCustom, "custom prefix recognised")
 check(old.effect == .none && near(old.effectAmount, 0.5) && near(old.effectX, 0.5), "old films decode with no effect")
-var fx = FilmStock.frost400
+var fx = FilmStock.classic400
 fx.effect = .swirl; fx.effectAmount = 0.8; fx.effectX = 0.2; fx.effectY = 0.7
 let fxBack = try! decoder.decode(FilmStock.self, from: encoder.encode(fx))
 check(fxBack == fx, "effect settings survive encode/decode")
@@ -280,7 +278,7 @@ check(plain.cubeData(size: 5).count == 5 * 5 * 5 * 4 * MemoryLayout<Float>.size,
 
 let colorFilms = FilmStock.all.filter(\.color)
 check(colorFilms.count == 7, "seven colour films")
-check(FilmStock.all.filter { !$0.color }.count == 15, "black & white films are unchanged")
+check(FilmStock.all.filter { !$0.color }.count == 7, "seven black & white films")
 for film in colorFilms {
     check(film.shareCaption.hasPrefix("Color"), "\(film.id) reads as colour")
     let back = FilmCode.film(from: FilmCode.url(for: film)!)!

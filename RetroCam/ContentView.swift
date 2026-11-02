@@ -1104,11 +1104,7 @@ struct ContentView: View {
 private extension FilmStock {
     /// One word for the icon bar.
     var shortName: String {
-        switch id {
-        case "sepia": return "SEPIA"
-        case "lith": return "LITH"
-        default: return String(name.split(separator: " ").first ?? "")
-        }
+        String(name.split(separator: " ").first ?? "")
     }
 }
 
