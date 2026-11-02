@@ -1,4 +1,4 @@
-# Cloudflare Worker that serves Exposures share links:
+# Cloudflare Worker that serves Film Exposures share links, accounts and profiles:
 #   /f/<code>   a shared film (the whole recipe is in the link; nothing stored)
 #   /r/<id>     a shared roll (photos stored in R2 for 30 days)
 # Deployed by .github/workflows/server.yml with the CLOUDFLARE_API_TOKEN and
@@ -7,9 +7,9 @@ name = "exposures"
 main = "src/worker.js"
 compatibility_date = "2025-09-01"
 workers_dev = true
-# Once filmexposures.com is in this Cloudflare account (see README), uncomment to serve
-# the links there instead of the workers.dev address:
-# routes = [{ pattern = "filmexposures.com", custom_domain = true }]
+# Serve the links at filmexposures.com (a Cloudflare custom domain: the deploy creates the
+# DNS record and certificate). The workers.dev address keeps working too.
+routes = [{ pattern = "filmexposures.com", custom_domain = true }]
 
 [[r2_buckets]]
 binding = "ROLLS"
