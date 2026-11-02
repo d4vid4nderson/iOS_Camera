@@ -12,10 +12,13 @@ export const GOVERNING_LAW = 'the State of Texas, United States';
 export const SUPPORT_TOPICS = ['Help using the app', 'Account or sign-in', 'Report a problem', 'Report content', 'Privacy request', 'Something else'];
 
 export const SITE_CSS = `
-:root{--bg:#0e0e0f;--panel:#161617;--panel2:#1d1d1e;--fg:#f2f0ec;--muted:#8c8a86;--line:#2a2a2b;--accent:#e8762e;--accent-ink:#1a0f07;
---mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace}
+:root{--bg:#0f0d0c;--panel:#171513;--panel2:#1f1c19;--fg:#f2ede4;--muted:#8f887d;--line:#2c2824;--accent:#e8762e;--accent-ink:#1a0f07;
+--mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+--edge:#f0a24e;--base:#15100c;--light:#f6ecd6;--ink:#2b2117;
+--grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E")}
 *{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif}
+body{margin:0;background:radial-gradient(120% 80% at 50% 0%,#1b1714 0%,var(--bg) 60%) fixed,var(--bg);color:var(--fg);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif}
+
 a{color:var(--fg)}
 .site-head,.site-foot{max-width:960px;margin:0 auto;padding:18px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px}
 .brand{font:700 13px/1 var(--mono);letter-spacing:.14em;text-decoration:none;display:flex;align-items:center;gap:10px}
@@ -54,36 +57,60 @@ select,button,input,textarea{font:inherit;color:var(--fg)}
 .hero h1{font-size:clamp(40px,7vw,68px)}
 .counter{display:inline-flex;align-items:baseline;gap:10px;font:700 15px/1 var(--mono);color:var(--muted);letter-spacing:.08em;margin-bottom:22px}
 .counter b{font-size:30px;color:var(--accent);letter-spacing:0}
-.films{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin:28px 0}
-.film{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 14px 16px;text-align:left;cursor:pointer;color:var(--fg);font:inherit;transition:border-color .15s,transform .15s}
-.film:hover,.film:focus-visible{border-color:var(--accent);outline:none;transform:translateY(-1px)}
-.film .tones{display:flex;gap:3px;margin-bottom:12px}.film .tones i{flex:1;height:12px;border-radius:3px}
-.film b{display:block;font-size:17px;letter-spacing:-.01em}.film span{font-size:13px;color:var(--muted)}
-.features{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:12px 0 28px}
-.feature{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px}
-.feature h3{margin:0 0 8px;color:var(--accent)}.feature p{margin:0;color:#c9c6c0;font-size:15px}
-/* Before / after, opened in place under the tapped film */
-.film[aria-expanded=true]{border-color:var(--accent);background:#1b1714}
-.film-open{grid-column:1/-1;background:var(--panel);border:1px solid var(--accent);border-radius:16px;padding:14px;display:grid;grid-template-columns:minmax(0,600px);justify-content:center;gap:12px}
+/* The films, as 35mm slides in their mounts */
+.shelf{display:flex;align-items:center;gap:10px;font:700 11px/1 var(--mono);letter-spacing:.16em;color:var(--muted);text-transform:uppercase;margin:30px 0 14px}
+.shelf::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--line),transparent)}
+.films{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:18px 16px;margin:0 0 8px}
+.mount{--card:#ece3cf;--card2:#ddd1b6;--print:#3a2d1f;--print2:#6f604c;
+  position:relative;aspect-ratio:1;border:0;border-radius:9px;padding:0;cursor:pointer;font:inherit;text-align:left;color:var(--print);
+  background:linear-gradient(155deg,var(--card),var(--card2));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -2px 0 rgba(0,0,0,.12),0 1px 0 rgba(0,0,0,.4),0 8px 18px -8px rgba(0,0,0,.7);
+  display:flex;flex-direction:column;align-items:stretch;transition:transform .18s ease,box-shadow .18s ease}
+.mount.bw{--card:#e6e5e1;--card2:#cfcdc7;--print:#26262a;--print2:#5d5c5a}
+.mount::before{content:"";position:absolute;inset:0;border-radius:inherit;background:var(--grain);opacity:.18;mix-blend-mode:multiply;pointer-events:none}
+.mount .label{display:flex;align-items:baseline;justify-content:space-between;gap:6px;padding:9.5% 10% 0;font:800 clamp(11px,1.25vw,13px)/1 var(--mono);letter-spacing:.06em;white-space:nowrap;overflow:hidden}
+.mount .label em{font-style:normal;font-weight:600;font-size:.82em;color:var(--print2)}
+.mount .window{position:relative;align-self:center;width:74%;aspect-ratio:3/2;flex:none;margin:6.5% 0 0;border-radius:3px;overflow:hidden;background:#0b0907;
+  box-shadow:0 0 0 1px rgba(0,0,0,.35),inset 0 0 0 1px rgba(0,0,0,.5),0 1px 0 1px rgba(255,255,255,.35)}
+.mount .window img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.mount .window::after{content:"";position:absolute;inset:0;box-shadow:inset 0 0 12px rgba(0,0,0,.45);pointer-events:none}
+.mount .note{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin:auto 0 8%;padding:0 10%;font-size:clamp(10px,1.05vw,11.5px);line-height:1.25;color:var(--print2)}
+.mount:hover{transform:translateY(-3px) rotate(-.6deg);box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -2px 0 rgba(0,0,0,.12),0 14px 26px -10px rgba(0,0,0,.85)}
+.mount:focus-visible{outline:none;box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--edge)}
+.mount[aria-expanded=true]{transform:translateY(-4px);box-shadow:0 0 0 2px var(--bg),0 0 0 3px rgba(240,162,78,.75),0 16px 28px -12px rgba(0,0,0,.9)}
+/* Opened: the same slide, larger, with the before/after in its window */
+.film-open{grid-column:1/-1;margin:6px 0 14px;display:grid;justify-items:center;gap:12px}
 .film-open[hidden]{display:none}
-.film-info{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
-.film-info h3{margin:0 0 6px;font:700 22px/1.15 -apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif;letter-spacing:-.01em;color:var(--fg);text-transform:none}
-.film-info .eyebrow{margin:0 0 8px}.film-info p{margin:0 0 6px}
-.close{width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--panel2);cursor:pointer;font-size:14px;flex:none}
-.compare{--split:50%;position:relative;border-radius:10px;overflow:hidden;aspect-ratio:3/2;background:#000;user-select:none;-webkit-user-select:none;touch-action:none;cursor:ew-resize}
+.slide{--card:#ece3cf;--card2:#ddd1b6;--print:#3a2d1f;--print2:#6f604c;position:relative;width:min(100%,700px);border-radius:16px;color:var(--print);
+  background:linear-gradient(155deg,var(--card),var(--card2));display:flex;flex-direction:column;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.6),inset 0 -3px 0 rgba(0,0,0,.12),0 2px 0 rgba(0,0,0,.4),0 30px 60px -24px rgba(0,0,0,.9)}
+.slide.bw{--card:#e6e5e1;--card2:#cfcdc7;--print:#26262a;--print2:#5d5c5a}
+.slide::before{content:"";position:absolute;inset:0;border-radius:inherit;background:var(--grain);opacity:.18;mix-blend-mode:multiply;pointer-events:none}
+.slide .label{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:6% 7% 0;font:800 clamp(14px,3.2vw,22px)/1 var(--mono);letter-spacing:.06em}
+.slide .label em{font-style:normal;font-weight:600;font-size:.62em;letter-spacing:.12em;color:var(--print2)}
+.slide .window{position:relative;align-self:center;width:86%;margin-top:4.5%;flex:none;border-radius:4px;
+  box-shadow:0 0 0 1px rgba(0,0,0,.35),0 1px 0 1px rgba(255,255,255,.4)}
+.slide .notes{margin:4.5% 0 6%;padding:0 7%;display:flex;justify-content:space-between;align-items:flex-end;gap:12px}
+.slide .notes p{margin:0;font-size:clamp(12px,2.4vw,15px);line-height:1.3;color:var(--print2)}
+.close{position:absolute;top:-12px;right:-12px;width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:var(--panel2);color:var(--fg);cursor:pointer;font-size:13px;z-index:3;box-shadow:0 4px 12px rgba(0,0,0,.5)}
+.close:hover{background:#2a2622}
+.hint{margin:0;font-size:13px;color:var(--muted)}
+.compare{--split:50%;position:relative;border-radius:4px;overflow:hidden;aspect-ratio:3/2;background:#000;user-select:none;-webkit-user-select:none;touch-action:none;cursor:ew-resize}
 .compare img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;-webkit-user-drag:none;pointer-events:none}
 .compare .after{clip-path:inset(0 0 0 var(--split))}
-.compare .handle{position:absolute;top:0;bottom:0;left:var(--split);width:2px;margin-left:-1px;background:var(--fg);pointer-events:none}
-.compare .handle span{position:absolute;top:50%;left:50%;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;background:var(--fg);box-shadow:0 2px 10px rgba(0,0,0,.5)}
-.compare .tag{position:absolute;top:8px;font:700 10px/1 var(--mono);letter-spacing:.1em;padding:5px 7px;border-radius:6px;background:rgba(0,0,0,.55);pointer-events:none}
-.compare .tag.left{left:8px}.compare .tag.right{right:8px;color:var(--accent)}
+.compare .handle{position:absolute;top:0;bottom:0;left:var(--split);width:2px;margin-left:-1px;background:rgba(246,236,214,.9);box-shadow:0 0 8px rgba(0,0,0,.5);pointer-events:none}
+.compare .handle span{position:absolute;top:50%;left:50%;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#fffaf0,#e4d6ba 70%,#c9b892);box-shadow:0 3px 10px rgba(0,0,0,.55),inset 0 -1px 2px rgba(0,0,0,.25)}
+.compare .handle span::before{content:"‹ ›";position:absolute;inset:0;display:grid;place-items:center;font:700 15px/1 var(--mono);color:#5a4630}
+.compare .tag{position:absolute;top:9px;font:700 10px/1 var(--mono);letter-spacing:.12em;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.7);pointer-events:none}
+.compare .tag.left{left:11px}.compare .tag.right{right:11px}
 .compare input[type=range]{position:absolute;inset:0;width:100%;height:100%;opacity:0;margin:0;pointer-events:none}
-.compare:focus-within .handle span{outline:2px solid var(--accent);outline-offset:2px}
+.compare:focus-within .handle span{outline:2px solid var(--edge);outline-offset:2px}
 .compare .info{position:absolute;right:8px;bottom:8px;width:26px;height:26px;border-radius:50%;border:1px solid rgba(255,255,255,.35);background:rgba(0,0,0,.55);color:var(--fg);font:italic 700 13px/1 Georgia,serif;cursor:pointer;z-index:2}
 .compare .info[aria-expanded=true]{background:var(--fg);color:#111}
-.compare .credit{position:absolute;left:8px;right:42px;bottom:8px;margin:0;padding:7px 10px;border-radius:8px;background:rgba(0,0,0,.72);font-size:12px;line-height:1.35;color:#e8e5df;z-index:2;cursor:auto}
+.compare .credit{position:absolute;left:8px;right:42px;bottom:8px;margin:0;padding:7px 10px;border-radius:6px;background:rgba(10,8,6,.78);font-size:12px;line-height:1.35;color:#e8e1d4;z-index:2;cursor:auto}
 .compare .credit a{color:var(--fg)}
-@media (max-width:720px){.film-open{grid-template-columns:1fr;padding:10px}}
+@media (prefers-reduced-motion:reduce){.mount{transition:none}.mount:hover,.mount[aria-expanded=true]{transform:none}}
 /* Long documents */
 .doc p,.doc li{color:#d4d1cb}.doc ul{padding-left:20px}.doc li{margin:6px 0}
 .doc .updated{font:600 12px/1 var(--mono);letter-spacing:.08em;color:var(--muted);margin-bottom:28px}
@@ -104,7 +131,7 @@ select,button,input,textarea{font:inherit;color:var(--fg)}
 .site-foot{border-top:1px solid var(--line);margin-top:24px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
 .site-foot nav{display:flex;gap:16px;flex-wrap:wrap}.site-foot a{color:var(--muted);text-decoration:none}.site-foot a:hover{color:var(--fg)}
 @media (max-width:640px){.features{grid-template-columns:1fr}}
-@media (max-width:520px){h1{font-size:36px}.nav{gap:12px}.nav .optional{display:none}.films{grid-template-columns:repeat(2,1fr);gap:10px}.film b{font-size:15px}}
+@media (max-width:520px){h1{font-size:36px}.nav{gap:12px}.nav .optional{display:none}.films{grid-template-columns:repeat(2,1fr);gap:14px 12px}.mount .label{font-size:12px}.mount .note{font-size:11px}}
 `;
 
 export function siteHeader() {
@@ -119,12 +146,18 @@ export function siteFooter(year = new Date().getUTCFullYear()) {
 
 import { FILM_PREVIEWS } from './film-previews.js';
 
+// Black & white first, then colour, as the home page shows (and numbers) them.
+const SHOWN = [...FILM_PREVIEWS.filter((f) => !f.color), ...FILM_PREVIEWS.filter((f) => f.color)];
+
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-function filmCard(f) {
-  return `<button class="film" type="button" data-film="${esc(f.id)}" aria-expanded="false" aria-controls="film-open" aria-label="See ${esc(f.name)} before and after">
-<div class="tones">${f.tones.map((c) => `<i style="background:${esc(c)}"></i>`).join('')}</div>
-<b>${esc(f.name)}</b><span>${esc(f.blurb)}</span></button>`;
+/// A film as a 35mm slide in its mount: the name printed on the mount, the sample photo
+/// through the film in the window, the film's description underneath.
+function filmCard(f, n) {
+  return `<button class="film mount ${f.color ? 'color' : 'bw'}" type="button" data-film="${esc(f.id)}" aria-expanded="false" aria-controls="film-open" aria-label="See ${esc(f.name)} before and after">
+<span class="label">${esc(f.name)}<em>${String(n + 1).padStart(2, '0')}</em></span>
+<span class="window"><img src="/films/thumbs/${esc(f.id)}.jpg" alt="" width="420" height="280" loading="lazy" decoding="async"></span>
+<span class="note">${esc(f.blurb)}</span></button>`;
 }
 
 /// The before/after panel: opens in place, on the row under the tapped film, with the
@@ -133,20 +166,23 @@ function filmCard(f) {
 function filmViewer() {
   const data = JSON.stringify(FILM_PREVIEWS.map(({ id, name, blurb, iso, color }) => ({ id, name, blurb, iso, color }))).replace(/</g, '\\u003c');
   return `<div class="film-open" id="film-open" hidden>
+  <div class="slide" id="viewer-slide">
+  <button class="close" type="button" id="viewer-close" aria-label="Close">✕</button>
+  <div class="label"><span id="viewer-name"></span><em id="viewer-iso"></em></div>
+  <div class="window">
   <div class="compare" id="compare">
     <img class="before" id="viewer-before" alt="The photo as shot" width="1200" height="800">
     <img class="after" id="viewer-after" alt="" width="1200" height="800">
     <div class="handle" aria-hidden="true"><span></span></div>
-    <span class="tag left">BEFORE</span><span class="tag right" id="viewer-tag"></span>
+    <span class="tag left">AS SHOT</span><span class="tag right" id="viewer-tag"></span>
     <input type="range" id="slider" min="0" max="100" value="50" aria-label="Compare before and after">
     <button class="info" type="button" id="viewer-info" aria-label="About this photo" aria-expanded="false" aria-controls="viewer-credit">i</button>
     <p class="credit" id="viewer-credit" hidden></p>
   </div>
-  <div class="film-info">
-    <div><p class="eyebrow" id="viewer-iso"></p><h3 id="viewer-name"></h3><p class="muted" id="viewer-blurb"></p>
-    <p class="muted small">Drag across the photo to compare.</p></div>
-    <button class="close" type="button" id="viewer-close" aria-label="Close">✕</button>
   </div>
+  <div class="notes"><p id="viewer-blurb"></p></div>
+  </div>
+  <p class="hint">Drag across the photo to compare.</p>
 </div>
 <script>
 (() => {
@@ -189,7 +225,8 @@ function filmViewer() {
     after.alt = 'The photo through ' + f.name;
     document.getElementById('viewer-name').textContent = f.name;
     document.getElementById('viewer-blurb').textContent = f.blurb;
-    document.getElementById('viewer-iso').textContent = (f.color ? 'COLOR' : 'BLACK & WHITE') + ' · ISO ' + f.iso;
+    document.getElementById('viewer-iso').textContent = (f.color ? 'COLOR' : 'B&W') + ' · ISO ' + f.iso;
+    document.getElementById('viewer-slide').className = 'slide ' + (f.color ? 'color' : 'bw');
     document.getElementById('viewer-tag').textContent = f.name;
     const c = credits[f.color ? 'color' : 'bw'];
     credit.textContent = 'Sample photo by ';
@@ -223,8 +260,9 @@ function filmViewer() {
 }
 
 export function homeBody(store) {
-  const bw = FILM_PREVIEWS.filter((f) => !f.color).map(filmCard).join('');
-  const color = FILM_PREVIEWS.filter((f) => f.color).map(filmCard).join('');
+  const card = (f) => filmCard(f, SHOWN.indexOf(f));
+  const bw = FILM_PREVIEWS.filter((f) => !f.color).map(card).join('');
+  const color = FILM_PREVIEWS.filter((f) => f.color).map(card).join('');
   const get = store
     ? `<div class="inline-buttons"><a class="button primary" href="${store}">Get Film Exposures</a></div>`
     : '<div class="inline-buttons"><span class="button disabled">Coming soon to the App Store</span></div>';
@@ -243,9 +281,9 @@ export function homeBody(store) {
 </section>
 <h2 id="films">The films</h2>
 <p class="muted">Tap a film to see what it does to the same photo.</p>
-<h3>Black &amp; white</h3>
+<p class="shelf">Black &amp; white</p>
 <div class="films">${bw}</div>
-<h3>Color</h3>
+<p class="shelf">Color</p>
 <div class="films">${color}</div>
 <p class="muted small">Your photos stay on your phone. Nothing is uploaded unless you share a roll or put one on your profile.</p>
 ${filmViewer()}`;
