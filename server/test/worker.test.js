@@ -571,3 +571,58 @@ test('www sends people to the plain domain', async () => {
   assert.equal(res.status, 301);
   assert.equal(res.headers.get('location'), 'https://filmexposures.com/r/AbCdEfGh23?x=1');
 });
+
+// MARK: Sign in with Apple notifications
+
+const appleEvent = (apple, event, claims = {}) => apple.sign({
+  exp: undefined, iat: Math.floor(Date.now() / 1000), jti: 'j1', events: JSON.stringify(event), ...claims,
+});
+const notify = async (e, payload) => call(e, 'POST', '/api/apple/notifications', {
+  type: 'application/json', body: JSON.stringify({ payload }),
+});
+
+test('Apple notifications must come from Apple, for this app, recently', async () => {
+  const { e, apple } = await accountEnv();
+  const other = await fakeApple();
+  const event = { type: 'consent-revoked', sub: 'apple-1' };
+  assert.equal((await notify(e, await appleEvent(apple, event))).status, 200);
+  assert.equal((await notify(e, await appleEvent(other, event))).status, 401, 'someone else\'s key');
+  assert.equal((await notify(e, await appleEvent(apple, event, { aud: 'com.someone.else' }))).status, 401, 'other apps');
+  assert.equal((await notify(e, await appleEvent(apple, event, { iat: Math.floor(Date.now() / 1000) - 30 * 86400 }))).status, 401, 'old');
+  assert.equal((await notify(e, 'x.y.z')).status, 401);
+  assert.equal((await call(e, 'POST', '/api/apple/notifications', { type: 'application/json', body: '{}' })).status, 400);
+  // Apple's form-encoded body works too.
+  const form = `payload=${encodeURIComponent(await appleEvent(apple, event))}`;
+  assert.equal((await call(e, 'POST', '/api/apple/notifications', { type: 'application/x-www-form-urlencoded', body: form })).status, 200);
+});
+
+test('Leaving Sign in with Apple deletes an Apple-only account and its public rolls', async () => {
+  const { e, apple } = await accountEnv();
+  const { token, me } = await signIn(e, apple, 'apple-1', 'Dave');
+  const now = Date.now();
+  const roll = await liveRoll(e, 2, token, now);
+  assert.equal((await call(e, 'GET', `/r/${roll.id}/roll.json`, { now })).status, 200);
+
+  assert.equal((await notify(e, await appleEvent(apple, { type: 'email-disabled', sub: 'apple-1' }))).status, 200);
+  assert.equal((await call(e, 'GET', '/api/me', { account: token })).status, 200, 'email events change nothing');
+
+  assert.equal((await notify(e, await appleEvent(apple, { type: 'account-delete', sub: 'apple-1' }))).status, 200);
+  assert.equal((await call(e, 'GET', '/api/me', { account: token })).status, 401, 'signed out');
+  assert.equal((await call(e, 'GET', `/u/${me.id}/profile.json`)).status, 404, 'profile gone');
+  assert.equal((await call(e, 'GET', `/r/${roll.id}/roll.json`, { now })).status, 404, 'rolls gone');
+  // Signing in with Apple again starts a new account.
+  assert.notEqual((await signIn(e, apple, 'apple-1', 'Dave')).me.id, me.id);
+});
+
+test('Leaving Sign in with Apple keeps an account that has another sign-in', async () => {
+  const { e, apple, google } = await socialEnv();
+  const { token, me } = await signIn(e, apple, 'apple-1', 'Dave');
+  assert.equal((await googleIn(e, google, 'g-1', {}, token)).status, 200);
+
+  assert.equal((await notify(e, await appleEvent(apple, { type: 'consent-revoked', sub: 'apple-1' }))).status, 200);
+  const after = await (await call(e, 'GET', '/api/me', { account: token })).json();
+  assert.equal(after.id, me.id);
+  assert.deepEqual(after.logins, ['google']);
+  assert.equal((await (await googleIn(e, google, 'g-1')).json()).me.id, me.id, 'Google still signs in');
+  assert.notEqual((await signIn(e, apple, 'apple-1', 'Dave')).me.id, me.id, 'Apple no longer does');
+});

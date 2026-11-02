@@ -20,6 +20,8 @@
 //        (signed in already? the same calls add that sign-in to your account instead)
 //   POST /api/me/avatar/use { provider }    go back to your Google or Facebook photo (account)
 //   POST /api/auth/signout                  forget this session              (account)
+//   POST /api/apple/notifications           Apple: someone stopped using Sign in with Apple
+//        here or deleted their Apple Account; that sign-in (or the whole account) is removed
 //   GET|PUT|DELETE /api/me                  your profile: { name } / delete your account (account)
 //   PUT|DELETE /api/me/avatar               your headshot (JPEG)             (account)
 //   POST /api/me/terms                      agree to the rules for public rolls (account)
@@ -141,6 +143,7 @@ export async function route(request, env, now = Date.now()) {
   }
   if (path === '/api/me/avatar/use' && method === 'POST') return useProviderPhoto(request, env, url);
   if (path === '/api/auth/signout' && method === 'POST') return signOut(request, env);
+  if (path === '/api/apple/notifications' && method === 'POST') return appleNotification(request, env, now);
   if (path === '/api/me' && method === 'GET') return withUser(request, env, (user) => json(200, mePayload(user, url)));
   if (path === '/api/me' && method === 'PUT') return updateMe(request, env, url);
   if (path === '/api/me' && method === 'DELETE') return deleteAccount(request, env);
@@ -626,19 +629,60 @@ async function updateAvatar(request, env, url, upload) {
 /// likes, its headshot and its sessions.
 async function deleteAccount(request, env) {
   return withUser(request, env, async (user) => {
-    for await (const keys of listKeys(env, `users/${user.id}/`)) {
-      for (const key of keys) {
-        const parts = key.split('/');
-        if (parts[2] === 'rolls') await deleteRoll(env, parts[3]);
-        else if (parts[2] === 'likes') await env.ROLLS.delete(`likes/${parts[3]}/${parts[4]}/${user.id}`);
-        else if (parts[2] === 'sessions') await env.ROLLS.delete(`sessions/${parts[3]}.json`);
-      }
-    }
-    await deletePrefix(env, `users/${user.id}/`);
-    const keys = Object.values(logins(user)).map((key) => `accounts/${key}.json`);
-    await env.ROLLS.delete([`users/${user.id}.json`, ...keys]);
+    await removeUser(env, user);
     return json(200, { ok: true });
   });
+}
+
+async function removeUser(env, user) {
+  for await (const keys of listKeys(env, `users/${user.id}/`)) {
+    for (const key of keys) {
+      const parts = key.split('/');
+      if (parts[2] === 'rolls') await deleteRoll(env, parts[3]);
+      else if (parts[2] === 'likes') await env.ROLLS.delete(`likes/${parts[3]}/${parts[4]}/${user.id}`);
+      else if (parts[2] === 'sessions') await env.ROLLS.delete(`sessions/${parts[3]}.json`);
+    }
+  }
+  await deletePrefix(env, `users/${user.id}/`);
+  const keys = Object.values(logins(user)).map((key) => `accounts/${key}.json`);
+  await env.ROLLS.delete([`users/${user.id}.json`, ...keys]);
+}
+
+/// Sign in with Apple's server-to-server notifications. When someone stops using Sign in
+/// with Apple for this app (consent-revoked) or deletes their Apple Account (account-delete),
+/// that sign-in comes off their account; if it was their only one, the account is deleted
+/// like DELETE /api/me. Email events are ignored (no email addresses are kept).
+async function appleNotification(request, env, now) {
+  const text = await request.text().catch(() => '');
+  let payload = null;
+  try { payload = JSON.parse(text).payload; } catch { payload = new URLSearchParams(text).get('payload'); }
+  if (typeof payload !== 'string' || payload.length > 8000) return json(400, { error: 'expected a payload' });
+  const keys = await signingKeys(env, 'APPLE', 'https://appleid.apple.com/auth/keys', now);
+  const claims = await verifyJWT(payload, keys, [APPLE_ISSUER], [env.APPLE_AUDIENCE || APPLE_AUDIENCE], now, { notification: true });
+  if (!claims) return json(401, { error: 'not from Apple' });
+  let event = claims.events;
+  if (typeof event === 'string') { try { event = JSON.parse(event); } catch { event = null; } }
+  if (!event || typeof event.sub !== 'string' || !event.sub) return json(400, { error: 'no event' });
+  if (event.type !== 'consent-revoked' && event.type !== 'account-delete') return json(200, { ok: true });
+
+  const key = await sha256(`apple:${event.sub}`);
+  const link = await env.ROLLS.get(`accounts/${key}.json`);
+  if (!link) return json(200, { ok: true });
+  const user = await getUser(env, JSON.parse(await link.text()).id);
+  if (!user) {
+    await env.ROLLS.delete(`accounts/${key}.json`);
+    return json(200, { ok: true });
+  }
+  const others = Object.keys(logins(user)).filter((p) => p !== 'apple' && logins(user)[p]);
+  if (others.length === 0) {
+    await removeUser(env, user);
+  } else {
+    delete logins(user).apple;
+    if (user.photos) delete user.photos.apple;
+    await putUser(env, user);
+    await env.ROLLS.delete(`accounts/${key}.json`);
+  }
+  return json(200, { ok: true });
 }
 
 /// Someone's public rolls, newest first (hidden and expired ones left out).
@@ -721,7 +765,9 @@ async function signingKeys(env, name, href, now) {
 
 /// The claims of an RS256 identity token, if one of `keys` signed it, it's from one of
 /// `issuers` for one of `audiences`, and it hasn't expired; otherwise null.
-async function verifyJWT(token, keys, issuers, audiences, now) {
+/// With { notification: true } (Apple's server-to-server events, which carry no sub or
+/// exp of their own) it instead needs an issue time from the last week.
+async function verifyJWT(token, keys, issuers, audiences, now, { notification = false } = {}) {
   const parts = token.split('.');
   if (parts.length !== 3) return null;
   let header, claims;
@@ -745,6 +791,13 @@ async function verifyJWT(token, keys, issuers, audiences, now) {
   }
   const aud = [].concat(claims.aud);
   if (!issuers.includes(claims.iss) || !aud.some((a) => audiences.includes(a))) return null;
+  if (notification) {
+    if (typeof claims.iat !== 'number') return null;
+    const age = now - claims.iat * 1000;
+    if (age > 7 * 24 * 60 * 60 * 1000 || age < -5 * 60 * 1000) return null;
+    if (typeof claims.exp === 'number' && claims.exp * 1000 <= now) return null;
+    return claims;
+  }
   if (typeof claims.sub !== 'string' || !claims.sub) return null;
   if (typeof claims.exp !== 'number' || claims.exp * 1000 <= now) return null;
   return claims;
