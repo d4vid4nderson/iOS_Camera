@@ -15,23 +15,29 @@ import UIKit
 enum FilmCodeCard {
     static let size = CGSize(width: 1080, height: 1350)   // 4:5, the portrait size feeds use
 
-    static func render(film: FilmStock, url: URL, photo: UIImage?) -> UIImage? {
+    /// Who shared the card: shown as a round headshot and a name.
+    struct Sharer {
+        var name: String
+        var avatar: UIImage?
+    }
+
+    static func render(film: FilmStock, url: URL, photo: UIImage?, sharer: Sharer? = nil) -> UIImage? {
         guard let modules = modules(for: url.absoluteString) else { return nil }
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         format.opaque = true
         return UIGraphicsImageRenderer(size: size, format: format).image { ctx in
             if let photo {
-                drawPhotoCard(film: film, photo: photo, modules: modules, in: ctx.cgContext)
+                drawPhotoCard(film: film, photo: photo, sharer: sharer, modules: modules, in: ctx.cgContext)
             } else {
-                drawToneCard(film: film, modules: modules, in: ctx.cgContext)
+                drawToneCard(film: film, sharer: sharer, modules: modules, in: ctx.cgContext)
             }
         }
     }
 
     // MARK: Layouts
 
-    private static func drawPhotoCard(film: FilmStock, photo: UIImage, modules: [[Bool]], in cg: CGContext) {
+    private static func drawPhotoCard(film: FilmStock, photo: UIImage, sharer: Sharer?, modules: [[Bool]], in cg: CGContext) {
         let background = UIColor(red: 0.961, green: 0.953, blue: 0.937, alpha: 1)
         let ink = UIColor(white: 0.067, alpha: 1)
         let muted = UIColor(red: 0.50, green: 0.486, blue: 0.463, alpha: 1)
@@ -68,14 +74,32 @@ enum FilmCodeCard {
         drawCode(modules, in: codeRect, ink: ink, paper: background, context: cg)
 
         let mark = UIFont.systemFont(ofSize: 22, weight: .semibold)
-        let markY = size.height - margin - mark.lineHeight
-        draw("EXPOSURES", font: mark, color: ink, at: CGPoint(x: margin, y: markY), kern: 1)
         let markWidth = ("EXPOSURES" as NSString).size(withAttributes: [.font: mark, .kern: 1]).width
-        draw("Scan to load this film", font: .systemFont(ofSize: 22, weight: .regular), color: muted,
-             at: CGPoint(x: margin + markWidth + 14, y: markY))
+        if let sharer {
+            // Headshot + name, with the wordmark and the hint under the name.
+            let side: CGFloat = 76
+            let avatarRect = CGRect(x: margin, y: size.height - margin - side, width: side, height: side)
+            drawAvatar(sharer, in: avatarRect, fill: UIColor(white: 0.86, alpha: 1), initialsColor: ink)
+            let x = avatarRect.maxX + 18
+            let nameFont = UIFont.systemFont(ofSize: 28, weight: .semibold)
+            let textHeight = nameFont.lineHeight + mark.lineHeight + 2
+            let top = avatarRect.midY - textHeight / 2
+            if !sharer.name.isEmpty {
+                draw(sharer.name, font: nameFont, color: ink, at: CGPoint(x: x, y: top))
+            }
+            let lineY = sharer.name.isEmpty ? avatarRect.midY - mark.lineHeight / 2 : top + nameFont.lineHeight + 2
+            draw("EXPOSURES", font: mark, color: muted, at: CGPoint(x: x, y: lineY), kern: 1)
+            draw("Scan to load this film", font: .systemFont(ofSize: 22, weight: .regular), color: muted,
+                 at: CGPoint(x: x + markWidth + 12, y: lineY))
+        } else {
+            let markY = size.height - margin - mark.lineHeight
+            draw("EXPOSURES", font: mark, color: ink, at: CGPoint(x: margin, y: markY), kern: 1)
+            draw("Scan to load this film", font: .systemFont(ofSize: 22, weight: .regular), color: muted,
+                 at: CGPoint(x: margin + markWidth + 14, y: markY))
+        }
     }
 
-    private static func drawToneCard(film: FilmStock, modules: [[Bool]], in cg: CGContext) {
+    private static func drawToneCard(film: FilmStock, sharer: Sharer?, modules: [[Bool]], in cg: CGContext) {
         let background = UIColor(red: 0.055, green: 0.055, blue: 0.059, alpha: 1)
         let light = UIColor(red: 0.949, green: 0.941, blue: 0.925, alpha: 1)
         let muted = UIColor(red: 0.55, green: 0.54, blue: 0.525, alpha: 1)
@@ -84,8 +108,23 @@ enum FilmCodeCard {
         background.setFill()
         cg.fill(CGRect(origin: .zero, size: size))
 
-        draw("EXPOSURES", font: .systemFont(ofSize: 22, weight: .semibold), color: muted,
-             at: CGPoint(x: margin, y: 52), kern: 1)
+        let mark = UIFont.systemFont(ofSize: 22, weight: .semibold)
+        if let sharer {
+            // Headshot + name top left, the wordmark top right.
+            let side: CGFloat = 64
+            let avatarRect = CGRect(x: margin, y: 40, width: side, height: side)
+            drawAvatar(sharer, in: avatarRect, fill: UIColor(white: 0.22, alpha: 1), initialsColor: light)
+            if !sharer.name.isEmpty {
+                let nameFont = UIFont.systemFont(ofSize: 28, weight: .semibold)
+                draw(sharer.name, font: nameFont, color: light,
+                     at: CGPoint(x: avatarRect.maxX + 16, y: avatarRect.midY - nameFont.lineHeight / 2))
+            }
+            let markWidth = ("EXPOSURES" as NSString).size(withAttributes: [.font: mark, .kern: 1]).width
+            draw("EXPOSURES", font: mark, color: muted,
+                 at: CGPoint(x: size.width - margin - markWidth, y: avatarRect.midY - mark.lineHeight / 2), kern: 1)
+        } else {
+            draw("EXPOSURES", font: mark, color: muted, at: CGPoint(x: margin, y: 52), kern: 1)
+        }
         let title = fitted(film.name, weight: .bold, size: 150, minSize: 64, width: size.width - 2 * margin)
         let titleTop: CGFloat = 150 + (150 - title.pointSize) * 0.6
         draw(film.name, font: title, color: light, at: CGPoint(x: margin - 5, y: titleTop), kern: -title.pointSize * 0.025)
@@ -114,6 +153,27 @@ enum FilmCodeCard {
     }
 
     // MARK: Pieces
+
+    /// A round headshot, or the name's initials on a plain disc.
+    private static func drawAvatar(_ sharer: Sharer, in rect: CGRect, fill: UIColor, initialsColor: UIColor) {
+        let circle = UIBezierPath(ovalIn: rect)
+        if let avatar = sharer.avatar {
+            UIGraphicsGetCurrentContext()?.saveGState()
+            circle.addClip()
+            avatar.draw(in: rect)
+            UIGraphicsGetCurrentContext()?.restoreGState()
+        } else {
+            fill.setFill()
+            circle.fill()
+            let initials = sharer.name.split(separator: " ").prefix(2)
+                .compactMap { $0.first(where: { $0.isLetter || $0.isNumber }) }
+                .map { String($0).uppercased() }.joined()
+            let font = UIFont.systemFont(ofSize: rect.height * 0.38, weight: .semibold)
+            let textSize = (initials as NSString).size(withAttributes: [.font: font])
+            draw(initials, font: font, color: initialsColor,
+                 at: CGPoint(x: rect.midX - textSize.width / 2, y: rect.midY - textSize.height / 2))
+        }
+    }
 
     private static func draw(_ text: String, font: UIFont, color: UIColor, at point: CGPoint, kern: CGFloat = 0) {
         (text as NSString).draw(at: point, withAttributes: [.font: font, .foregroundColor: color, .kern: kern])
