@@ -572,6 +572,21 @@ test('www sends people to the plain domain', async () => {
   assert.equal(res.headers.get('location'), 'https://filmexposures.com/r/AbCdEfGh23?x=1');
 });
 
+test('the home page script parses', async () => {
+  const page = await (await call(env(), 'GET', '/')).text();
+  const scripts = [...page.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+  assert.ok(scripts.length >= 1, 'has the film viewer script');
+  for (const code of scripts) assert.doesNotThrow(() => new Function(code), 'script is valid JavaScript');
+  assert.match(page, /data-film="tide200"/);
+  assert.equal((page.match(/data-film="/g) || []).length, 22, 'all 22 films are listed');
+});
+
+test('the terms carry the promises to photographers', async () => {
+  const page = await (await call(env(), 'GET', '/terms')).text();
+  assert.match(page, /We always credit photographers/);
+  assert.match(page, /never profit from selling photography or other people&#39;s art|never profit from selling photography or other people's art/);
+});
+
 // MARK: Sign in with Apple notifications
 
 const appleEvent = (apple, event, claims = {}) => apple.sign({
