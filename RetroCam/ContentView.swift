@@ -443,7 +443,7 @@ struct ContentView: View {
             Text("LOADING FILM…").font(.mono(13)).foregroundStyle(.secondary)
         case .unauthorized:
             VStack(spacing: 12) {
-                Text("RetroCam needs camera access.").font(.mono(13))
+                Text("Exposures needs camera access.").font(.mono(13))
                 Button("Open Settings") {
                     if let url = URL(string: UIApplication.openSettingsURLString) {
                         UIApplication.shared.open(url)

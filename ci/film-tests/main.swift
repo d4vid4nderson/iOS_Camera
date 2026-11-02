@@ -143,11 +143,11 @@ check(oldRoll.develop == .instant && oldRoll.finishedAt == nil && oldRoll.frames
 var recipe = FilmStock.lith
 recipe.name = "MY LITH"; recipe.effect = .swirl; recipe.effectAmount = 0.7; recipe.contrast = 0.81
 let link = FilmCode.url(for: recipe)!
-check(link.scheme == "mono36" && link.absoluteString.count < 1500, "film link is compact (\(link.absoluteString.count) chars)")
+check(link.scheme == "exposures" && link.absoluteString.count < 1500, "film link is compact (\(link.absoluteString.count) chars)")
 let received = FilmCode.film(from: link)!
 check(received.isCustom && received.id != recipe.id && received.name == "MY LITH", "received film is a new custom film")
 check(near(received.contrast, 0.81) && received.effect == .swirl && received.tone == recipe.tone, "every setting survives the link")
-check(FilmCode.film(from: URL(string: "mono36://film?d=garbage")!) == nil, "damaged links are rejected")
+check(FilmCode.film(from: URL(string: "exposures://film?d=garbage")!) == nil, "damaged links are rejected")
 check(FilmCode.film(from: URL(string: "https://example.com/film?d=abc")!) == nil, "other links are ignored")
 var shareLib = FilmLibrary()
 shareLib.add(received)

@@ -1,13 +1,15 @@
 import Photos
 
-/// Files each roll into its own album ("Roll 07 · CLASSIC 400") inside a "Mono36" folder
+/// Files each roll into its own album ("Roll 07 · CLASSIC 400") inside an "Exposures" folder
 /// in Photos. Needs full Photos access; with limited or add-only access the shot is saved
 /// to the library without an album, as before.
 ///
 /// Saves run one at a time (see `CameraModel`), so two frames finishing together can't
 /// both create the roll's album.
 enum RollAlbums {
-    static let folderTitle = "Mono36"
+    static let folderTitle = "Exposures"
+    /// The folder's name before the app was renamed; renamed in place when found.
+    private static let legacyFolderTitles = ["Mono36"]
     private static let albumsKey = "roll.albums"   // roll number -> album local identifier
 
     enum Outcome {
@@ -37,7 +39,7 @@ enum RollAlbums {
         return .filed
     }
 
-    /// The roll's album, created (inside the Mono36 folder) the first time it's needed.
+    /// The roll's album, created (inside the Exposures folder) the first time it's needed.
     private static func album(for roll: Roll) async throws -> PHAssetCollection {
         var ids = UserDefaults.standard.dictionary(forKey: albumsKey) as? [String: String] ?? [:]
         let key = String(roll.number)
@@ -46,7 +48,7 @@ enum RollAlbums {
             return existing
         }
 
-        let folder = existingFolder()
+        let folder = try await currentFolder()
         var albumID: String?
         try await PHPhotoLibrary.shared().performChanges {
             let albumRequest = PHAssetCollectionChangeRequest.creationRequestForAssetCollection(withTitle: roll.albumTitle)
@@ -67,9 +69,23 @@ enum RollAlbums {
         return created
     }
 
-    private static func existingFolder() -> PHCollectionList? {
+    private static func folder(titled title: String) -> PHCollectionList? {
         let options = PHFetchOptions()
-        options.predicate = NSPredicate(format: "localizedTitle == %@", folderTitle)
+        options.predicate = NSPredicate(format: "localizedTitle == %@", title)
         return PHCollectionList.fetchCollectionLists(with: .folder, subtype: .regularFolder, options: options).firstObject
+    }
+
+    /// The Exposures folder if there is one. A folder from before the rename ("Mono36") is
+    /// renamed in place, so its roll albums stay together.
+    private static func currentFolder() async throws -> PHCollectionList? {
+        if let existing = folder(titled: folderTitle) { return existing }
+        for legacy in legacyFolderTitles {
+            guard let old = folder(titled: legacy) else { continue }
+            try await PHPhotoLibrary.shared().performChanges {
+                PHCollectionListChangeRequest(for: old)?.title = folderTitle
+            }
+            return folder(titled: folderTitle) ?? old
+        }
+        return nil
     }
 }

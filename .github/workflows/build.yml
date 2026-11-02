@@ -42,8 +42,8 @@ jobs:
         run: |
           plist=build/DerivedData/Build/Products/Release-iphoneos/RetroCam.app/Info.plist
           plutil -p "$plist"
-          # Film recipe links (mono36://) need the URL type merged from Config/Info.plist.
-          plutil -p "$plist" | grep -q '"mono36"' || { echo "mono36 URL scheme missing"; exit 1; }
+          # Film recipe links (exposures://) need the URL type merged from Config/Info.plist.
+          plutil -p "$plist" | grep -q '"exposures"' || { echo "exposures URL scheme missing"; exit 1; }
 
       - name: Upload build log
         if: failure()

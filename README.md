@@ -1,6 +1,6 @@
-# RetroCam
+# Exposures
 
-A black & white film camera for iPhone. SwiftUI + AVFoundation + Core Image, no dependencies.
+A film camera for iPhone (formerly RetroCam / Mono36; the Xcode project and bundle ID keep the old name).  SwiftUI + AVFoundation + Core Image, no dependencies.
 
 ## What it does
 - Live viewfinder rendered through the film look on the GPU (Metal + Core Image), so what you see is what you get.

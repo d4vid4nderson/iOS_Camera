@@ -1,10 +1,10 @@
 import Foundation
 
 /// Share a film's whole recipe (filter, curve, toning, grain, lens, FX) as a link or QR
-/// code: mono36://film?d=<code>. The code is the film's JSON, zlib-compressed and
+/// code: exposures://film?d=<code>. The code is the film's JSON, zlib-compressed and
 /// base64url-encoded, so it fits comfortably in a QR code.
 enum FilmCode {
-    static let scheme = "mono36"
+    static let scheme = "exposures"
 
     static func url(for film: FilmStock) -> URL? {
         var shared = film

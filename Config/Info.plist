@@ -11,7 +11,7 @@
 			<string>com.davidanderson.retrocam.film</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>mono36</string>
+				<string>exposures</string>
 			</array>
 		</dict>
 	</array>

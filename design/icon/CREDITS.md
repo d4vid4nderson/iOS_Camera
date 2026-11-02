@@ -1,6 +1,6 @@
 # App icon credit
 
-The Mono36 app icon is **"iPhone replacement icon-camera"** by **hehedavid**
+The Exposures app icon (formerly Mono36) is **"iPhone replacement icon-camera"** by **hehedavid**
 (Spacedesign, heysd.com), published 21 Feb 2011:
 https://www.deviantart.com/hehedavid/art/iPhone-replacement-icon-camera-198311019
 

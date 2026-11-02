@@ -9,7 +9,7 @@ private extension Font {
 }
 
 /// Share a film's recipe: a QR code a friend scans with their iPhone camera, or a link
-/// to send. Either opens Mono36 and offers to add the film.
+/// to send. Either opens Exposures and offers to add the film.
 struct FilmShareSheet: View {
     let film: FilmStock
     let accent: Color
@@ -38,7 +38,7 @@ struct FilmShareSheet: View {
                     .frame(maxWidth: 240)
                     .accessibilityLabel("QR code for \(film.name)")
 
-                Text("Scan with the iPhone camera to add this film to Mono36. Every setting comes with it.")
+                Text("Scan with the iPhone camera to add this film to Exposures. Every setting comes with it.")
                     .font(.mono(10)).foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)

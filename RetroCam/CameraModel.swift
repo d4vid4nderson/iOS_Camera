@@ -402,7 +402,7 @@ final class CameraModel: NSObject, ObservableObject {
         library.update(stock)
     }
 
-    /// Add a film someone shared with you (from a mono36:// link or QR code) and load it.
+    /// Add a film someone shared with you (from an exposures:// link or QR code) and load it.
     func addSharedFilm(_ film: FilmStock) {
         library.add(film)
         selectFilm(id: film.id)
