@@ -29,8 +29,7 @@ enum ContactSheet {
             ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
 
             // Header: roll, film, date.
-            var title = String(format: "FILM EXPOSURES   ROLL %02d", roll.number)
-            if let name = roll.name { title += "   " + name.uppercased() }
+            var title = "FILM EXPOSURES   " + roll.title.uppercased()
             if let film = roll.film { title += "   \(film)" }
             if let started = roll.started {
                 title += "   " + started.formatted(.dateTime.month(.abbreviated).day().year()).uppercased()

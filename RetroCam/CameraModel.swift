@@ -589,14 +589,52 @@ final class CameraModel: NSObject, ObservableObject {
 
     /// Wind on to a fresh roll (its album is made when its first frame is saved). Works
     /// before frame 36 too: the rest of the old roll stays blank.
+    /// Finish the roll in the camera (it develops, if it waits for that) and load a new one.
     func rewindRoll() {
         guard roll.frames > 0 else { return }
         var finished = roll
         finished.finish()
         RollStore.updateInfo(finished)
-        roll = finished.next()
+        roll = Roll(number: freshRollNumber)
         rollsVersion += 1
         developReadyRolls()
+    }
+
+    /// Load a new roll, leaving the one in the camera part-shot to come back to.
+    func loadNewRoll() {
+        guard roll.frames > 0 else { return }
+        RollStore.updateInfo(roll)
+        roll = Roll(number: freshRollNumber)
+        rollsVersion += 1
+    }
+
+    /// Part-shot rolls you can put back in the camera (not the one in it), newest first.
+    func openRolls() -> [Roll] {
+        RollStore.rolls().filter { $0.isOpen && $0.number != roll.number }
+    }
+
+    /// Put a part-shot roll back in the camera to carry on shooting it, with the film it
+    /// was last shot on. The roll that was in the camera stays part-shot.
+    func loadRoll(_ number: Int) {
+        guard number != roll.number else { return }
+        guard developing == 0 else {
+            message = "Wait for the last frame to finish developing, then switch rolls."
+            return
+        }
+        guard let stored = RollStore.rolls().first(where: { $0.number == number }), stored.isOpen else { return }
+        if roll.frames > 0 { RollStore.updateInfo(roll) }
+        roll = stored
+        if let last = RollStore.films(of: number).max(by: { $0.key < $1.key })?.value,
+           library.current(id: last) != nil, last != stock.id {
+            selectFilm(id: last)
+        }
+        rollsVersion += 1
+        message = "\(stored.title.uppercased()) LOADED · \(stored.frames)/\(Roll.length)"
+    }
+
+    /// A number no roll has yet.
+    private var freshRollNumber: Int {
+        Roll.freshNumber(after: RollStore.rolls().map(\.number) + [roll.number])
     }
 
     /// Name a roll ("Beach day"); an empty name goes back to just its number. Renames its
@@ -633,7 +671,8 @@ final class CameraModel: NSObject, ObservableObject {
             message = "Wait for the last frame to finish developing, then delete the roll."
             return
         }
-        let name = String(format: "ROLL %02d", number)
+        let name = (RollStore.rolls().first { $0.number == number }?.title
+                    ?? (number == roll.number ? roll.title : String(format: "Roll %02d", number))).uppercased()
         let previous = saveChain
         saveChain = Task {
             await previous?.value
@@ -661,7 +700,7 @@ final class CameraModel: NSObject, ObservableObject {
                 return
             }
             await MainActor.run {
-                if number == self.roll.number, self.roll.frames > 0 { self.roll = self.roll.next() }
+                if number == self.roll.number, self.roll.frames > 0 { self.roll = Roll(number: self.freshRollNumber) }
                 self.rollsVersion += 1
                 self.lastPrint = RollStore.latestThumbnail()
                 self.message = "\(name)\(photosNote) DELETED"
@@ -675,7 +714,7 @@ final class CameraModel: NSObject, ObservableObject {
         let previous = saveChain
         saveChain = Task {
             await previous?.value
-            var developed: [Int] = []
+            var developed: [String] = []
             for stored in RollStore.rolls() where stored.isDeveloped() {
                 let waiting = RollStore.pendingFrames(of: stored.number)
                 guard !waiting.isEmpty else { continue }
@@ -689,13 +728,13 @@ final class CameraModel: NSObject, ObservableObject {
                         break   // keep the rest waiting; try again next time
                     }
                 }
-                developed.append(stored.number)
+                developed.append(stored.title.uppercased())
             }
             await MainActor.run {
                 self.rollsVersion += 1
                 guard !developed.isEmpty else { return }
                 self.lastPrint = RollStore.latestThumbnail()
-                let names = developed.sorted().map { String(format: "ROLL %02d", $0) }.joined(separator: ", ")
+                let names = developed.joined(separator: ", ")
                 self.message = "\(names) \(developed.count == 1 ? "HAS" : "HAVE") DEVELOPED"
             }
         }
