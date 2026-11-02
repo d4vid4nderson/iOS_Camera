@@ -190,8 +190,9 @@ struct ContentView: View {
                 showingPrint = true
             } label: {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(String(format: "ROLL %02d", camera.roll.number))
+                    Text(camera.roll.name?.uppercased() ?? String(format: "ROLL %02d", camera.roll.number))
                         .font(.mono(8, .semibold)).foregroundStyle(.secondary)
+                        .lineLimit(1)
                     Text(String(format: "%02d", camera.framesShot) + "/\(CameraModel.rollLength)")
                         .font(.mono(15, .bold)).foregroundStyle(accent)
                         .contentTransition(.numericText())

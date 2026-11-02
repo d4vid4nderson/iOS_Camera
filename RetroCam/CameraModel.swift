@@ -599,6 +599,25 @@ final class CameraModel: NSObject, ObservableObject {
         developReadyRolls()
     }
 
+    /// Name a roll ("Beach day"); an empty name goes back to just its number. Renames its
+    /// album in Photos too ("Roll 07 · Beach day").
+    func renameRoll(_ number: Int, to raw: String) {
+        let name = Roll.cleanName(raw)
+        // The camera's copy rewrites roll.json with every frame, so it has to carry the name too.
+        if number == roll.number { roll.name = name }
+        guard var target = RollStore.rolls().first(where: { $0.number == number }) ?? (number == roll.number ? roll : nil)
+        else { return }
+        target.name = name
+        RollStore.updateInfo(target)
+        rollsVersion += 1
+        let title = target.albumTitle
+        let previous = saveChain
+        saveChain = Task {
+            await previous?.value
+            try? await RollAlbums.rename(rollNumber: number, to: title)
+        }
+    }
+
     /// The film (as you have it now) most of a roll was shot on, for sharing it with the
     /// roll. nil for rolls shot before films were recorded per frame.
     func film(ofRoll number: Int) -> FilmStock? {

@@ -83,7 +83,7 @@ enum RollShare {
                       progress: @escaping @MainActor (Int, Int) -> Void) async throws -> (Record, UIImage?) {
         guard let base = ShareLinks.base else { throw ShareError.notConfigured }
         guard !frames.isEmpty else { throw ShareError.server("There are no developed frames to share yet.") }
-        let title = String(format: "Roll %02d", roll.number)
+        let title = roll.title
         let showProfile = profile.showOnCards && !profile.isEmpty
 
         var filmInfo: [String: Any] = [:]
@@ -156,7 +156,7 @@ enum RollShare {
         let frames = RollStore.frames(of: roll.number).filter { !RollStore.isPending(roll: roll.number, frame: $0) }
         let thumbs = frames.prefix(9).compactMap { UIImage(contentsOfFile: RollStore.thumbURL(roll: roll.number, frame: $0).path) }
         let showProfile = profile.showOnCards && !profile.isEmpty
-        return RollCard.render(title: String(format: "Roll %02d", roll.number), filmName: film?.name ?? roll.film,
+        return RollCard.render(title: roll.title, filmName: film?.name ?? roll.film,
                                frameCount: frames.count, frames: Array(thumbs), url: record.url,
                                sharer: showProfile ? FilmCodeCard.Sharer(name: profile.name, avatar: profile.photo) : nil)
     }

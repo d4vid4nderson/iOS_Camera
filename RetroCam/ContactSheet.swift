@@ -30,6 +30,7 @@ enum ContactSheet {
 
             // Header: roll, film, date.
             var title = String(format: "EXPOSURES   ROLL %02d", roll.number)
+            if let name = roll.name { title += "   " + name.uppercased() }
             if let film = roll.film { title += "   \(film)" }
             if let started = roll.started {
                 title += "   " + started.formatted(.dateTime.month(.abbreviated).day().year()).uppercased()

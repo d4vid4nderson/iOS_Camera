@@ -32,6 +32,8 @@ struct RollViewer: View {
     @State private var uploading: (done: Int, total: Int)?
     @State private var shareRecord: RollShare.Record?
     @State private var unsharing = false
+    @State private var renaming: Roll?
+    @State private var nameDraft = ""
 
     private var roll: Roll? { rolls.first { $0.number == selected } }
     private var isInCamera: Bool { selected == camera.roll.number }
@@ -59,6 +61,7 @@ struct RollViewer: View {
         }
         .overlay {
             if let target = deleting { deleteCard(target) }
+            if let target = renaming { renameCard(target) }
             if let target = confirmingShare { shareCard(target) }
         }
         .preferredColorScheme(.dark)
@@ -78,8 +81,23 @@ struct RollViewer: View {
     private var header: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(roll?.albumTitle.uppercased() ?? String(format: "ROLL %02d", camera.roll.number))
-                    .font(.mono(15, .bold)).foregroundStyle(accent)
+                // Tap the title to name the roll.
+                Button {
+                    if let roll { startRenaming(roll) }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(roll?.albumTitle.uppercased() ?? String(format: "ROLL %02d", camera.roll.number))
+                            .font(.mono(15, .bold)).foregroundStyle(accent)
+                            .lineLimit(1)
+                        Image(systemName: "pencil")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(roll == nil)
+                .accessibilityHint("Rename this roll")
                 Text(subtitle).font(.mono(10)).foregroundStyle(.secondary)
             }
             Spacer()
@@ -196,6 +214,9 @@ struct RollViewer: View {
                         .disabled(makingSheet)
                 }
                 Spacer(minLength: 0)
+                if let roll {
+                    chip("RENAME", selected: false) { startRenaming(roll) }
+                }
                 if let roll, !frames.isEmpty {
                     deleteChip("DELETE ROLL") { withAnimation(.snappy(duration: 0.15)) { deleting = roll } }
                 }
@@ -264,6 +285,65 @@ struct RollViewer: View {
                 .foregroundStyle(Color(red: 1, green: 0.45, blue: 0.4))
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: Rename a roll
+
+    private func startRenaming(_ roll: Roll) {
+        nameDraft = roll.name ?? ""
+        withAnimation(.snappy(duration: 0.15)) { renaming = roll }
+    }
+
+    private func renameCard(_ target: Roll) -> some View {
+        ZStack(alignment: .top) {
+            Color.black.opacity(0.6).ignoresSafeArea()
+                .onTapGesture { withAnimation(.snappy(duration: 0.15)) { renaming = nil } }
+            VStack(alignment: .leading, spacing: 12) {
+                Text("NAME \(target.numberTitle.uppercased())").font(.mono(15, .bold)).foregroundStyle(accent)
+                TextField("", text: $nameDraft,
+                          prompt: Text("E.G. BEACH DAY").foregroundStyle(Color(white: 0.4)))
+                    .font(.mono(14, .semibold))
+                    .foregroundStyle(.white)
+                    .autocorrectionDisabled()
+                    .submitLabel(.done)
+                    .onSubmit { saveName(target) }
+                    .padding(.horizontal, 14).padding(.vertical, 11)
+                    .background(Capsule().fill(Color(white: 0.17)))
+                    .onChange(of: nameDraft) { _, new in
+                        if new.count > Roll.maxNameLength { nameDraft = String(new.prefix(Roll.maxNameLength)) }
+                    }
+                Text("Its album in Photos becomes \"\(previewTitle(target))\". The name also goes on the roll's contact sheet and share card.")
+                    .font(.mono(10)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                cardButton("SAVE", destructive: false) { saveName(target) }
+                if target.name != nil {
+                    cardButton("CLEAR NAME", destructive: false, quiet: true) {
+                        nameDraft = ""
+                        saveName(target)
+                    }
+                }
+                cardButton("CANCEL", destructive: false, quiet: true) {
+                    withAnimation(.snappy(duration: 0.15)) { renaming = nil }
+                }
+            }
+            .padding(18)
+            .background(RoundedRectangle(cornerRadius: 18).fill(Color(white: 0.11)))
+            .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color(white: 0.2), lineWidth: 1))
+            .padding(.horizontal, 22)
+            .padding(.top, 80)
+        }
+        .transition(.opacity)
+    }
+
+    private func previewTitle(_ target: Roll) -> String {
+        var preview = target
+        preview.name = Roll.cleanName(nameDraft)
+        return preview.albumTitle
+    }
+
+    private func saveName(_ target: Roll) {
+        camera.renameRoll(target.number, to: nameDraft)
+        withAnimation(.snappy(duration: 0.15)) { renaming = nil }
     }
 
     // MARK: Delete a roll
