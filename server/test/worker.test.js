@@ -492,3 +492,9 @@ test('version 4 colour codes carry unify', () => {
   assert.equal(v4.name, 'EARTH 200');
   assert.equal(v4.iso, 200);
 });
+
+test('www sends people to the plain domain', async () => {
+  const res = await route(new Request('https://www.filmexposures.com/r/AbCdEfGh23?x=1'), env());
+  assert.equal(res.status, 301);
+  assert.equal(res.headers.get('location'), 'https://filmexposures.com/r/AbCdEfGh23?x=1');
+});

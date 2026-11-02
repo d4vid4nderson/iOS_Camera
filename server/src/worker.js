@@ -60,6 +60,11 @@ export default {
 
 export async function route(request, env, now = Date.now()) {
   const url = new URL(request.url);
+  // www.filmexposures.com -> filmexposures.com, so every link has one address.
+  if (url.hostname.startsWith('www.')) {
+    url.hostname = url.hostname.slice(4);
+    return new Response(null, { status: 301, headers: { location: url.href } });
+  }
   const path = url.pathname.replace(/\/+$/, '') || '/';
   const method = request.method;
   let m;

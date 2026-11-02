@@ -9,7 +9,10 @@ compatibility_date = "2025-09-01"
 workers_dev = true
 # Serve the links at filmexposures.com (a Cloudflare custom domain: the deploy creates the
 # DNS record and certificate). The workers.dev address keeps working too.
-routes = [{ pattern = "filmexposures.com", custom_domain = true }]
+routes = [
+  { pattern = "filmexposures.com", custom_domain = true },
+  { pattern = "www.filmexposures.com", custom_domain = true },
+]
 
 [[r2_buckets]]
 binding = "ROLLS"
