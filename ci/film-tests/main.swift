@@ -12,7 +12,7 @@ func near(_ a: CGFloat, _ b: CGFloat, _ tol: CGFloat = 1e-6) -> Bool { abs(a - b
 // Built-in films: unique ids, sane values inside the ADJUST panel's ranges.
 let ids = FilmStock.all.map(\.id)
 check(Set(ids).count == ids.count, "film ids are unique")
-check(FilmStock.all.count == 15, "15 built-in films, got \(FilmStock.all.count)")
+check(FilmStock.all.count == 20, "20 built-in films (15 black & white, 5 colour), got \(FilmStock.all.count)")
 for f in FilmStock.all {
     check(!f.isCustom, "\(f.id) is not custom")
     check((0...1).contains(f.contrast), "\(f.id) contrast in range")
