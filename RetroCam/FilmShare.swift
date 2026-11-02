@@ -28,15 +28,13 @@ struct FilmShareSheet: View {
             Text(film.name).font(.mono(20, .bold)).foregroundStyle(accent)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            if let url, let qr = Self.qrImage(for: url) {
-                Image(uiImage: qr)
-                    .interpolation(.none)
+            if let url, let card = FilmCodeCard.render(film: film, url: url, accent: UIColor(accent)) {
+                Image(uiImage: card)
                     .resizable()
                     .scaledToFit()
-                    .padding(14)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.white))
-                    .frame(maxWidth: 240)
-                    .accessibilityLabel("QR code for \(film.name)")
+                    .clipShape(RoundedRectangle(cornerRadius: 18))
+                    .frame(maxHeight: 440)
+                    .accessibilityLabel("Share code for \(film.name)")
 
                 Text("Scan with the iPhone camera to add this film to Exposures. Every setting comes with it.")
                     .font(.mono(10)).foregroundStyle(.secondary)
@@ -44,9 +42,9 @@ struct FilmShareSheet: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 Button {
-                    sharing = ShareItems(items: [url, qr])
+                    sharing = ShareItems(items: [card, url])
                 } label: {
-                    Text("SEND LINK")
+                    Text("SHARE CODE")
                         .font(.mono(12, .bold))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
@@ -66,15 +64,5 @@ struct FilmShareSheet: View {
         .sheet(item: $sharing) { item in
             ActivityView(items: item.items).ignoresSafeArea()
         }
-    }
-
-    /// Black-on-white QR code, sharp at any size.
-    static func qrImage(for url: URL) -> UIImage? {
-        let filter = CIFilter.qrCodeGenerator()
-        filter.message = Data(url.absoluteString.utf8)
-        filter.correctionLevel = "M"
-        guard let code = filter.outputImage?.samplingNearest().transformed(by: CGAffineTransform(scaleX: 12, y: 12)),
-              let cg = CIContext().createCGImage(code, from: code.extent) else { return nil }
-        return UIImage(cgImage: cg)
     }
 }
