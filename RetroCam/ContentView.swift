@@ -71,13 +71,16 @@ struct ContentView: View {
                 // and the shutter stays close to the settings it works with.
                 Spacer(minLength: 0)
                 topPlate
+                    .padding(.horizontal, 16)
+                // Full screen width: the 3:4 frame is as big as the phone's width allows.
                 viewfinder
                     .overlay { panelLayer }
                 iconBar
+                    .padding(.horizontal, 12)
                 Spacer(minLength: 4).frame(maxHeight: 24)
                 controls
+                    .padding(.horizontal, 16)
             }
-            .padding(.horizontal, 16)
             .padding(.vertical, 8)
 
             if let message = camera.message {
@@ -305,7 +308,7 @@ struct ContentView: View {
             case .border: borderPicker
             }
         }
-        .padding(10)
+        .padding(Self.panelPadding)
         .background(RoundedRectangle(cornerRadius: 14).fill(Color(white: 0.11).opacity(0.94)))
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color(white: 0.25), lineWidth: 0.5))
     }
@@ -404,8 +407,7 @@ struct ContentView: View {
             }
         }
         .aspectRatio(3 / 4, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
-        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color(white: 0.25), lineWidth: 1))
+        .clipped()
     }
 
     @ViewBuilder
@@ -441,8 +443,10 @@ struct ContentView: View {
                     chip(option.name, selected: option == camera.lens) { camera.selectLens(option) }
                 }
             }
-            .padding(.horizontal, 2)
+            .padding(.horizontal, Self.scrollInset)
         }
+        .edgeFade(Self.scrollInset)
+        .padding(.horizontal, -Self.panelPadding)
         .sensoryFeedback(.selection, trigger: camera.lens)
     }
 
@@ -495,10 +499,12 @@ struct ContentView: View {
                             }
                     }
                 }
-                .padding(.horizontal, 2)
+                .padding(.horizontal, Self.scrollInset)
             }
+            .edgeFade(Self.scrollInset)
             .onAppear { proxy.scrollTo(camera.stock.id, anchor: .center) }
         }
+        .padding(.horizontal, -Self.panelPadding)
         .sensoryFeedback(.selection, trigger: camera.stock.id)
         .sensoryFeedback(.impact(weight: .light), trigger: managingFilm)
     }
@@ -696,21 +702,8 @@ struct ContentView: View {
 
     private var adjustPanel: some View {
         VStack(alignment: .leading, spacing: 10) {
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(AdjustParam.allCases) { param in
-                            smallChip(param.title, selected: param == adjusting) {
-                                withAnimation(.snappy(duration: 0.2)) { adjusting = param }
-                            }
-                            .id(param)
-                        }
-                    }
-                    .padding(.horizontal, 2)
-                }
-                .onAppear { proxy.scrollTo(adjusting, anchor: .center) }
-            }
-            .sensoryFeedback(.selection, trigger: adjusting)
+            adjustTabs
+                .sensoryFeedback(.selection, trigger: adjusting)
 
             adjustControl(adjusting)
                 .id(adjusting)
@@ -736,6 +729,48 @@ struct ContentView: View {
             }
         }
     }
+
+    /// Which setting the dial edits: text tabs with an accent underline, so they read as
+    /// navigation and not as another row of values.
+    private var adjustTabs: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 18) {
+                    ForEach(AdjustParam.allCases) { param in
+                        let on = param == adjusting
+                        Button {
+                            withAnimation(.snappy(duration: 0.2)) { adjusting = param }
+                        } label: {
+                            Text(param.title)
+                                .font(.mono(10, .bold))
+                                .foregroundStyle(on ? accent : Color(white: 0.55))
+                                .padding(.vertical, 6)
+                                .overlay(alignment: .bottom) {
+                                    Rectangle().fill(on ? accent : .clear).frame(height: 2)
+                                }
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .id(param)
+                    }
+                }
+                .padding(.horizontal, Self.scrollInset)
+            }
+            .edgeFade(Self.scrollInset)
+            .onAppear { proxy.scrollTo(adjusting, anchor: .center) }
+            .onChange(of: adjusting) { _, param in
+                withAnimation(.snappy(duration: 0.25)) { proxy.scrollTo(param, anchor: .center) }
+            }
+        }
+        .padding(.horizontal, -Self.panelPadding)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Color(white: 0.22)).frame(height: 0.5).padding(.horizontal, -Self.panelPadding)
+        }
+    }
+
+    /// Panel content padding, and how far scrolling rows run into it before fading out.
+    static let panelPadding: CGFloat = 10
+    static let scrollInset: CGFloat = 14
 
     private func beginSaving() {
         filmName = camera.stock.isCustom ? camera.stock.name : "MY " + camera.stock.shortName
@@ -787,9 +822,11 @@ struct ContentView: View {
                     smallChip(item[keyPath: label], selected: item == selected) { action(item) }
                 }
             }
-            .padding(.horizontal, 2)
+            .padding(.horizontal, Self.scrollInset)
             .padding(.vertical, 4)
         }
+        .edgeFade(Self.scrollInset)
+        .padding(.horizontal, -Self.panelPadding)
     }
 
     private func smallChip(_ text: String, selected: Bool, action: @escaping () -> Void) -> some View {
@@ -904,6 +941,22 @@ private extension FilmStock {
         case "lith": return "LITH"
         default: return String(name.split(separator: " ").first ?? "")
         }
+    }
+}
+
+private extension View {
+    /// Fade both ends of a horizontal scroller, so a clipped item reads as "more this
+    /// way" rather than as a mistake.
+    func edgeFade(_ width: CGFloat) -> some View {
+        mask(
+            HStack(spacing: 0) {
+                LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing)
+                    .frame(width: width)
+                Rectangle().fill(Color.black)
+                LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                    .frame(width: width)
+            }
+        )
     }
 }
 
