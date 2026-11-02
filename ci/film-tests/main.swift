@@ -207,7 +207,9 @@ food.expose(film: "CLASSIC 400")
 check(food.isOpen, "a part-shot roll can be loaded again")
 var finishedEarly = food
 finishedEarly.finish()
-check(!finishedEarly.isOpen, "a finished roll stays finished")
+check(finishedEarly.isOpen, "a roll finished early can go back in the camera")
+finishedEarly.reopen()
+check(finishedEarly.finishedAt == nil && finishedEarly.frames == food.frames, "reopening carries on where it stopped")
 var full = Roll(number: 4)
 for _ in 0..<Roll.length { full.expose(film: "CLASSIC 400") }
 check(!full.isOpen, "a full roll can't be loaded again")

@@ -621,8 +621,10 @@ final class CameraModel: NSObject, ObservableObject {
             message = "Wait for the last frame to finish developing, then switch rolls."
             return
         }
-        guard let stored = RollStore.rolls().first(where: { $0.number == number }), stored.isOpen else { return }
+        guard var stored = RollStore.rolls().first(where: { $0.number == number }), stored.isOpen else { return }
         if roll.frames > 0 { RollStore.updateInfo(roll) }
+        stored.reopen()
+        RollStore.updateInfo(stored)
         roll = stored
         if let last = RollStore.films(of: number).max(by: { $0.key < $1.key })?.value,
            library.current(id: last) != nil, last != stock.id {

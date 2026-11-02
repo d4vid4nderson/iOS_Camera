@@ -123,7 +123,7 @@ struct RollViewer: View {
         if isInCamera {
             parts.append("IN CAMERA")
         } else if roll.isOpen {
-            parts.append("PART-SHOT")
+            parts.append("\(Roll.length - roll.frames) FRAMES LEFT")
         }
         return parts.joined(separator: " · ")
     }
@@ -228,7 +228,7 @@ struct RollViewer: View {
                 }
                 Spacer(minLength: 0)
                 if let roll, roll.isOpen, !isInCamera {
-                    chip("LOAD IN CAMERA", selected: true) { load(roll.number) }
+                    chip("SHOOT THIS ROLL", selected: true) { load(roll.number) }
                 }
                 if let roll {
                     chip("RENAME", selected: false) { startRenaming(roll) }

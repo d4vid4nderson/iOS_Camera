@@ -69,8 +69,16 @@ struct Roll: Codable, Equatable {
 
     var isFinished: Bool { frames >= Self.length }
 
-    /// Part-shot and not finished: it can go back in the camera to carry on shooting.
-    var isOpen: Bool { frames > 0 && frames < Self.length && finishedAt == nil }
+    /// Part-shot with frames left: it can go back in the camera to carry on shooting, even
+    /// if it was finished early (loading it opens it again).
+    var isOpen: Bool { frames > 0 && frames < Self.length }
+
+    /// Back in the camera: a roll finished early carries on, and develops again when it's
+    /// finished next.
+    mutating func reopen() {
+        guard frames < Self.length else { return }
+        finishedAt = nil
+    }
 
     /// A number for a new roll that no roll already has.
     static func freshNumber(after existing: [Int]) -> Int { (existing.max() ?? 0) + 1 }
