@@ -62,21 +62,28 @@ select,button,input,textarea{font:inherit;color:var(--fg)}
 .features{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:12px 0 28px}
 .feature{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px}
 .feature h3{margin:0 0 8px;color:var(--accent)}.feature p{margin:0;color:#c9c6c0;font-size:15px}
-/* Before / after viewer */
-.viewer{border:1px solid var(--line);border-radius:18px;background:var(--panel);color:var(--fg);padding:18px;width:min(960px,94vw);max-height:94vh}
-.viewer::backdrop{background:rgba(0,0,0,.75)}
-.viewer-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
-.viewer h2{margin:0 0 4px}.viewer-head p{margin:0}.viewer .eyebrow{margin:0 0 6px}
-.close,.viewer-foot button{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--panel2);cursor:pointer;font-size:16px;flex:none}
-.compare{--split:50%;position:relative;margin:14px 0 10px;border-radius:12px;overflow:hidden;aspect-ratio:3/2;background:#000;user-select:none}
-.compare img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+/* Before / after, opened in place under the tapped film */
+.film[aria-expanded=true]{border-color:var(--accent);background:#1b1714}
+.film-open{grid-column:1/-1;background:var(--panel);border:1px solid var(--accent);border-radius:16px;padding:14px;display:grid;grid-template-columns:minmax(0,600px);justify-content:center;gap:12px}
+.film-open[hidden]{display:none}
+.film-info{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.film-info h3{margin:0 0 6px;font:700 22px/1.15 -apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif;letter-spacing:-.01em;color:var(--fg);text-transform:none}
+.film-info .eyebrow{margin:0 0 8px}.film-info p{margin:0 0 6px}
+.close{width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--panel2);cursor:pointer;font-size:14px;flex:none}
+.compare{--split:50%;position:relative;border-radius:10px;overflow:hidden;aspect-ratio:3/2;background:#000;user-select:none;-webkit-user-select:none;touch-action:none;cursor:ew-resize}
+.compare img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;-webkit-user-drag:none;pointer-events:none}
 .compare .after{clip-path:inset(0 0 0 var(--split))}
 .compare .handle{position:absolute;top:0;bottom:0;left:var(--split);width:2px;margin-left:-1px;background:var(--fg);pointer-events:none}
-.compare .handle span{position:absolute;top:50%;left:50%;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;background:var(--fg);box-shadow:0 2px 10px rgba(0,0,0,.5)}
-.compare .tag{position:absolute;top:10px;font:700 11px/1 var(--mono);letter-spacing:.1em;padding:6px 8px;border-radius:6px;background:rgba(0,0,0,.55);pointer-events:none}
-.compare .tag.left{left:10px}.compare .tag.right{right:10px;color:var(--accent)}
-.compare input[type=range]{position:absolute;inset:0;width:100%;height:100%;opacity:0;margin:0;cursor:ew-resize}
-.viewer-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:center}
+.compare .handle span{position:absolute;top:50%;left:50%;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;background:var(--fg);box-shadow:0 2px 10px rgba(0,0,0,.5)}
+.compare .tag{position:absolute;top:8px;font:700 10px/1 var(--mono);letter-spacing:.1em;padding:5px 7px;border-radius:6px;background:rgba(0,0,0,.55);pointer-events:none}
+.compare .tag.left{left:8px}.compare .tag.right{right:8px;color:var(--accent)}
+.compare input[type=range]{position:absolute;inset:0;width:100%;height:100%;opacity:0;margin:0;pointer-events:none}
+.compare:focus-within .handle span{outline:2px solid var(--accent);outline-offset:2px}
+.compare .info{position:absolute;right:8px;bottom:8px;width:26px;height:26px;border-radius:50%;border:1px solid rgba(255,255,255,.35);background:rgba(0,0,0,.55);color:var(--fg);font:italic 700 13px/1 Georgia,serif;cursor:pointer;z-index:2}
+.compare .info[aria-expanded=true]{background:var(--fg);color:#111}
+.compare .credit{position:absolute;left:8px;right:42px;bottom:8px;margin:0;padding:7px 10px;border-radius:8px;background:rgba(0,0,0,.72);font-size:12px;line-height:1.35;color:#e8e5df;z-index:2;cursor:auto}
+.compare .credit a{color:var(--fg)}
+@media (max-width:720px){.film-open{grid-template-columns:1fr;padding:10px}}
 /* Long documents */
 .doc p,.doc li{color:#d4d1cb}.doc ul{padding-left:20px}.doc li{margin:6px 0}
 .doc .updated{font:600 12px/1 var(--mono);letter-spacing:.08em;color:var(--muted);margin-bottom:28px}
@@ -115,64 +122,102 @@ import { FILM_PREVIEWS } from './film-previews.js';
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 function filmCard(f) {
-  return `<button class="film" type="button" data-film="${esc(f.id)}" aria-label="See ${esc(f.name)} before and after">
+  return `<button class="film" type="button" data-film="${esc(f.id)}" aria-expanded="false" aria-controls="film-open" aria-label="See ${esc(f.name)} before and after">
 <div class="tones">${f.tones.map((c) => `<i style="background:${esc(c)}"></i>`).join('')}</div>
 <b>${esc(f.name)}</b><span>${esc(f.blurb)}</span></button>`;
 }
 
-/// The before/after viewer: the same photo, as shot and through the film, with a slider
-/// between them. Arrow buttons (and the arrow keys) step through the films.
+/// The before/after panel: opens in place, on the row under the tapped film, with the
+/// photo as shot and through the film, a divider to drag, and the film's details under
+/// it. Black & white films are shown on one photo and colour films on another.
 function filmViewer() {
-  const data = JSON.stringify(FILM_PREVIEWS.map(({ id, name, blurb, iso }) => ({ id, name, blurb, iso }))).replace(/</g, '\\u003c');
-  return `<dialog class="viewer" id="viewer" aria-label="Film before and after">
-  <div class="viewer-head"><div><p class="eyebrow" id="viewer-iso"></p><h2 id="viewer-name"></h2><p class="muted" id="viewer-blurb"></p></div>
-  <button class="close" type="button" id="viewer-close" aria-label="Close">✕</button></div>
+  const data = JSON.stringify(FILM_PREVIEWS.map(({ id, name, blurb, iso, color }) => ({ id, name, blurb, iso, color }))).replace(/</g, '\\u003c');
+  return `<div class="film-open" id="film-open" hidden>
   <div class="compare" id="compare">
-    <img class="before" src="/films/before.jpg" alt="The photo as shot" width="1200" height="800">
+    <img class="before" id="viewer-before" alt="The photo as shot" width="1200" height="800">
     <img class="after" id="viewer-after" alt="" width="1200" height="800">
     <div class="handle" aria-hidden="true"><span></span></div>
     <span class="tag left">BEFORE</span><span class="tag right" id="viewer-tag"></span>
-    <input type="range" id="slider" min="0" max="100" value="50" aria-label="Drag to compare before and after">
+    <input type="range" id="slider" min="0" max="100" value="50" aria-label="Compare before and after">
+    <button class="info" type="button" id="viewer-info" aria-label="About this photo" aria-expanded="false" aria-controls="viewer-credit">i</button>
+    <p class="credit" id="viewer-credit" hidden></p>
   </div>
-  <div class="viewer-foot"><button type="button" id="prev" aria-label="Previous film">←</button>
-  <span class="muted small">Drag to compare. A preview of the film on a sample photo.</span>
-  <button type="button" id="next" aria-label="Next film">→</button></div>
-</dialog>
+  <div class="film-info">
+    <div><p class="eyebrow" id="viewer-iso"></p><h3 id="viewer-name"></h3><p class="muted" id="viewer-blurb"></p>
+    <p class="muted small">Drag across the photo to compare.</p></div>
+    <button class="close" type="button" id="viewer-close" aria-label="Close">✕</button>
+  </div>
+</div>
 <script>
 (() => {
   const films = ${data};
-  const dialog = document.getElementById('viewer');
-  const after = document.getElementById('viewer-after');
-  const slider = document.getElementById('slider');
+  // The sample photos: black & white films on an Italian street, colour films on a coast.
+  const credits = {
+    bw: { name: 'Lou Levit', url: 'https://unsplash.com/photos/umcc42T8fD4' },
+    color: { name: 'Stefan Kunze', url: 'https://unsplash.com/photos/_SmZSuZwkHg' },
+  };
+  const info = document.getElementById('viewer-info');
+  const credit = document.getElementById('viewer-credit');
+  const showCredit = (on) => { credit.hidden = !on; info.setAttribute('aria-expanded', String(on)); };
+  info.addEventListener('pointerdown', (e) => e.stopPropagation());
+  info.addEventListener('click', (e) => { e.stopPropagation(); showCredit(credit.hidden); });
+  credit.addEventListener('pointerdown', (e) => e.stopPropagation());
+  const panel = document.getElementById('film-open');
   const compare = document.getElementById('compare');
-  let index = 0;
+  const slider = document.getElementById('slider');
+  let current = null;
   const set = (v) => compare.style.setProperty('--split', v + '%');
-  const show = (i) => {
-    index = (i + films.length) % films.length;
-    const f = films[index];
+  const close = () => {
+    panel.hidden = true;
+    if (current) current.setAttribute('aria-expanded', 'false');
+    current = null;
+  };
+  const open = (card) => {
+    const f = films.find((x) => x.id === card.dataset.film);
+    if (!f) return;
+    if (current === card) { close(); return; }
+    if (current) current.setAttribute('aria-expanded', 'false');
+    current = card;
+    card.setAttribute('aria-expanded', 'true');
+    // Put the panel after the last card on the tapped card's row.
+    let last = card;
+    for (let n = card.nextElementSibling; n && n.matches('.film') && n.offsetTop === card.offsetTop; n = n.nextElementSibling) last = n;
+    last.after(panel);
+    document.getElementById('viewer-before').src = '/films/before-' + (f.color ? 'color' : 'bw') + '.jpg';
+    const after = document.getElementById('viewer-after');
     after.src = '/films/' + f.id + '.jpg';
     after.alt = 'The photo through ' + f.name;
     document.getElementById('viewer-name').textContent = f.name;
     document.getElementById('viewer-blurb').textContent = f.blurb;
-    document.getElementById('viewer-iso').textContent = 'ISO ' + f.iso;
+    document.getElementById('viewer-iso').textContent = (f.color ? 'COLOR' : 'BLACK & WHITE') + ' · ISO ' + f.iso;
     document.getElementById('viewer-tag').textContent = f.name;
-    new Image().src = '/films/' + films[(index + 1) % films.length].id + '.jpg';
-  };
-  document.querySelectorAll('[data-film]').forEach((card) => card.addEventListener('click', () => {
-    show(films.findIndex((f) => f.id === card.dataset.film));
+    const c = credits[f.color ? 'color' : 'bw'];
+    credit.textContent = 'Sample photo by ';
+    const link = document.createElement('a');
+    link.href = c.url; link.textContent = c.name; link.target = '_blank'; link.rel = 'noopener';
+    credit.append(link, " on Unsplash. The film is a preview of the app's look.");
+    showCredit(false);
     slider.value = 50; set(50);
-    dialog.showModal();
-  }));
+    panel.hidden = false;
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+  document.querySelectorAll('[data-film]').forEach((card) => card.addEventListener('click', () => open(card)));
+  document.getElementById('viewer-close').onclick = close;
   slider.addEventListener('input', () => set(slider.value));
-  document.getElementById('prev').onclick = () => show(index - 1);
-  document.getElementById('next').onclick = () => show(index + 1);
-  document.getElementById('viewer-close').onclick = () => dialog.close();
-  dialog.addEventListener('click', (e) => { if (e.target === dialog) dialog.close(); });
-  dialog.addEventListener('keydown', (e) => {
-    if (e.target === slider) return;
-    if (e.key === 'ArrowLeft') show(index - 1);
-    if (e.key === 'ArrowRight') show(index + 1);
-  });
+  // Drag (or tap) anywhere on the photo, with a finger or a mouse. The range input stays
+  // for the keyboard and screen readers.
+  let dragging = false;
+  const follow = (e) => {
+    const box = compare.getBoundingClientRect();
+    const v = Math.min(100, Math.max(0, ((e.clientX - box.left) / box.width) * 100));
+    slider.value = v; set(v);
+  };
+  compare.addEventListener('pointerdown', (e) => { dragging = true; compare.setPointerCapture(e.pointerId); follow(e); e.preventDefault(); });
+  compare.addEventListener('pointermove', (e) => { if (dragging) follow(e); });
+  const stop = () => { dragging = false; };
+  compare.addEventListener('pointerup', stop);
+  compare.addEventListener('pointercancel', stop);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && current) close(); });
 })();
 </script>`;
 }
@@ -202,7 +247,6 @@ export function homeBody(store) {
 <div class="films">${bw}</div>
 <h3>Color</h3>
 <div class="films">${color}</div>
-<p class="muted small">Sample photo by <a href="https://unsplash.com/photos/umcc42T8fD4">Lou Levit</a> on Unsplash. Previews approximate the app's films.</p>
 <p class="muted small">Your photos stay on your phone. Nothing is uploaded unless you share a roll or put one on your profile.</p>
 ${filmViewer()}`;
 }
@@ -287,6 +331,12 @@ export function termsBody() {
 <h2>Your photos</h2>
 <p>You own the photos you take and the films you create. When you share a roll or put it on your public profile, you give us a worldwide, non-exclusive, royalty-free licence to store, copy, display and distribute it only as needed to run Film Exposures: for example, to show it to people with the link or on your profile, and to create share cards. This licence ends when you unshare the roll, make it private or delete your account, except for copies that take a short time to clear from our systems.</p>
 <p>Only share photos you took or have the right to share, and only share photos of people who agreed to it.</p>
+
+<h2>Our promises to photographers</h2>
+<ul>
+<li><b>We always credit photographers.</b> If we ever feature a photo that someone shared publicly, on our website or anywhere else, we will ask the photographer first and credit them by name. The sample photos on our website are credited the same way.</li>
+<li><b>We never profit from selling photography or other people's art.</b> We don't sell, license or rent your photos, or anyone else's photos or artwork, to anyone.</li>
+</ul>
 
 <h2>Rules for what you share</h2>
 <p>There is no tolerance for objectionable content or abusive users. Do not share:</p>
