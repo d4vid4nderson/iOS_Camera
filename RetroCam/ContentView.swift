@@ -1132,7 +1132,7 @@ private extension View {
 private enum AdjustParam: String, CaseIterable, Identifiable {
     case filter, contrast, key, fade, whites, tone, toneAmount, glow, grainSize, vignette, softness, fog
     // Colour films.
-    case strength, saturation, warmth, tint, shadowHue, shadowAmount, highlightHue, highlightAmount, aqua
+    case strength, saturation, warmth, tint, shadowHue, shadowAmount, highlightHue, highlightAmount, aqua, unify, unifyHue
     case redShadows, redHighlights, greenShadows, greenHighlights, blueShadows, blueHighlights, halation
 
     /// The settings a film has, in panel order: black & white films have a filter and
@@ -1141,6 +1141,7 @@ private enum AdjustParam: String, CaseIterable, Identifiable {
         if stock.color {
             return [.strength, .contrast, .key, .fade, .whites,
                     .saturation, .warmth, .tint,
+                    .unify, .unifyHue,
                     .shadowHue, .shadowAmount, .highlightHue, .highlightAmount, .aqua,
                     .redShadows, .redHighlights, .greenShadows, .greenHighlights, .blueShadows, .blueHighlights,
                     .glow, .halation, .grainSize, .vignette, .softness, .fog]
@@ -1174,6 +1175,8 @@ private enum AdjustParam: String, CaseIterable, Identifiable {
         case .highlightHue: return "LIGHT COLOR"
         case .highlightAmount: return "LIGHT %"
         case .aqua: return "BLUES"
+        case .unify: return "UNIFY"
+        case .unifyHue: return "UNIFY COLOR"
         case .redShadows: return "RED LOW"
         case .redHighlights: return "RED HIGH"
         case .greenShadows: return "GREEN LOW"
@@ -1206,6 +1209,8 @@ private enum AdjustParam: String, CaseIterable, Identifiable {
         case .highlightHue: return \.highlightHue
         case .highlightAmount: return \.highlightAmount
         case .aqua: return \.aqua
+        case .unify: return \.unify
+        case .unifyHue: return \.unifyHue
         case .redShadows: return \.redShadows
         case .redHighlights: return \.redHighlights
         case .greenShadows: return \.greenShadows
@@ -1232,14 +1237,14 @@ private enum AdjustParam: String, CaseIterable, Identifiable {
 
     /// Bipolar settings (cool…warm, lower…lift) read with a sign; hues in degrees.
     private var isSigned: Bool { range.lowerBound < 0 && self != .key }
-    private var isHue: Bool { self == .shadowHue || self == .highlightHue }
+    private var isHue: Bool { self == .shadowHue || self == .highlightHue || self == .unifyHue }
 
     var step: Double {
         switch self {
         case .key: return 0.1
         case .fade, .whites: return 0.01
         case .grainSize: return 0.1
-        case .shadowHue, .highlightHue: return 1.0 / 72   // 5°
+        case .shadowHue, .highlightHue, .unifyHue: return 1.0 / 72   // 5°
         default: return 0.05
         }
     }
@@ -1247,7 +1252,7 @@ private enum AdjustParam: String, CaseIterable, Identifiable {
     var majorEvery: Int {
         switch self {
         case .key, .fade, .whites: return 5
-        case .shadowHue, .highlightHue: return 6               // every 30°
+        case .shadowHue, .highlightHue, .unifyHue: return 6               // every 30°
         default: return 4
         }
     }

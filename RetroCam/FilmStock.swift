@@ -76,6 +76,9 @@ struct FilmStock: Identifiable, Hashable, Codable {
     var highlightAmount: CGFloat = 0
     /// Blues toward aqua (+) or navy (-).
     var aqua: CGFloat = 0
+    /// Colour unity (0...1) and the hue colours gather toward. See `ColorGrade.unify`.
+    var unify: CGFloat = 0
+    var unifyHue: CGFloat = 0.11
     /// RGB curves: each channel lifted (+) or lowered (-) in its shadows and highlights.
     var redShadows: CGFloat = 0
     var redHighlights: CGFloat = 0
@@ -91,7 +94,7 @@ struct FilmStock: Identifiable, Hashable, Codable {
         ColorGrade(saturation: Double(saturation),
                    shadowHue: Double(shadowHue), shadowAmount: Double(shadowAmount),
                    highlightHue: Double(highlightHue), highlightAmount: Double(highlightAmount),
-                   aqua: Double(aqua),
+                   aqua: Double(aqua), unify: Double(unify), unifyHue: Double(unifyHue),
                    redShadows: Double(redShadows), redHighlights: Double(redHighlights),
                    greenShadows: Double(greenShadows), greenHighlights: Double(greenHighlights),
                    blueShadows: Double(blueShadows), blueHighlights: Double(blueHighlights))
@@ -266,7 +269,7 @@ extension FilmStock {
         case id, name, iso, blurb, red, green, blue, contrast, blackLift, whitePoint
         case grain, grainSize, vignette, tone, toneAmount, bloom, edgeSoftness, exposure, key, fog
         case effect, effectAmount, effectX, effectY
-        case color, strength, saturation, warmth, tint, shadowHue, shadowAmount, highlightHue, highlightAmount, aqua
+        case color, strength, saturation, warmth, tint, shadowHue, shadowAmount, highlightHue, highlightAmount, aqua, unify, unifyHue
         case redShadows, redHighlights, greenShadows, greenHighlights, blueShadows, blueHighlights, halation
     }
 
@@ -308,6 +311,8 @@ extension FilmStock {
         highlightHue = value(.highlightHue, 0.1)
         highlightAmount = value(.highlightAmount, 0)
         aqua = value(.aqua, 0)
+        unify = value(.unify, 0)
+        unifyHue = value(.unifyHue, 0.11)
         redShadows = value(.redShadows, 0); redHighlights = value(.redHighlights, 0)
         greenShadows = value(.greenShadows, 0); greenHighlights = value(.greenHighlights, 0)
         blueShadows = value(.blueShadows, 0); blueHighlights = value(.blueHighlights, 0)
@@ -336,6 +341,7 @@ extension FilmStock {
             try c.encode(shadowHue, forKey: .shadowHue); try c.encode(shadowAmount, forKey: .shadowAmount)
             try c.encode(highlightHue, forKey: .highlightHue); try c.encode(highlightAmount, forKey: .highlightAmount)
             try c.encode(aqua, forKey: .aqua)
+            try c.encode(unify, forKey: .unify); try c.encode(unifyHue, forKey: .unifyHue)
             try c.encode(redShadows, forKey: .redShadows); try c.encode(redHighlights, forKey: .redHighlights)
             try c.encode(greenShadows, forKey: .greenShadows); try c.encode(greenHighlights, forKey: .greenHighlights)
             try c.encode(blueShadows, forKey: .blueShadows); try c.encode(blueHighlights, forKey: .blueHighlights)
@@ -463,6 +469,35 @@ extension FilmStock {
         redHighlights: 0.1, blueShadows: -0.05, blueHighlights: -0.15,
         halation: 0.3)
 
+    /// Earth tones: every colour gathered into tan, khaki and olive, skies and greens
+    /// muted, whites kept clean, deep blacks. Moody window light, deserts, dark suits.
+    static let earth200 = FilmStock(
+        id: "earth200", name: "EARTH 200", iso: 200,
+        blurb: "Tan and olive, clean whites",
+        red: 0.33, green: 0.52, blue: 0.15,
+        contrast: 0.5, blackLift: 0.0, whitePoint: 0.97,
+        grain: 0.2, grainSize: 1.2,
+        vignette: 0.45,
+        bloom: 0.1, key: -0.1,
+        color: true, strength: 0.7, saturation: 0.85, warmth: 0.12,
+        shadowHue: 0.09, shadowAmount: 0.15,
+        aqua: 0, unify: 0.7, unifyHue: 0.105,
+        redShadows: 0.05, blueShadows: -0.1)
+
+    /// Bright and hazy: high key, soft contrast, warm tan mids, whites that open up,
+    /// colours gathered into the same earthy family.
+    static let meadow400 = FilmStock(
+        id: "meadow400", name: "MEADOW 400", iso: 400,
+        blurb: "Bright, hazy, sun-bleached",
+        red: 0.33, green: 0.52, blue: 0.15,
+        contrast: 0.22, blackLift: 0.04, whitePoint: 1.0,
+        grain: 0.22, grainSize: 1.3,
+        vignette: 0.2,
+        bloom: 0.35, exposure: 0.15, key: 0.3,
+        color: true, strength: 0.7, saturation: 0.7, warmth: 0.15,
+        unify: 0.75, unifyHue: 0.115,
+        halation: 0.1)
+
     static let noir = FilmStock(
         id: "noir", name: "NOIR 400", iso: 400,
         blurb: "Low key: deep shadows, bright highlights",
@@ -580,7 +615,7 @@ extension FilmStock {
     /// separate shelves): everyday, colour, filters and emulsions, darkroom prints.
     static let all: [FilmStock] = [
         .classic400, .pan50, .frost400, .push3200, .noir,
-        .warm400, .golden100, .tide200, .dusk800, .north400,
+        .warm400, .golden100, .earth200, .meadow400, .tide200, .dusk800, .north400,
         .redFilter, .ortho, .infrared, .tintype,
         .lith, .sepia, .selenium, .platinum, .cyanotype, .expired,
     ]

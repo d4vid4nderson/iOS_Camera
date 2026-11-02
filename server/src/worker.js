@@ -772,6 +772,8 @@ const COLOR_FIELDS = [
 ];
 // Version 3 adds how strongly the colour look applies.
 const V3_FIELDS = [['strength', 0, 1]];
+// Version 4 adds colour unity (a frame's colours gathered toward one hue).
+const V4_FIELDS = [['unify', 0, 1], ['unifyHue', 0, 1]];
 export const TONES = ['neutral', 'warm', 'cool', 'selenium', 'split', 'gold', 'platinum', 'cyanotype', 'tintype'];
 const TONE_NAMES = {
   warm: 'Sepia', cool: 'Cool', selenium: 'Selenium', split: 'Split', gold: 'Gold',
@@ -803,12 +805,13 @@ export function decodeFilm(code) {
   } catch {
     return null;
   }
-  if (![1, 2, 3].includes(bytes[0])) return null;
+  if (![1, 2, 3, 4].includes(bytes[0])) return null;
   const isColor = bytes[0] !== 1;
-  const packed = bytes[0] === 3 ? FIELDS.concat(COLOR_FIELDS, V3_FIELDS) : isColor ? FIELDS.concat(COLOR_FIELDS) : FIELDS;
+  const packed = FIELDS.concat(
+    isColor ? COLOR_FIELDS : [], bytes[0] >= 3 ? V3_FIELDS : [], bytes[0] >= 4 ? V4_FIELDS : []);
   const fixed = 1 + packed.length + 2 + 2;
   if (bytes.length < fixed) return null;
-  const film = { color: isColor, strength: 1 };
+  const film = { color: isColor, strength: 1, unify: 0 };
   packed.forEach(([name, lo, hi], i) => { film[name] = lo + (bytes[1 + i] / 255) * (hi - lo); });
   let at = 1 + packed.length;
   if (bytes[at] >= TONES.length || bytes[at + 1] >= EFFECTS.length) return null;
@@ -886,6 +889,7 @@ function settingsList(film) {
     const rows = [['Strength', pct(film.strength)], ['Contrast', pct(film.contrast)], ['Saturation', pct(film.saturation)], ['Warmth', signed(film.warmth)]];
     if (film.shadowAmount > 0.02) rows.push(['Shadow color', `${deg(film.shadowHue)} ${pct(film.shadowAmount)}`]);
     if (film.highlightAmount > 0.02) rows.push(['Light color', `${deg(film.highlightHue)} ${pct(film.highlightAmount)}`]);
+    if (film.unify > 0.02) rows.push(['Unify', `${deg(film.unifyHue)} ${pct(film.unify)}`]);
     if (film.halation > 0.02) rows.push(['Halation', pct(film.halation)]);
     rows.push(['Grain', pct(film.grain)]);
     if (film.effect !== 'none') rows.push(['Effect', `${EFFECT_NAMES[film.effect]} ${pct(film.effectAmount)}`]);

@@ -469,7 +469,7 @@ test('colour film links decode like the app', async () => {
   const page = await (await call(env(), 'GET', `/f/${code}`)).text();
   assert.match(page, /TIDE 200/);
   assert.match(page, /Saturation/);
-  assert.equal(decodeFilm(Buffer.from([4, ...bytes.slice(1)]).toString('base64url')), null, 'unknown versions are refused');
+  assert.equal(decodeFilm(Buffer.from([5, ...bytes.slice(1)]).toString('base64url')), null, 'unknown versions are refused');
   assert.equal(decodeFilm(Buffer.from(bytes.slice(0, 30)).toString('base64url')), null, 'short colour codes are refused');
 });
 
@@ -482,4 +482,13 @@ test('version 3 colour codes carry strength; version 2 opens at full strength', 
   const v2 = decodeFilm(Buffer.from([2, ...Array(18).fill(128), ...Array(15).fill(128), 0, 0, 0x01, 0x90, ...name]).toString('base64url'));
   assert.equal(v2.strength, 1);
   assert.equal(v2.name, 'SOFT');
+});
+
+test('version 4 colour codes carry unify', () => {
+  const name = [...new TextEncoder().encode('EARTH 200')];
+  const v4 = decodeFilm(Buffer.from([4, ...Array(18).fill(128), ...Array(15).fill(128), 178, 179, 27, 0, 0, 0, 200, ...name]).toString('base64url'));
+  assert.ok(Math.abs(v4.unify - 179 / 255) < 0.001);
+  assert.ok(Math.abs(v4.unifyHue - 27 / 255) < 0.001);
+  assert.equal(v4.name, 'EARTH 200');
+  assert.equal(v4.iso, 200);
 });

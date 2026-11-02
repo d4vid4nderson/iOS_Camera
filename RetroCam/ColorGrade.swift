@@ -21,6 +21,11 @@ struct ColorGrade: Hashable {
     var highlightAmount: Double = 0
     /// Blues toward aqua (+) or navy (-), -1...1.
     var aqua: Double = 0
+    /// Colour unity, 0...1: hues near `unifyHue` are pulled toward it and colours far
+    /// from it are muted, so a whole frame sits in one colour family (earthy tans, say,
+    /// with slate skies). Greys and whites stay clean.
+    var unify: Double = 0
+    var unifyHue: Double = 0.11
     /// Per-channel curve bends, -1...1: how far each channel is lifted (+) or lowered (-)
     /// in its shadows (a third of the way up) and its highlights (two thirds up). Black
     /// and white stay put.
@@ -30,7 +35,7 @@ struct ColorGrade: Hashable {
 
     /// Leaves every colour as it is.
     var isIdentity: Bool {
-        saturation == 1 && shadowAmount == 0 && highlightAmount == 0 && aqua == 0
+        saturation == 1 && shadowAmount == 0 && highlightAmount == 0 && aqua == 0 && unify == 0
             && redShadows == 0 && redHighlights == 0 && greenShadows == 0
             && greenHighlights == 0 && blueShadows == 0 && blueHighlights == 0
     }
@@ -61,6 +66,23 @@ struct ColorGrade: Hashable {
                 h = (h - aqua * 0.045 * weight * weight).truncatingRemainder(dividingBy: 1)
                 if h < 0 { h += 1 }
                 (r, g, b) = Self.rgb(h, s, v)
+            }
+        }
+
+        // 2b. Unity: pull nearby hues toward one, mute the far ones (they're not rotated,
+        //     which would sweep a blue sky through green), and keep brightness.
+        if unify > 0 {
+            let (h, s, v) = Self.hsv(r, g, b)
+            if s > 0.01 {
+                let before = Self.luma(r, g, b)
+                let d = Self.hueDistance(h, unifyHue), ad = abs(d)
+                let near = max(0, 1 - ad / 0.25)               // within 90°
+                let far = min(max((ad - 0.08) / 0.3, 0), 1)    // beyond ~30°
+                var h2 = (h - d * unify * 0.6 * near).truncatingRemainder(dividingBy: 1)
+                if h2 < 0 { h2 += 1 }
+                (r, g, b) = Self.rgb(h2, s * (1 - unify * 0.85 * far), v)
+                let shift = before - Self.luma(r, g, b)
+                r = clamp(r + shift); g = clamp(g + shift); b = clamp(b + shift)
             }
         }
 
