@@ -39,6 +39,29 @@ enum RollAlbums {
         return .filed
     }
 
+    /// Forget a deleted roll's album. With `deletingPhotos`, also delete the album and
+    /// every photo in it from Photos — iOS asks the user to confirm, and this throws if
+    /// they decline. Returns how many photos were deleted, or nil if the album wasn't found
+    /// (no Full Access, or it was already removed in Photos).
+    @discardableResult
+    static func remove(rollNumber: Int, deletingPhotos: Bool) async throws -> Int? {
+        var ids = UserDefaults.standard.dictionary(forKey: albumsKey) as? [String: String] ?? [:]
+        let key = String(rollNumber)
+        var deleted: Int?
+        if deletingPhotos, let id = ids[key],
+           let album = PHAssetCollection.fetchAssetCollections(withLocalIdentifiers: [id], options: nil).firstObject {
+            let assets = PHAsset.fetchAssets(in: album, options: nil)
+            try await PHPhotoLibrary.shared().performChanges {
+                PHAssetChangeRequest.deleteAssets(assets)
+                PHAssetCollectionChangeRequest.deleteAssetCollections([album] as NSArray)
+            }
+            deleted = assets.count
+        }
+        ids[key] = nil
+        UserDefaults.standard.set(ids, forKey: albumsKey)
+        return deleted
+    }
+
     /// The roll's album, created (inside the Exposures folder) the first time it's needed.
     private static func album(for roll: Roll) async throws -> PHAssetCollection {
         var ids = UserDefaults.standard.dictionary(forKey: albumsKey) as? [String: String] ?? [:]

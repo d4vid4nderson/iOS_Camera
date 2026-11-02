@@ -106,6 +106,13 @@ enum RollStore {
         return nil
     }
 
+    /// Remove the app's copy of a roll: frames, thumbnails, undeveloped frames, details.
+    static func delete(roll number: Int) throws {
+        let folder = folder(for: number)
+        guard FileManager.default.fileExists(atPath: folder.path) else { return }
+        try FileManager.default.removeItem(at: folder)
+    }
+
     /// Frame numbers stored for a roll, in order.
     static func frames(of number: Int) -> [Int] {
         let names = (try? FileManager.default.contentsOfDirectory(atPath: folder(for: number).path)) ?? []
