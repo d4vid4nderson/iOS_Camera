@@ -59,6 +59,8 @@ struct ContentView: View {
     /// A film someone shared, waiting for "ADD".
     @State private var incomingFilm: FilmStock?
     @State private var incomingRoll: IncomingRoll?
+    @State private var showingProfile = false
+    @State private var profile = Profile.load()
     @State private var confirmingDelete = false
     @AppStorage(ShutterFinish.storageKey) private var finishRaw = ShutterFinish.copper.rawValue
 
@@ -77,6 +79,8 @@ struct ContentView: View {
                 Spacer(minLength: 0)
                 topPlate
                     .padding(.horizontal, 16)
+                    // Above the viewfinder for taps: the live preview can reach past its frame.
+                    .zIndex(1)
                 // Full screen width: the 3:4 frame is as big as the phone's width allows.
                 viewfinder
                     .overlay { panelLayer }
@@ -123,8 +127,11 @@ struct ContentView: View {
         .fullScreenCover(isPresented: $showingPrint) {
             RollViewer(camera: camera, accent: accent)
         }
-        .sheet(item: $sharingFilm) { film in
+        .sheet(item: $sharingFilm, onDismiss: { profile = Profile.load() }) { film in
             FilmShareSheet(film: film, accent: accent)
+        }
+        .sheet(isPresented: $showingProfile) {
+            ProfileSheet(accent: accent) { profile = $0 }
         }
         .fullScreenCover(item: $incomingRoll) { ref in
             SharedRollView(rollID: ref.id, camera: camera, accent: accent)
@@ -171,50 +178,62 @@ struct ContentView: View {
         }
     }
 
-    // MARK: Top plate: frame counter, film loaded, flash and date stamp
+    // MARK: Top plate: roll and frame count, film loaded, your profile
 
     private var topPlate: some View {
         HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(String(format: "ROLL %02d", camera.roll.number))
-                    .font(.mono(8, .semibold)).foregroundStyle(.secondary)
-                Text(String(format: "%02d", camera.framesShot) + "/\(CameraModel.rollLength)")
-                    .font(.mono(15, .bold)).foregroundStyle(accent)
-                    .contentTransition(.numericText())
+            // Roll and frame count: opens your rolls.
+            Button { showingPrint = true } label: {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(String(format: "ROLL %02d", camera.roll.number))
+                        .font(.mono(8, .semibold)).foregroundStyle(.secondary)
+                    Text(String(format: "%02d", camera.framesShot) + "/\(CameraModel.rollLength)")
+                        .font(.mono(15, .bold)).foregroundStyle(accent)
+                        .contentTransition(.numericText())
+                }
+                .frame(width: 90, height: 40, alignment: .leading)
+                .contentShape(Rectangle())
             }
-                .frame(width: 90, alignment: .leading)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Roll \(camera.roll.number), frame \(camera.framesShot) of \(CameraModel.rollLength)")
-                // Hidden: long-press for a camera-orientation readout (for bug reports).
-                .onLongPressGesture { camera.showDiagnostics.toggle() }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Roll \(camera.roll.number), frame \(camera.framesShot) of \(CameraModel.rollLength)")
+            .accessibilityHint("Open your rolls")
+            // Hidden: long-press for a camera-orientation readout (for bug reports).
+            .simultaneousGesture(LongPressGesture(minimumDuration: 0.8).onEnded { _ in camera.showDiagnostics.toggle() })
 
-            Spacer()
+            Spacer(minLength: 0)
 
+            // Film loaded: opens the film picker.
             Button { toggle(.film) } label: {
                 HStack(spacing: 6) {
                     Text(camera.stock.name).font(.mono(12, .semibold))
                     Text("\(camera.stock.iso)").font(.mono(10)).foregroundStyle(.secondary)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(openPanel == .film ? 180 : 0))
                 }
+                .padding(.horizontal, 12)
+                .frame(height: 40)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityHint("Choose film")
 
-            Spacer()
+            Spacer(minLength: 0)
 
-            HStack(spacing: 6) {
-                if camera.flashAvailable {
-                    plateIcon(flashSymbol, active: camera.flash != .off,
-                              label: "Flash \(camera.flash.label)") { camera.cycleFlash() }
-                        .sensoryFeedback(.selection, trigger: camera.flash)
-                }
-                plateIcon("calendar", active: camera.stampMode != .off,
-                          badge: camera.stampMode == .dateTime ? "T" : nil,
-                          label: "Date stamp \(camera.stampMode.label)") { camera.cycleStamp() }
-                    .sensoryFeedback(.selection, trigger: camera.stampMode)
+            // Your profile: headshot and name for share cards.
+            Button { showingProfile = true } label: {
+                ProfileAvatar(photo: profile.photo, size: 30)
+                    .overlay(Circle().stroke(profile.photo == nil ? Color(white: 0.3) : accent.opacity(0.7), lineWidth: 1))
+                    .rotationEffect(.degrees(camera.uiRotation))
+                    .animation(.snappy(duration: 0.3), value: camera.uiRotation)
+                    .frame(width: 90, height: 40, alignment: .trailing)
+                    .contentShape(Rectangle())
             }
-            .frame(width: 90, alignment: .trailing)
+            .buttonStyle(.plain)
+            .accessibilityLabel(profile.name.isEmpty ? "Your profile" : "Your profile, \(profile.name)")
         }
-        .frame(height: 34)
+        .frame(height: 40)
     }
 
     private var flashSymbol: String {
@@ -225,31 +244,10 @@ struct ContentView: View {
         }
     }
 
-    /// Small tap-to-cycle icon in the top plate (flash, date stamp).
-    private func plateIcon(_ symbol: String, active: Bool, badge: String? = nil, label: String,
-                           action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 15, weight: .medium))
-                .frame(width: 34, height: 34)
-                .overlay(alignment: .bottomTrailing) {
-                    if let badge {
-                        Text(badge).font(.mono(8, .bold)).offset(x: -4, y: -4)
-                    }
-                }
-                .foregroundStyle(active ? accent : Color(white: 0.55))
-                .rotationEffect(.degrees(camera.uiRotation))
-                .animation(.snappy(duration: 0.3), value: camera.uiRotation)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
-    }
-
     // MARK: Icon bar: every setting one tap away, opening above the bar
 
     private var iconBar: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 2) {
             barItem(.film, value: camera.stock.shortName)
             barItem(.adjust, value: camera.isFilmEdited ? "EDITED" : "EDIT",
                     highlighted: camera.isFilmEdited)
@@ -261,11 +259,44 @@ struct ContentView: View {
             barItem(.border, value: camera.border.label, highlighted: camera.border != .none)
             barItem(.fx, value: camera.stock.effect == .none ? "OFF" : camera.stock.effect.label,
                     highlighted: camera.stock.effect != .none)
+            // Tap to cycle, no panel.
+            if camera.flashAvailable {
+                cycleItem(flashSymbol, value: camera.flash.label, highlighted: camera.flash != .off,
+                          label: "Flash") { camera.cycleFlash() }
+                    .sensoryFeedback(.selection, trigger: camera.flash)
+            }
+            cycleItem("calendar", value: camera.stampMode.label, highlighted: camera.stampMode != .off,
+                      label: "Date stamp") { camera.cycleStamp() }
+                .sensoryFeedback(.selection, trigger: camera.stampMode)
         }
         .padding(4)
         .background(RoundedRectangle(cornerRadius: 12).fill(Color(white: 0.12)))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(white: 0.2), lineWidth: 0.5))
         .sensoryFeedback(.selection, trigger: openPanel)
+    }
+
+    /// A bar control that changes on tap (flash, date stamp) instead of opening a panel.
+    private func cycleItem(_ symbol: String, value: String, highlighted: Bool, label: String,
+                           action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: symbol)
+                    .font(.system(size: 16, weight: .medium))
+                    .frame(height: 18)
+                Text(value)
+                    .font(.mono(9, .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+            }
+            .rotationEffect(.degrees(camera.uiRotation))
+            .animation(.snappy(duration: 0.3), value: camera.uiRotation)
+            .foregroundStyle(highlighted ? accent : Color(white: 0.8))
+            .frame(maxWidth: .infinity)
+            .frame(height: 46)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(label), \(value)")
     }
 
     private func barItem(_ panel: SettingPanel, value: String, highlighted: Bool = false) -> some View {
@@ -278,7 +309,7 @@ struct ContentView: View {
                 Text(value)
                     .font(.mono(9, .semibold))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                    .minimumScaleFactor(0.6)
                     .contentTransition(.numericText())
             }
             .rotationEffect(.degrees(camera.uiRotation))
