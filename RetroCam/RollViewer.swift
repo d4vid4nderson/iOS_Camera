@@ -14,6 +14,9 @@ private extension Font {
 struct RollViewer: View {
     @ObservedObject var camera: CameraModel
     let accent: Color
+    /// Open on the roll in the camera (from the frame counter), even before its first
+    /// frame; otherwise on the newest roll with frames (from the last print).
+    var opensInCamera = false
     @Environment(\.dismiss) private var dismiss
 
     @State private var rolls: [Roll] = []
@@ -193,7 +196,7 @@ struct RollViewer: View {
                         .disabled(makingSheet)
                 }
                 Spacer(minLength: 0)
-                if let roll {
+                if let roll, !frames.isEmpty {
                     deleteChip("DELETE ROLL") { withAnimation(.snappy(duration: 0.15)) { deleting = roll } }
                 }
             }
@@ -426,8 +429,16 @@ struct RollViewer: View {
 
     private func reload() {
         rolls = RollStore.rolls()
+        // The roll in the camera is always listed, even before its first frame.
+        if !rolls.contains(where: { $0.number == camera.roll.number }) {
+            rolls.insert(camera.roll, at: 0)
+        }
         if selected == nil || !rolls.contains(where: { $0.number == selected }) {
-            selected = rolls.first(where: { $0.number == camera.roll.number })?.number ?? rolls.first?.number
+            if opensInCamera {
+                selected = camera.roll.number
+            } else {
+                selected = rolls.first(where: { !RollStore.frames(of: $0.number).isEmpty })?.number ?? camera.roll.number
+            }
         }
         loadFrames()
     }

@@ -43,6 +43,9 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var focusPoint: CGPoint?
     @State private var showingPrint = false
+    /// Open the roll viewer on the roll in the camera (frame counter) rather than the
+    /// newest print (thumbnail).
+    @State private var rollsFromCounter = false
     /// The settings panel floating over the bottom of the viewfinder, if any.
     /// It overlays the viewfinder, so opening it never moves the viewfinder or the shutter.
     @State private var openPanel: SettingPanel?
@@ -53,9 +56,9 @@ struct ContentView: View {
     @State private var filmName = ""
     @FocusState private var nameFieldFocused: Bool
     /// Long-pressed film card whose actions (rename, reset, delete) the FILM panel shows.
-    @State private var managingFilm: String?
     /// Film whose recipe is being shared (QR / link).
-    @State private var sharingFilm: FilmStock?
+    @State private var filmShare: ShareItems?
+    @State private var preparingShare = false
     /// A film someone shared, waiting for "ADD".
     @State private var incomingFilm: FilmStock?
     @State private var incomingRoll: IncomingRoll?
@@ -109,7 +112,6 @@ struct ContentView: View {
         .ignoresSafeArea(.keyboard)
         .animation(.snappy(duration: 0.2), value: naming)
         .onChange(of: openPanel) { _, _ in
-            managingFilm = nil
             confirmingDelete = false
         }
         .preferredColorScheme(.dark)
@@ -125,10 +127,10 @@ struct ContentView: View {
         }
         .sensoryFeedback(.impact(weight: .medium), trigger: camera.framesShot)
         .fullScreenCover(isPresented: $showingPrint) {
-            RollViewer(camera: camera, accent: accent)
+            RollViewer(camera: camera, accent: accent, opensInCamera: rollsFromCounter)
         }
-        .sheet(item: $sharingFilm, onDismiss: { profile = Profile.load() }) { film in
-            FilmShareSheet(film: film, accent: accent)
+        .sheet(item: $filmShare) { item in
+            ActivityView(items: item.items).ignoresSafeArea()
         }
         .sheet(isPresented: $showingProfile) {
             ProfileSheet(accent: accent) { profile = $0 }
@@ -182,8 +184,11 @@ struct ContentView: View {
 
     private var topPlate: some View {
         HStack(alignment: .center) {
-            // Roll and frame count: opens your rolls.
-            Button { showingPrint = true } label: {
+            // Roll and frame count: opens the roll in the camera.
+            Button {
+                rollsFromCounter = true
+                showingPrint = true
+            } label: {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(String(format: "ROLL %02d", camera.roll.number))
                         .font(.mono(8, .semibold)).foregroundStyle(.secondary)
@@ -191,12 +196,12 @@ struct ContentView: View {
                         .font(.mono(15, .bold)).foregroundStyle(accent)
                         .contentTransition(.numericText())
                 }
-                .frame(width: 90, height: 40, alignment: .leading)
+                .frame(width: 90, height: 44, alignment: .leading)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Roll \(camera.roll.number), frame \(camera.framesShot) of \(CameraModel.rollLength)")
-            .accessibilityHint("Open your rolls")
+            .accessibilityHint("Open this roll")
             // Hidden: long-press for a camera-orientation readout (for bug reports).
             .simultaneousGesture(LongPressGesture(minimumDuration: 0.8).onEnded { _ in camera.showDiagnostics.toggle() })
 
@@ -213,7 +218,7 @@ struct ContentView: View {
                         .rotationEffect(.degrees(openPanel == .film ? 180 : 0))
                 }
                 .padding(.horizontal, 12)
-                .frame(height: 40)
+                .frame(height: 44)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -223,17 +228,17 @@ struct ContentView: View {
 
             // Your profile: headshot and name for share cards.
             Button { showingProfile = true } label: {
-                ProfileAvatar(photo: profile.photo, size: 30)
-                    .overlay(Circle().stroke(profile.photo == nil ? Color(white: 0.3) : accent.opacity(0.7), lineWidth: 1))
+                ProfileAvatar(photo: profile.photo, size: 40)
+                    .overlay(Circle().stroke(profile.photo == nil ? Color(white: 0.3) : accent.opacity(0.7), lineWidth: 1.5))
                     .rotationEffect(.degrees(camera.uiRotation))
                     .animation(.snappy(duration: 0.3), value: camera.uiRotation)
-                    .frame(width: 90, height: 40, alignment: .trailing)
+                    .frame(width: 90, height: 44, alignment: .trailing)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(profile.name.isEmpty ? "Your profile" : "Your profile, \(profile.name)")
         }
-        .frame(height: 40)
+        .frame(height: 44)
     }
 
     private var flashSymbol: String {
@@ -347,11 +352,8 @@ struct ContentView: View {
 
             switch panel {
             case .film:
-                if let id = managingFilm, let film = camera.library.current(id: id) {
-                    filmActions(film)
-                } else {
-                    stockPicker
-                }
+                stockPicker
+                filmActions(camera.stock)
             case .adjust: adjustPanel
             case .fx: fxPanel
             case .lens: lensPicker
@@ -551,14 +553,6 @@ struct ContentView: View {
                                     proxy.scrollTo(stock.id, anchor: .center)
                                 }
                             }
-                            // Long press: this film's actions, in the panel's own style.
-                            .onLongPressGesture(minimumDuration: 0.35) {
-                                guard hasActions(stock) else { return }
-                                withAnimation(.snappy(duration: 0.2)) {
-                                    managingFilm = stock.id
-                                    confirmingDelete = false
-                                }
-                            }
                     }
                 }
                 .padding(.horizontal, Self.scrollInset)
@@ -568,11 +562,8 @@ struct ContentView: View {
         }
         .padding(.horizontal, -Self.panelPadding)
         .sensoryFeedback(.selection, trigger: camera.stock.id)
-        .sensoryFeedback(.impact(weight: .light), trigger: managingFilm)
+        .onChange(of: camera.stock.id) { _, _ in confirmingDelete = false }
     }
-
-    /// Every film can at least be shared; your own and edited ones have more.
-    private func hasActions(_ stock: FilmStock) -> Bool { true }
 
     private func canister(_ stock: FilmStock) -> some View {
         let selected = stock.id == camera.stock.id
@@ -618,69 +609,71 @@ struct ContentView: View {
         .accessibilityAddTraits(.isButton)
     }
 
-    /// A long-pressed film's actions, shown in place of the film strip.
+    /// The selected film's actions, under the film strip: share it straight to the share
+    /// sheet, and rename / reset / delete where that applies.
     private func filmActions(_ film: FilmStock) -> some View {
         let edited = camera.library.isEdited(id: film.id)
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                if film.isCustom {
-                    Image(systemName: "person.crop.square").font(.system(size: 10, weight: .bold))
+        return HStack(spacing: 6) {
+            Button { shareFilm(film) } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "square.and.arrow.up").font(.system(size: 10, weight: .bold))
+                    Text(preparingShare ? "PREPARING…" : "SHARE")
                 }
-                Text(film.name).font(.mono(12, .bold)).lineLimit(1)
-                if edited {
-                    Text("EDITED").font(.mono(9, .bold)).foregroundStyle(.secondary)
+                .font(.mono(10, .bold))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(accent.opacity(0.18)))
+                .overlay(Capsule().stroke(accent, lineWidth: 1))
+                .foregroundStyle(accent)
+            }
+            .buttonStyle(.plain)
+            .disabled(preparingShare)
+            .accessibilityLabel("Share \(film.name)")
+
+            if film.isCustom {
+                smallChip("RENAME", selected: false) {
+                    filmName = film.name
+                    naming = .rename(film.id)
                 }
             }
-            .foregroundStyle(accent)
-            .padding(.horizontal, 4)
-
-            HStack(spacing: 6) {
-                if film.isCustom {
-                    smallChip("RENAME", selected: false) {
-                        filmName = film.name
-                        naming = .rename(film.id)
-                        managingFilm = nil
+            if edited {
+                smallChip("RESET", selected: false) { camera.resetFilm() }
+            }
+            Spacer(minLength: 0)
+            if film.isCustom {
+                Button {
+                    if confirmingDelete {
+                        camera.deleteFilm(id: film.id)
+                        confirmingDelete = false
+                    } else {
+                        withAnimation(.snappy(duration: 0.15)) { confirmingDelete = true }
                     }
+                } label: {
+                    Text(confirmingDelete ? "TAP TO DELETE" : "DELETE")
+                        .font(.mono(10, .bold))
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 6)
+                        .background(Capsule().fill(Color.red.opacity(confirmingDelete ? 0.28 : 0.12)))
+                        .overlay(Capsule().stroke(Color.red.opacity(confirmingDelete ? 0.9 : 0), lineWidth: 1))
+                        .foregroundStyle(Color(red: 1, green: 0.45, blue: 0.4))
                 }
-                if edited {
-                    smallChip("RESET", selected: false) {
-                        camera.selectFilm(id: film.id)
-                        camera.resetFilm()
-                        managingFilm = nil
-                    }
-                }
-                if film.isCustom {
-                    Button {
-                        if confirmingDelete {
-                            camera.deleteFilm(id: film.id)
-                            managingFilm = nil
-                            confirmingDelete = false
-                        } else {
-                            withAnimation(.snappy(duration: 0.15)) { confirmingDelete = true }
-                        }
-                    } label: {
-                        Text(confirmingDelete ? "TAP TO DELETE" : "DELETE")
-                            .font(.mono(10, .bold))
-                            .padding(.horizontal, 9)
-                            .padding(.vertical, 6)
-                            .background(Capsule().fill(Color.red.opacity(confirmingDelete ? 0.28 : 0.12)))
-                            .overlay(Capsule().stroke(Color.red.opacity(confirmingDelete ? 0.9 : 0), lineWidth: 1))
-                            .foregroundStyle(Color(red: 1, green: 0.45, blue: 0.4))
-                    }
-                    .buttonStyle(.plain)
-                    .sensoryFeedback(.warning, trigger: confirmingDelete) { _, new in new }
-                }
-                Spacer(minLength: 0)
-                smallChip("SHARE", selected: false) {
-                    sharingFilm = film
-                    managingFilm = nil
-                }
-                smallChip("DONE", selected: true) {
-                    withAnimation(.snappy(duration: 0.2)) { managingFilm = nil }
-                }
+                .buttonStyle(.plain)
+                .sensoryFeedback(.warning, trigger: confirmingDelete) { _, new in new }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, 4)
+    }
+
+    /// Straight to the share sheet with the film's card and link.
+    private func shareFilm(_ film: FilmStock) {
+        preparingShare = true
+        Task {
+            let items = await Task.detached(priority: .userInitiated) { FilmShare.items(for: film) }.value
+            preparingShare = false
+            if let items { filmShare = ShareItems(items: items) } else {
+                camera.message = "This film couldn't be packed into a link."
+            }
+        }
     }
 
     /// Name a film (save as new / rename): a card in the panels' style above the
@@ -964,7 +957,10 @@ struct ContentView: View {
 
     private var controls: some View {
         HStack {
-            Button { showingPrint = true } label: {
+            Button {
+                rollsFromCounter = false
+                showingPrint = true
+            } label: {
                 ZStack {
                     RoundedRectangle(cornerRadius: 4).fill(Color(white: 0.15))
                     if let print = camera.lastPrint {
