@@ -13,7 +13,9 @@ import Foundation
 /// Older links (exposures://film?d=…, zlib-compressed JSON) still open.
 enum FilmCode {
     static let scheme = "exposures"
+    /// 1: black & white films. 2: colour films (the same settings, then the colour ones).
     private static let version: UInt8 = 1
+    private static let colorVersion: UInt8 = 2
 
     /// Every packed setting and the range it's packed into, in code order.
     private static let fields: [(WritableKeyPath<FilmStock, CGFloat>, ClosedRange<CGFloat>)] = [
@@ -24,9 +26,19 @@ enum FilmCode {
         (\.effectAmount, 0...1), (\.effectX, 0...1), (\.effectY, 0...1),
     ]
 
+    /// A colour film's settings, packed after the ones above (version 2).
+    private static let colorFields: [(WritableKeyPath<FilmStock, CGFloat>, ClosedRange<CGFloat>)] = [
+        (\.saturation, 0...1.6), (\.warmth, -1...1), (\.tint, -1...1),
+        (\.shadowHue, 0...1), (\.shadowAmount, 0...1), (\.highlightHue, 0...1), (\.highlightAmount, 0...1),
+        (\.aqua, -1...1),
+        (\.redShadows, -1...1), (\.redHighlights, -1...1), (\.greenShadows, -1...1),
+        (\.greenHighlights, -1...1), (\.blueShadows, -1...1), (\.blueHighlights, -1...1),
+        (\.halation, 0...1),
+    ]
+
     static func url(for film: FilmStock) -> URL? {
-        var bytes: [UInt8] = [version]
-        for (path, range) in fields {
+        var bytes: [UInt8] = [film.color ? colorVersion : version]
+        for (path, range) in fields + (film.color ? colorFields : []) {
             let t = (film[keyPath: path] - range.lowerBound) / (range.upperBound - range.lowerBound)
             bytes.append(UInt8((min(max(t, 0), 1) * 255).rounded()))
         }
@@ -62,14 +74,18 @@ enum FilmCode {
     private static func unpack(_ code: String) -> FilmStock? {
         guard let data = data(base64url: code) else { return nil }
         let bytes = [UInt8](data)
-        let fixed = 1 + fields.count + 2 + 2
-        guard bytes.count >= fixed, bytes[0] == version else { return nil }
+        guard let first = bytes.first, first == version || first == colorVersion else { return nil }
+        let isColor = first == colorVersion
+        let packed = fields + (isColor ? colorFields : [])
+        let fixed = 1 + packed.count + 2 + 2
+        guard bytes.count >= fixed else { return nil }
         var film = FilmStock.classic400
-        for (i, (path, range)) in fields.enumerated() {
+        film.color = isColor
+        for (i, (path, range)) in packed.enumerated() {
             let t = CGFloat(bytes[1 + i]) / 255
             film[keyPath: path] = range.lowerBound + t * (range.upperBound - range.lowerBound)
         }
-        var at = 1 + fields.count
+        var at = 1 + packed.count
         let tones = Toning.allCases, effects = LensEffect.allCases
         guard Int(bytes[at]) < tones.count, Int(bytes[at + 1]) < effects.count else { return nil }
         film.tone = tones[Int(bytes[at])]

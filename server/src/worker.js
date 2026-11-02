@@ -761,6 +761,15 @@ const FIELDS = [
   ['toneAmount', 0, 1], ['bloom', 0, 1], ['edgeSoftness', 0, 1], ['exposure', -1, 1], ['fog', 0, 1],
   ['effectAmount', 0, 1], ['effectX', 0, 1], ['effectY', 0, 1],
 ];
+// Colour films (code version 2) carry these after the ones above.
+const COLOR_FIELDS = [
+  ['saturation', 0, 1.6], ['warmth', -1, 1], ['tint', -1, 1],
+  ['shadowHue', 0, 1], ['shadowAmount', 0, 1], ['highlightHue', 0, 1], ['highlightAmount', 0, 1],
+  ['aqua', -1, 1],
+  ['redShadows', -1, 1], ['redHighlights', -1, 1], ['greenShadows', -1, 1],
+  ['greenHighlights', -1, 1], ['blueShadows', -1, 1], ['blueHighlights', -1, 1],
+  ['halation', 0, 1],
+];
 export const TONES = ['neutral', 'warm', 'cool', 'selenium', 'split', 'gold', 'platinum', 'cyanotype', 'tintype'];
 const TONE_NAMES = {
   warm: 'Sepia', cool: 'Cool', selenium: 'Selenium', split: 'Split', gold: 'Gold',
@@ -792,11 +801,14 @@ export function decodeFilm(code) {
   } catch {
     return null;
   }
-  const fixed = 1 + FIELDS.length + 2 + 2;
-  if (bytes.length < fixed || bytes[0] !== 1) return null;
-  const film = {};
-  FIELDS.forEach(([name, lo, hi], i) => { film[name] = lo + (bytes[1 + i] / 255) * (hi - lo); });
-  let at = 1 + FIELDS.length;
+  if (bytes[0] !== 1 && bytes[0] !== 2) return null;
+  const isColor = bytes[0] === 2;
+  const packed = isColor ? FIELDS.concat(COLOR_FIELDS) : FIELDS;
+  const fixed = 1 + packed.length + 2 + 2;
+  if (bytes.length < fixed) return null;
+  const film = { color: isColor };
+  packed.forEach(([name, lo, hi], i) => { film[name] = lo + (bytes[1 + i] / 255) * (hi - lo); });
+  let at = 1 + packed.length;
   if (bytes[at] >= TONES.length || bytes[at + 1] >= EFFECTS.length) return null;
   film.tone = TONES[bytes[at]];
   film.effect = EFFECTS[bytes[at + 1]];
@@ -813,13 +825,15 @@ export function decodeFilm(code) {
 
 /// "Black & white · ISO 50 · Fine grain" (FilmStock.shareCaption).
 export function caption(film) {
-  const kind = film.tone === 'neutral' || film.toneAmount < 0.3 ? 'Black & white' : `${TONE_NAMES[film.tone]} toned`;
+  const kind = film.color ? 'Color'
+    : film.tone === 'neutral' || film.toneAmount < 0.3 ? 'Black & white' : `${TONE_NAMES[film.tone]} toned`;
   const texture = film.grain < 0.2 ? 'Fine grain' : film.grain < 0.45 ? 'Medium grain' : 'Heavy grain';
   return `${kind} · ISO ${film.iso} · ${texture}`;
 }
 
 /// An approximate tone scale for the page: black to white through the film's range and toning.
 function toneScale(film, steps = 9) {
+  if (film.color) return colorScale(film, steps);
   const [ink, mid, paper] = STOPS[film.tone] || STOPS.neutral;
   const a = film.toneAmount;
   return Array.from({ length: steps }, (_, i) => {
@@ -833,8 +847,45 @@ function toneScale(film, steps = 9) {
   });
 }
 
+/// A colour film's tone scale: grey through its white balance and grade (mirror of
+/// RetroCam/ColorGrade.swift, without the blue-only aqua shift, which greys don't feel).
+function colorScale(film, steps) {
+  const luma = (r, g, b) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  const clamp = (x) => Math.min(Math.max(x, 0), 1);
+  const hueRGB = (h) => {
+    const hh = (((h % 1) + 1) % 1) * 6, x = 1 - Math.abs((hh % 2) - 1);
+    return hh < 1 ? [1, x, 0] : hh < 2 ? [x, 1, 0] : hh < 3 ? [0, 1, x] : hh < 4 ? [0, x, 1] : hh < 5 ? [x, 0, 1] : [1, 0, x];
+  };
+  const tint = (h) => { const c = hueRGB(h); const y = luma(...c); return c.map((v) => v - y); };
+  const st = tint(film.shadowHue), ht = tint(film.highlightHue);
+  const gains = [1 + 0.12 * film.warmth + 0.04 * film.tint, 1 + 0.02 * film.warmth - 0.07 * film.tint, 1 - 0.14 * film.warmth + 0.04 * film.tint];
+  const bends = [[film.redShadows, film.redHighlights], [film.greenShadows, film.greenHighlights], [film.blueShadows, film.blueHighlights]];
+  return Array.from({ length: steps }, (_, i) => {
+    const x = film.blackLift + (i / (steps - 1)) * (film.whitePoint - film.blackLift);
+    let c = gains.map((k) => clamp(x * k));
+    c = c.map((v, j) => clamp(v + 0.12 * (bends[j][0] * 6.75 * v * (1 - v) ** 2 + bends[j][1] * 6.75 * v * v * (1 - v))));
+    let y = luma(...c);
+    c = c.map((v) => clamp(y + film.saturation * (v - y)));
+    y = luma(...c);
+    const ws = film.shadowAmount * (1 - y) ** 2, wh = film.highlightAmount * y * y;
+    c = c.map((v, j) => clamp(v + 0.4 * (ws * st[j] + wh * ht[j])));
+    return `rgb(${c.map((v) => Math.round(v * 255)).join(',')})`;
+  });
+}
+
 function settingsList(film) {
   const pct = (v) => `${Math.round(v * 100)}%`;
+  if (film.color) {
+    const deg = (h) => `${Math.round(h * 360) % 360}°`;
+    const signed = (v) => `${v > 0 ? '+' : ''}${Math.round(v * 100)}`;
+    const rows = [['Contrast', pct(film.contrast)], ['Saturation', pct(film.saturation)], ['Warmth', signed(film.warmth)]];
+    if (film.shadowAmount > 0.02) rows.push(['Shadow color', `${deg(film.shadowHue)} ${pct(film.shadowAmount)}`]);
+    if (film.highlightAmount > 0.02) rows.push(['Light color', `${deg(film.highlightHue)} ${pct(film.highlightAmount)}`]);
+    if (film.halation > 0.02) rows.push(['Halation', pct(film.halation)]);
+    rows.push(['Grain', pct(film.grain)]);
+    if (film.effect !== 'none') rows.push(['Effect', `${EFFECT_NAMES[film.effect]} ${pct(film.effectAmount)}`]);
+    return rows;
+  }
   const rows = [
     ['Contrast', pct(film.contrast)], ['Grain', pct(film.grain)], ['Vignette', pct(film.vignette / 1.2)],
   ];

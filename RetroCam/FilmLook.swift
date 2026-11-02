@@ -1,7 +1,7 @@
 import CoreImage
 import CoreImage.CIFilterBuiltins
 
-/// The black & white film emulation pipeline. Pure Core Image, so the exact
+/// The film emulation pipeline, black & white or colour. Pure Core Image, so the exact
 /// same recipe runs on the live viewfinder and on the full-resolution photo.
 ///
 /// Grain size is expressed relative to the image's long side, so a 1,500 px
@@ -25,18 +25,29 @@ enum FilmLook {
         // 0b. Lens effects (FX): fisheye, swirl, tilt-shift, zoom, drag, double, prism...
         lens = LensFX.lens(lens, stock: stock)
 
-        // 1. Spectral response -> monochrome (in Core Image's linear working space).
-        let mix = CIVector(x: stock.red, y: stock.green, z: stock.blue, w: 0)
-        let mono = CIFilter.colorMatrix()
-        mono.inputImage = lens
-        mono.rVector = mix
-        mono.gVector = mix
-        mono.bVector = mix
-        mono.aVector = CIVector(x: 0, y: 0, z: 0, w: 1)
-        var image = mono.outputImage!.clampedToExtent().applyingFilter("CIColorClamp").cropped(to: extent)
+        // 1. Black & white: spectral response -> monochrome (in Core Image's linear working
+        //    space). Colour: the scene as it is.
+        var image: CIImage
+        if stock.color {
+            image = lens.clampedToExtent().applyingFilter("CIColorClamp").cropped(to: extent)
+        } else {
+            let mix = CIVector(x: stock.red, y: stock.green, z: stock.blue, w: 0)
+            let mono = CIFilter.colorMatrix()
+            mono.inputImage = lens
+            mono.rVector = mix
+            mono.gVector = mix
+            mono.bVector = mix
+            mono.aVector = CIVector(x: 0, y: 0, z: 0, w: 1)
+            image = mono.outputImage!.clampedToExtent().applyingFilter("CIColorClamp").cropped(to: extent)
+        }
 
         // 2. Work in gamma-encoded space for the tonal/print steps (curves behave like a darkroom).
         image = image.applyingFilter("CILinearToSRGBToneCurve")
+
+        // 2b. Colour: white balance before the curve, like the film's own colour response.
+        if stock.color, stock.warmth != 0 || stock.tint != 0 {
+            image = whiteBalance(image, warmth: stock.warmth, tint: stock.tint)
+        }
 
         // 3. Characteristic curve: S-curve for contrast, mid-tone key, lifted blacks, dimmed whites.
         image = toneCurve(image, stock: stock)
@@ -50,12 +61,19 @@ enum FilmLook {
         if stock.bloom > 0 {
             image = bloom(image, amount: stock.bloom)
         }
+        // 3b'. Colour: halation, the red-orange fringe around bright lights.
+        if stock.color, stock.halation > 0 {
+            image = bloom(image, amount: stock.halation, tint: (1, 0.36, 0.16), threshold: 0.78, spread: 0.008)
+        }
 
         // 3c. Print effects (FX): halftone dots, etched lines.
         image = LensFX.print(image, stock: stock)
 
-        // 4. Print toning (split: separate ink, mid and paper colours).
-        if stock.toneAmount > 0, stock.tone != .neutral {
+        // 4. Black & white: print toning (split: separate ink, mid and paper colours).
+        //    Colour: the grade (RGB curves, aqua blues, saturation, split toning).
+        if stock.color {
+            image = grade(image, stock.grade)
+        } else if stock.toneAmount > 0, stock.tone != .neutral {
             image = tone(image, toning: stock.tone, amount: stock.toneAmount)
         }
 
@@ -104,11 +122,13 @@ enum FilmLook {
         return blur.outputImage?.cropped(to: extent) ?? image
     }
 
-    /// Soft glow around highlights: keep what's above 70% grey, blur it wide, screen it back on.
-    private static func bloom(_ image: CIImage, amount: CGFloat) -> CIImage {
+    /// Soft glow around highlights: keep what's above `threshold`, blur it wide (`spread`
+    /// of the long side), tint it, screen it back on.
+    private static func bloom(_ image: CIImage, amount: CGFloat,
+                              tint: (CGFloat, CGFloat, CGFloat) = (1, 1, 1),
+                              threshold: CGFloat = 0.7, spread: CGFloat = 0.015) -> CIImage {
         let extent = image.extent
         let longSide = max(extent.width, extent.height)
-        let threshold: CGFloat = 0.7
         let gain = 1 / (1 - threshold)
 
         let highlights = CIFilter.colorMatrix()
@@ -122,14 +142,25 @@ enum FilmLook {
 
         let glow = bright
             .clampedToExtent()
-            .applyingGaussianBlur(sigma: Double(longSide * 0.015))
+            .applyingGaussianBlur(sigma: Double(longSide * spread))
             .cropped(to: extent)
 
+        // A tinted glow takes its brightness from the highlights' luminance.
         let strength = CIFilter.colorMatrix()
         strength.inputImage = glow
-        strength.rVector = CIVector(x: amount, y: 0, z: 0, w: 0)
-        strength.gVector = CIVector(x: 0, y: amount, z: 0, w: 0)
-        strength.bVector = CIVector(x: 0, y: 0, z: amount, w: 0)
+        if tint == (1, 1, 1) {
+            strength.rVector = CIVector(x: amount, y: 0, z: 0, w: 0)
+            strength.gVector = CIVector(x: 0, y: amount, z: 0, w: 0)
+            strength.bVector = CIVector(x: 0, y: 0, z: amount, w: 0)
+        } else {
+            let luma: (CGFloat, CGFloat, CGFloat) = (0.2126, 0.7152, 0.0722)
+            func row(_ k: CGFloat) -> CIVector {
+                CIVector(x: amount * k * luma.0, y: amount * k * luma.1, z: amount * k * luma.2, w: 0)
+            }
+            strength.rVector = row(tint.0)
+            strength.gVector = row(tint.1)
+            strength.bVector = row(tint.2)
+        }
         strength.aVector = CIVector(x: 0, y: 0, z: 0, w: 1)
 
         let screen = CIFilter.screenBlendMode()
@@ -162,6 +193,43 @@ enum FilmLook {
         curve.point3 = p[3]
         curve.point4 = p[4]
         return curve.outputImage ?? image
+    }
+
+    /// White balance on gamma-encoded colour: warm adds red and takes blue, tint trades
+    /// green for magenta.
+    private static func whiteBalance(_ image: CIImage, warmth w: CGFloat, tint t: CGFloat) -> CIImage {
+        let matrix = CIFilter.colorMatrix()
+        matrix.inputImage = image
+        matrix.rVector = CIVector(x: 1 + 0.12 * w + 0.04 * t, y: 0, z: 0, w: 0)
+        matrix.gVector = CIVector(x: 0, y: 1 + 0.02 * w - 0.07 * t, z: 0, w: 0)
+        matrix.bVector = CIVector(x: 0, y: 0, z: 1 - 0.14 * w + 0.04 * t, w: 0)
+        matrix.aVector = CIVector(x: 0, y: 0, z: 0, w: 1)
+        return matrix.outputImage?.applyingFilter("CIColorClamp") ?? image
+    }
+
+    /// Apply a colour grade through a colour cube built from it (cached: the live view
+    /// renders every frame, and the cube only changes when the film's settings do).
+    private static func grade(_ image: CIImage, _ grade: ColorGrade) -> CIImage {
+        guard !grade.isIdentity else { return image }
+        let cube = CIFilter.colorCube()
+        cube.inputImage = image
+        cube.cubeDimension = Float(cubeSize)
+        cube.cubeData = cubeData(for: grade)
+        return cube.outputImage ?? image
+    }
+
+    private static let cubeSize = 33
+    private static let cubeLock = NSLock()
+    private static var cubes: [ColorGrade: Data] = [:]
+
+    private static func cubeData(for grade: ColorGrade) -> Data {
+        cubeLock.lock()
+        defer { cubeLock.unlock() }
+        if let data = cubes[grade] { return data }
+        if cubes.count > 12 { cubes.removeAll() }   // dialling a setting makes a new one each step
+        let data = grade.cubeData(size: cubeSize)
+        cubes[grade] = data
+        return data
     }
 
     /// Tone the grey print: each channel follows a quadratic through the toning's ink,

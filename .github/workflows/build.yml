@@ -36,7 +36,7 @@ jobs:
 
       - name: Film model tests
         run: |
-          swiftc RetroCam/FilmStock.swift RetroCam/FilmLibrary.swift RetroCam/Roll.swift RetroCam/FilmCode.swift RetroCam/ShareLinks.swift ci/film-tests/main.swift -o "$RUNNER_TEMP/film-tests"
+          swiftc RetroCam/ColorGrade.swift RetroCam/FilmStock.swift RetroCam/FilmLibrary.swift RetroCam/Roll.swift RetroCam/FilmCode.swift RetroCam/ShareLinks.swift ci/film-tests/main.swift -o "$RUNNER_TEMP/film-tests"
           "$RUNNER_TEMP/film-tests"
 
       - name: Build

@@ -233,6 +233,7 @@ enum FilmCodeCard {
         flat.vignette = 0
         flat.fog = 0
         flat.bloom = 0
+        flat.halation = 0
         flat.edgeSoftness = 0
         flat.effect = .none
 
