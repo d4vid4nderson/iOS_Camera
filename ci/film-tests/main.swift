@@ -178,4 +178,11 @@ var shareLib = FilmLibrary()
 shareLib.add(received)
 check(shareLib.original(id: received.id) != nil && shareLib.all.last?.id == received.id, "shared film added to the picker")
 
+// Share card captions.
+check(FilmStock.pan50.shareCaption == "Black & white  ·  ISO 50  ·  Fine grain", "PAN 50 caption: \(FilmStock.pan50.shareCaption)")
+check(FilmStock.selenium.shareCaption.hasPrefix("Selenium toned"), "selenium film says it's toned")
+check(FilmStock.expired.shareCaption.hasPrefix("Black & white"), "a light tint still reads as black & white")
+check(FilmStock.push3200.shareCaption.hasSuffix("Heavy grain"), "push film is heavy grain")
+for film in FilmStock.all { check(film.shareCaption.contains("ISO \(film.iso)"), "\(film.id) caption has its ISO") }
+
 if failures == 0 { print("film tests: all passed") } else { print("film tests: \(failures) failed"); exit(1) }

@@ -9,6 +9,7 @@ import UniformTypeIdentifiers
 ///   Application Support/Rolls/007/frame-01.jpg   screen-sharp copy (2048 px long side)
 ///                                 thumb-01.jpg   grid thumbnail (480 px)
 ///                                 roll.json      the roll's number, film, dates, develop mode
+///                                 films.json     which film each frame was shot on (by film id)
 ///                                 full-01.jpg    full-resolution frame waiting to develop
 ///                                                (deleted once it's in Photos)
 enum RollStore {
@@ -64,7 +65,7 @@ enum RollStore {
     }
 
     /// Keep a copy of a developed frame. Runs off the main thread.
-    static func save(_ jpeg: Data, roll: Roll, frame: Int) throws {
+    static func save(_ jpeg: Data, roll: Roll, frame: Int, filmID: String? = nil) throws {
         let folder = folder(for: roll.number)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         guard let preview = downsample(jpeg, to: previewSize, quality: 0.85),
@@ -74,6 +75,35 @@ enum RollStore {
         if let info = try? JSONEncoder().encode(roll) {
             try? info.write(to: folder.appendingPathComponent("roll.json"), options: .atomic)
         }
+        if let filmID {
+            var shotOn = films(of: roll.number)
+            shotOn[frame] = filmID
+            let named = Dictionary(uniqueKeysWithValues: shotOn.map { (String($0.key), $0.value) })
+            if let data = try? JSONEncoder().encode(named) {
+                try? data.write(to: folder.appendingPathComponent("films.json"), options: .atomic)
+            }
+        }
+    }
+
+    /// Which film each frame of a roll was shot on (frame number -> film id). Frames shot
+    /// before this was recorded aren't listed.
+    static func films(of number: Int) -> [Int: String] {
+        let url = folder(for: number).appendingPathComponent("films.json")
+        guard let data = try? Data(contentsOf: url),
+              let named = try? JSONDecoder().decode([String: String].self, from: data) else { return [:] }
+        return Dictionary(uniqueKeysWithValues: named.compactMap { key, id in Int(key).map { ($0, id) } })
+    }
+
+    /// The newest developed frame shot on a film, for its share card. nil if there's none.
+    static func latestFrame(filmID: String) -> UIImage? {
+        for roll in rolls() {
+            let shotOn = films(of: roll.number)
+            for frame in frames(of: roll.number).reversed()
+            where shotOn[frame] == filmID && !isPending(roll: roll.number, frame: frame) {
+                if let image = UIImage(contentsOfFile: frameURL(roll: roll.number, frame: frame).path) { return image }
+            }
+        }
+        return nil
     }
 
     /// Frame numbers stored for a roll, in order.
