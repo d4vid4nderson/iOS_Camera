@@ -56,6 +56,34 @@ if /usr/libexec/PlistBuddy -c "Print :ProvisionedDevices" "$PROFILE_PLIST" >/dev
   fail "Profile '$NAME' is a Development or Ad Hoc profile (it lists devices). Create one of type 'App Store Connect'."
 fi
 
+# --- Entitlements the profile allows ------------------------------------------
+# Sign in with Apple and links that open the app (Associated Domains) need both the
+# capability on the App ID and a profile made after it was switched on. Include each
+# entitlement only if this profile carries it, so an older profile still signs (without
+# them) instead of failing the build.
+ENTITLEMENTS="$RUNNER_TEMP/app.entitlements"
+has() { /usr/libexec/PlistBuddy -c "Print :Entitlements:$1" "$PROFILE_PLIST" >/dev/null 2>&1; }
+{
+  echo '<?xml version="1.0" encoding="UTF-8"?>'
+  echo '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">'
+  echo '<plist version="1.0"><dict>'
+  if has com.apple.developer.applesignin; then
+    echo '<key>com.apple.developer.applesignin</key><array><string>Default</string></array>'
+    echo "Profile allows Sign in with Apple: on."
+  else
+    echo "::warning::This provisioning profile doesn't include Sign in with Apple, so the build leaves it off. Switch it on for $BUNDLE_ID, re-save the App Store profile and update PROVISIONING_PROFILE."
+  fi
+  if has com.apple.developer.associated-domains; then
+    echo '<key>com.apple.developer.associated-domains</key><array><string>applinks:filmexposures.com</string></array>'
+    echo "Profile allows Associated Domains: links to filmexposures.com open the app."
+  else
+    echo "::warning::This provisioning profile doesn't include Associated Domains, so filmexposures.com links open the web page first. Switch it on for $BUNDLE_ID, re-save the profile and update PROVISIONING_PROFILE."
+  fi
+  echo '</dict></plist>'
+} > "$ENTITLEMENTS"
+plutil -lint "$ENTITLEMENTS" >/dev/null || fail "Couldn't write the entitlements file."
+echo "APP_ENTITLEMENTS=$ENTITLEMENTS" >> "$GITHUB_ENV"
+
 for dir in "$HOME/Library/MobileDevice/Provisioning Profiles" \
            "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
   mkdir -p "$dir"
