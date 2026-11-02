@@ -12,7 +12,7 @@ private extension Font {
 ///
 /// The card shows your latest frame shot on the film when there is one (PHOTO), or the
 /// film's tone scale (TONES) — also the choice for anyone who'd rather not share a photo.
-/// Your headshot and name (set here, kept on this phone) go in the card's corner.
+/// Your headshot and name (your profile, kept on this phone) go in the card's corner.
 struct FilmShareSheet: View {
     let film: FilmStock
     let accent: Color
@@ -24,8 +24,6 @@ struct FilmShareSheet: View {
     @State private var card: UIImage?
     @State private var profile = Profile.load()
     @State private var editingProfile = false
-    @State private var nameDraft = ""
-    @State private var pickerItem: PhotosPickerItem?
     @State private var avatarVersion = 0
 
     /// Re-render the card when any of these change.
@@ -124,108 +122,29 @@ struct FilmShareSheet: View {
 
     // MARK: Your photo & name
 
-    @ViewBuilder private var profileRow: some View {
-        if editingProfile {
-            profileEditor
-        } else {
-            HStack(spacing: 10) {
-                avatar(size: 30)
-                Text(profile.isEmpty ? "ADD YOUR PHOTO & NAME"
-                     : profile.name.isEmpty ? "YOUR PHOTO" : profile.name)
-                    .font(.mono(11, .bold))
-                    .foregroundStyle(profile.isEmpty ? accent : .white)
-                    .lineLimit(1)
-                Spacer(minLength: 4)
-                if !profile.isEmpty {
-                    chip(profile.showOnCards ? "ON CARD" : "HIDDEN", selected: profile.showOnCards) {
-                        profile.showOnCards.toggle()
-                        profile.saveSettings()
-                    }
+    private var profileRow: some View {
+        HStack(spacing: 10) {
+            ProfileAvatar(photo: profile.photo, size: 30)
+            Text(profile.isEmpty ? "ADD YOUR PHOTO & NAME"
+                 : profile.name.isEmpty ? "YOUR PHOTO" : profile.name)
+                .font(.mono(11, .bold))
+                .foregroundStyle(profile.isEmpty ? accent : .white)
+                .lineLimit(1)
+            Spacer(minLength: 4)
+            if !profile.isEmpty {
+                chip(profile.showOnCards ? "ON CARD" : "HIDDEN", selected: profile.showOnCards) {
+                    profile.showOnCards.toggle()
+                    profile.saveSettings()
                 }
-                chip(profile.isEmpty ? "ADD" : "EDIT", selected: false) {
-                    nameDraft = profile.name
-                    withAnimation(.snappy(duration: 0.2)) { editingProfile = true }
-                }
+            }
+            chip(profile.isEmpty ? "ADD" : "EDIT", selected: false) { editingProfile = true }
+        }
+        .sheet(isPresented: $editingProfile) {
+            ProfileSheet(accent: accent) { updated in
+                profile = updated
+                avatarVersion += 1
             }
         }
-    }
-
-    private var profileEditor: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 14) {
-                avatar(size: 64)
-                VStack(alignment: .leading, spacing: 8) {
-                    PhotosPicker(selection: $pickerItem, matching: .images) {
-                        chipText(profile.photo == nil ? "CHOOSE HEADSHOT" : "CHANGE PHOTO", selected: false)
-                    }
-                    .buttonStyle(.plain)
-                    if profile.photo != nil {
-                        chip("REMOVE PHOTO", selected: false) {
-                            Profile.removeHeadshot()
-                            profile.photo = nil
-                            avatarVersion += 1
-                        }
-                    }
-                }
-            }
-            TextField("", text: $nameDraft,
-                      prompt: Text("YOUR NAME OR @HANDLE").foregroundStyle(Color(white: 0.4)))
-                .font(.mono(13, .semibold))
-                .foregroundStyle(.white)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .submitLabel(.done)
-                .onSubmit(saveName)
-                .padding(.horizontal, 14).padding(.vertical, 10)
-                .background(Capsule().fill(Color(white: 0.16)))
-                .onChange(of: nameDraft) { _, new in
-                    if new.count > Profile.maxNameLength { nameDraft = String(new.prefix(Profile.maxNameLength)) }
-                }
-            HStack {
-                Text("Kept on this phone. Only appears on cards you share.")
-                    .font(.mono(9)).foregroundStyle(.secondary)
-                Spacer()
-                chip("DONE", selected: true) { saveName() }
-            }
-        }
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: 14).fill(Color(white: 0.12)))
-        .onChange(of: pickerItem) { _, item in
-            guard let item else { return }
-            Task {
-                if let data = try? await item.loadTransferable(type: Data.self) {
-                    let headshot = await Task.detached(priority: .userInitiated) {
-                        Profile.saveHeadshot(from: data)
-                    }.value
-                    if let headshot {
-                        profile.photo = headshot
-                        avatarVersion += 1
-                    }
-                }
-                pickerItem = nil
-            }
-        }
-    }
-
-    private func saveName() {
-        profile.name = Profile.cleanName(nameDraft)
-        profile.saveSettings()
-        withAnimation(.snappy(duration: 0.2)) { editingProfile = false }
-    }
-
-    private func avatar(size: CGFloat) -> some View {
-        ZStack {
-            if let image = profile.photo {
-                Image(uiImage: image).resizable().scaledToFill()
-            } else {
-                Color(white: 0.18)
-                Image(systemName: "person.fill")
-                    .font(.system(size: size * 0.45))
-                    .foregroundStyle(Color(white: 0.5))
-            }
-        }
-        .frame(width: size, height: size)
-        .clipShape(Circle())
     }
 
     private func chip(_ text: String, selected: Bool, action: @escaping () -> Void) -> some View {
