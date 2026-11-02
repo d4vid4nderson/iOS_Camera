@@ -1,3 +1,4 @@
+import Combine
 import PhotosUI
 import SwiftUI
 
@@ -48,6 +49,9 @@ struct ProfileSheet: View {
                             chipText(profile.photo == nil ? "CHOOSE HEADSHOT" : "CHANGE PHOTO", selected: true)
                         }
                         .buttonStyle(.plain)
+                        ForEach(providerPhotos, id: \.self) { provider in
+                            chip("USE \(provider.uppercased()) PHOTO", selected: false) { useProviderPhoto(provider) }
+                        }
                         if profile.photo != nil {
                             chip("REMOVE PHOTO", selected: false) {
                                 Profile.removeHeadshot()
@@ -111,6 +115,12 @@ struct ProfileSheet: View {
         }
         .onAppear(perform: loadRolls)
         .task { await account.refresh() }
+        .onReceive(account.$headshotVersion.dropFirst()) { _ in
+            // A Google or Facebook photo became the headshot.
+            profile = Profile.load()
+            nameDraft = profile.name
+            onChange(profile)
+        }
         .scrollDismissesKeyboard(.interactively)
         .presentationDetents([.medium, .large])
         .presentationBackground(Color(white: 0.09))
@@ -171,6 +181,20 @@ struct ProfileSheet: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            VStack(alignment: .leading, spacing: 8) {
+                Text("SIGN-INS").font(.mono(9, .semibold)).foregroundStyle(.secondary)
+                Text(signInsLine(me)).font(.mono(11, .bold)).foregroundStyle(.white)
+                if !me.has("apple") {
+                    AppleSignInButton(onError: { note = $0.uppercased() })
+                }
+                if SocialSignIn.googleAvailable, !me.has("google") {
+                    ProviderButton(provider: "google", onError: { note = $0.uppercased() })
+                }
+                if SocialSignIn.facebookAvailable, !me.has("facebook") {
+                    ProviderButton(provider: "facebook", onError: { note = $0.uppercased() })
+                }
+            }
+
             HStack(spacing: 6) {
                 chip("SIGN OUT", selected: false) { Task { await account.signOut() } }
                 Spacer(minLength: 0)
@@ -197,8 +221,31 @@ struct ProfileSheet: View {
                 Text("Sign in to put rolls on a public profile people can open from your shares, and to like frames in other people's rolls. Not needed for the camera or for sharing links.")
                     .font(.mono(10)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                AppleSignInButton(onError: { note = $0.uppercased() }, onSignedIn: { note = nil; loadRolls() })
+                SignInButtons(onError: { note = $0.uppercased() }, onSignedIn: { note = nil; loadRolls() })
             }
+        }
+    }
+
+    private func signInsLine(_ me: Account.Me) -> String {
+        let names = (me.logins ?? ["apple"]).map { $0 == "google" ? "GOOGLE" : $0 == "facebook" ? "FACEBOOK" : "APPLE" }
+        return names.joined(separator: " · ")
+    }
+
+    /// Sign-ins whose photo you could switch back to (not the one you're using).
+    private var providerPhotos: [String] {
+        guard account.isSignedIn, let me = account.me else { return [] }
+        return (me.photos ?? []).filter { $0 != me.avatarSource || profile.photo == nil }
+    }
+
+    private func useProviderPhoto(_ provider: String) {
+        working = true
+        Task {
+            do {
+                try await account.useProviderPhoto(provider)
+            } catch {
+                note = error.localizedDescription.uppercased()
+            }
+            working = false
         }
     }
 

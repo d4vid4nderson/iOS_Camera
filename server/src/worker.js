@@ -14,6 +14,11 @@
 //   PUT|DELETE /api/rolls/<id>/frames/<n>/like   like or unlike a frame          (account)
 //
 //   POST /api/auth/apple { identityToken }  Sign in with Apple -> { token, me }
+//   POST /api/auth/google { idToken }       Sign in with Google -> { token, me }
+//   POST /api/auth/facebook { code, redirectUri }  Facebook Login -> { token, me }
+//   GET  /auth/facebook/callback            Facebook sends people back here; it opens the app
+//        (signed in already? the same calls add that sign-in to your account instead)
+//   POST /api/me/avatar/use { provider }    go back to your Google or Facebook photo (account)
 //   POST /api/auth/signout                  forget this session              (account)
 //   GET|PUT|DELETE /api/me                  your profile: { name } / delete your account (account)
 //   PUT|DELETE /api/me/avatar               your headshot (JPEG)             (account)
@@ -21,7 +26,7 @@
 //   GET  /u/<id>                            a profile page; /u/<id>/profile.json for the app
 //   GET  /.well-known/apple-app-site-association   lets these links open the app
 //
-// "(account)" means an X-Account header with the session token from /api/auth/apple.
+// "(account)" means an X-Account header with the session token from /api/auth/*.
 // Link-shared rolls are deleted 30 days after they're shared (checked on every read, and swept
 // daily). Rolls on a profile stay until they're taken off it or deleted.
 
@@ -32,6 +37,9 @@ export const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 export const HIDE_AFTER_REPORTS = 3;
 export const APPLE_ISSUER = 'https://appleid.apple.com';
 export const APPLE_AUDIENCE = 'com.davidanderson.retrocam';
+export const GOOGLE_ISSUERS = ['https://accounts.google.com', 'accounts.google.com'];
+export const PROVIDERS = ['apple', 'google', 'facebook'];
+const FACEBOOK_GRAPH = 'https://graph.facebook.com/v19.0';
 const DAY = 24 * 60 * 60 * 1000;
 const ROLL = '([A-Za-z0-9]{10})';
 const USER = '([A-Za-z0-9]{12})';
@@ -93,6 +101,18 @@ export async function route(request, env, now = Date.now()) {
   }
 
   if (path === '/api/auth/apple' && method === 'POST') return signInWithApple(request, env, url, now);
+  if (path === '/api/auth/google' && method === 'POST') return signInWithGoogle(request, env, url, now);
+  if (path === '/api/auth/facebook' && method === 'POST') return signInWithFacebook(request, env, url, now);
+  if (path === '/auth/facebook/callback' && method === 'GET') {
+    // Facebook only sends people back to a web address; this hands the code to the app.
+    const back = new URL('exposures://auth/facebook');
+    for (const key of ['code', 'state', 'error']) {
+      const value = url.searchParams.get(key);
+      if (value) back.searchParams.set(key, value.slice(0, 2000));
+    }
+    return new Response(null, { status: 302, headers: { location: back.href } });
+  }
+  if (path === '/api/me/avatar/use' && method === 'POST') return useProviderPhoto(request, env, url);
   if (path === '/api/auth/signout' && method === 'POST') return signOut(request, env);
   if (path === '/api/me' && method === 'GET') return withUser(request, env, (user) => json(200, mePayload(user, url)));
   if (path === '/api/me' && method === 'PUT') return updateMe(request, env, url);
@@ -321,20 +341,143 @@ async function signInWithApple(request, env, url, now) {
   const body = await readJSON(request);
   const claims = body?.identityToken ? await verifyAppleToken(String(body.identityToken), env, now) : null;
   if (!claims) return json(401, { error: 'Sign in with Apple could not be verified.' });
-  const appleKey = await sha256(`apple:${claims.sub}`);
-  const link = await env.ROLLS.get(`accounts/${appleKey}.json`);
-  let user = link ? await getUser(env, JSON.parse(await link.text()).id) : null;
-  if (!user) {
-    user = { id: randomID(12), name: clean(body.name, 24), avatar: 0, createdAt: now, termsAt: null, appleKey };
-    await putUser(env, user);
-    await env.ROLLS.put(`accounts/${appleKey}.json`, JSON.stringify({ id: user.id }));
+  return signIn(request, env, url, now, 'apple', claims.sub, { name: clean(body.name, 24) });
+}
+
+async function signInWithGoogle(request, env, url, now) {
+  const body = await readJSON(request);
+  const claims = body?.idToken ? await verifyGoogleToken(String(body.idToken), env, now) : null;
+  if (!claims) return json(401, { error: 'Sign in with Google could not be verified.' });
+  // Google's photo URLs end in a size (=s96-c); ask for a bigger one.
+  const photo = typeof claims.picture === 'string' ? claims.picture.replace(/=s\d+(-c)?$/, '=s600-c') : null;
+  return signIn(request, env, url, now, 'google', claims.sub, { name: clean(claims.name, 24), photo });
+}
+
+/// Facebook Login: the app gets a code from Facebook's login page; the server swaps it for
+/// an access token (which needs the app secret), then asks Facebook who it is.
+async function signInWithFacebook(request, env, url, now) {
+  if (!env.FACEBOOK_APP_ID || !env.FACEBOOK_APP_SECRET) return json(503, { error: 'Facebook Login is not set up.' });
+  const body = await readJSON(request);
+  const code = typeof body?.code === 'string' ? body.code : '';
+  const redirectUri = `${url.origin}/auth/facebook/callback`;
+  if (!code) return json(400, { error: 'Expected a code' });
+  const exchange = new URL(`${FACEBOOK_GRAPH}/oauth/access_token`);
+  exchange.search = new URLSearchParams({
+    client_id: env.FACEBOOK_APP_ID, client_secret: env.FACEBOOK_APP_SECRET, redirect_uri: redirectUri, code,
+  }).toString();
+  const tokenRes = await facebookFetch(env, exchange.href);
+  const accessToken = tokenRes?.access_token;
+  if (!accessToken) return json(401, { error: 'Facebook Login could not be verified.' });
+  const me = new URL(`${FACEBOOK_GRAPH}/me`);
+  me.search = new URLSearchParams({ fields: 'id,name,picture.width(600).height(600)', access_token: accessToken }).toString();
+  const person = await facebookFetch(env, me.href);
+  if (!person?.id) return json(401, { error: 'Facebook Login could not be verified.' });
+  const picture = person.picture?.data;
+  const photo = picture && !picture.is_silhouette && typeof picture.url === 'string' ? picture.url : null;
+  return signIn(request, env, url, now, 'facebook', String(person.id), { name: clean(person.name, 24), photo });
+}
+
+async function facebookFetch(env, href) {
+  try {
+    const res = await (env.FETCH || fetch)(href);
+    return res.ok ? await res.json() : null;
+  } catch {
+    return null;
   }
-  const token = randomHex(32);
-  const hash = await sha256(token);
-  await env.ROLLS.put(`sessions/${hash}.json`, JSON.stringify({ id: user.id, createdAt: now }));
-  await env.ROLLS.put(`users/${user.id}/sessions/${hash}`, '1');
+}
+
+/// Sign in with a provider's verified id. Already signed in (X-Account), it adds this
+/// sign-in to your account instead. The provider's photo becomes your headshot when you
+/// don't have one of your own, and is kept so you can go back to it.
+async function signIn(request, env, url, now, provider, sub, { name, photo }) {
+  const key = await sha256(`${provider}:${sub}`);
+  const link = await env.ROLLS.get(`accounts/${key}.json`);
+  const linkedID = link ? JSON.parse(await link.text()).id : null;
+  const current = await currentUser(request, env);
+  let user;
+  let token = null;
+
+  if (current) {
+    if (linkedID && linkedID !== current.id) {
+      return json(409, { error: `That ${providerName(provider)} account already belongs to another Film Exposures account.` });
+    }
+    user = current;
+  } else {
+    user = linkedID ? await getUser(env, linkedID) : null;
+    if (!user) {
+      user = { id: randomID(12), name, avatar: 0, avatarSource: null, createdAt: now, termsAt: null, logins: {} };
+    }
+  }
+  logins(user)[provider] = key;
+  if (!user.name && name) user.name = name;
+  if (photo && (await importPhoto(env, user, provider, photo))) {
+    user.photos = { ...(user.photos || {}), [provider]: true };
+    if (!user.avatar) await setAvatarFromProvider(env, user, provider);
+  }
+  await putUser(env, user);
+  await env.ROLLS.put(`accounts/${key}.json`, JSON.stringify({ id: user.id }));
+
+  if (!current) {
+    token = randomHex(32);
+    const hash = await sha256(token);
+    await env.ROLLS.put(`sessions/${hash}.json`, JSON.stringify({ id: user.id, createdAt: now }));
+    await env.ROLLS.put(`users/${user.id}/sessions/${hash}`, '1');
+  }
   return json(200, { token, me: mePayload(user, url) });
 }
+
+const PHOTO_HOSTS = [/\.googleusercontent\.com$/, /\.fbcdn\.net$/, /^platform-lookaside\.fbsbx\.com$/, /^graph\.facebook\.com$/];
+
+/// Keep a copy of a provider's photo (JPEG only, from the provider's own image hosts).
+async function importPhoto(env, user, provider, href) {
+  let target;
+  try { target = new URL(href); } catch { return false; }
+  if (target.protocol !== 'https:' || !PHOTO_HOSTS.some((host) => host.test(target.hostname))) return false;
+  try {
+    const res = await (env.FETCH || fetch)(target.href);
+    if (!res.ok) return false;
+    const bytes = await res.arrayBuffer();
+    if (bytes.byteLength === 0 || bytes.byteLength > MAX_IMAGE_BYTES) return false;
+    const head = new Uint8Array(bytes, 0, 3);
+    if (head[0] !== 0xff || head[1] !== 0xd8 || head[2] !== 0xff) return false;
+    await env.ROLLS.put(`users/${user.id}/photo-${provider}.jpg`, bytes, { httpMetadata: { contentType: 'image/jpeg' } });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function setAvatarFromProvider(env, user, provider) {
+  const object = await env.ROLLS.get(`users/${user.id}/photo-${provider}.jpg`);
+  if (!object) return false;
+  await env.ROLLS.put(`users/${user.id}/avatar.jpg`, await new Response(object.body).arrayBuffer(),
+    { httpMetadata: { contentType: 'image/jpeg' } });
+  user.avatar = (user.avatar || 0) + 1;
+  user.avatarSource = provider;
+  return true;
+}
+
+async function useProviderPhoto(request, env, url) {
+  return withUser(request, env, async (user) => {
+    const provider = (await readJSON(request))?.provider;
+    if (!PROVIDERS.includes(provider) || !user.photos?.[provider]) return json(404, { error: 'no photo from that sign-in' });
+    if (!(await setAvatarFromProvider(env, user, provider))) return json(404, { error: 'no photo from that sign-in' });
+    await putUser(env, user);
+    return json(200, mePayload(user, url));
+  });
+}
+
+/// The sign-ins on an account ({ apple: key, google: key }); older accounts kept one appleKey.
+function logins(user) {
+  if (!user.logins) user.logins = {};
+  if (user.appleKey) {
+    user.logins.apple = user.logins.apple || user.appleKey;
+    delete user.appleKey;
+  }
+  return user.logins;
+}
+
+const providerName = (p) => ({ apple: 'Apple', google: 'Google', facebook: 'Facebook' }[p] || p);
 
 async function signOut(request, env) {
   const token = request.headers.get('x-account') || '';
@@ -367,9 +510,11 @@ async function updateAvatar(request, env, url, upload) {
       if (head[0] !== 0xff || head[1] !== 0xd8 || head[2] !== 0xff) return json(415, { error: 'JPEG only' });
       await env.ROLLS.put(`users/${user.id}/avatar.jpg`, bytes, { httpMetadata: { contentType: 'image/jpeg' } });
       user.avatar = (user.avatar || 0) + 1;   // a version, so caches pick up a new headshot
+      user.avatarSource = 'own';
     } else {
       await env.ROLLS.delete(`users/${user.id}/avatar.jpg`);
       user.avatar = 0;
+      user.avatarSource = null;
     }
     await putUser(env, user);
     return json(200, mePayload(user, url));
@@ -389,7 +534,8 @@ async function deleteAccount(request, env) {
       }
     }
     await deletePrefix(env, `users/${user.id}/`);
-    await env.ROLLS.delete([`users/${user.id}.json`, `accounts/${user.appleKey}.json`]);
+    const keys = Object.values(logins(user)).map((key) => `accounts/${key}.json`);
+    await env.ROLLS.delete([`users/${user.id}.json`, ...keys]);
     return json(200, { ok: true });
   });
 }
@@ -411,7 +557,8 @@ async function publicProfile(env, id, url, now) {
     }
   }
   rolls.sort((a, b) => b.createdAt - a.createdAt);
-  return { ...mePayload(user, url), termsAccepted: undefined, rolls: rolls.map(({ createdAt, ...r }) => r) };
+  const { id: uid, name, avatar, url: link } = mePayload(user, url);
+  return { id: uid, name, avatar, url: link, rolls: rolls.map(({ createdAt, ...r }) => r) };
 }
 
 function mePayload(user, url) {
@@ -421,6 +568,9 @@ function mePayload(user, url) {
     avatar: user.avatar ? `${url.origin}/u/${user.id}/avatar.jpg?v=${user.avatar}` : null,
     url: `${url.origin}/u/${user.id}`,
     termsAccepted: Boolean(user.termsAt),
+    logins: PROVIDERS.filter((p) => logins(user)[p]),
+    avatarSource: user.avatar ? user.avatarSource || 'own' : null,
+    photos: PROVIDERS.filter((p) => user.photos?.[p]),
   };
 }
 
@@ -450,21 +600,27 @@ async function withUser(request, env, handler) {
   return handler(user);
 }
 
-let appleKeyCache = { keys: null, at: 0 };
+const keyCache = new Map();
 
-/// Apple's public keys for checking identity tokens (APPLE_KEYS overrides them in tests).
-async function appleKeys(env, now) {
-  if (env.APPLE_KEYS) return env.APPLE_KEYS;
-  if (appleKeyCache.keys && now - appleKeyCache.at < 60 * 60 * 1000) return appleKeyCache.keys;
-  const res = await fetch('https://appleid.apple.com/auth/keys');
-  if (!res.ok) return appleKeyCache.keys || [];
-  appleKeyCache = { keys: (await res.json()).keys || [], at: now };
-  return appleKeyCache.keys;
+/// A provider's public signing keys (env.<NAME>_KEYS overrides them in tests).
+async function signingKeys(env, name, href, now) {
+  if (env[`${name}_KEYS`]) return env[`${name}_KEYS`];
+  const cached = keyCache.get(href);
+  if (cached && now - cached.at < 60 * 60 * 1000) return cached.keys;
+  try {
+    const res = await (env.FETCH || fetch)(href);
+    if (!res.ok) return cached?.keys || [];
+    const keys = (await res.json()).keys || [];
+    keyCache.set(href, { keys, at: now });
+    return keys;
+  } catch {
+    return cached?.keys || [];
+  }
 }
 
-/// The claims of a Sign in with Apple identity token, if Apple signed it for this app and
-/// it hasn't expired; otherwise null.
-export async function verifyAppleToken(token, env, now = Date.now()) {
+/// The claims of an RS256 identity token, if one of `keys` signed it, it's from one of
+/// `issuers` for one of `audiences`, and it hasn't expired; otherwise null.
+async function verifyJWT(token, keys, issuers, audiences, now) {
   const parts = token.split('.');
   if (parts.length !== 3) return null;
   let header, claims;
@@ -475,7 +631,7 @@ export async function verifyAppleToken(token, env, now = Date.now()) {
     return null;
   }
   if (header.alg !== 'RS256') return null;
-  const jwk = (await appleKeys(env, now)).find((k) => k.kid === header.kid);
+  const jwk = keys.find((k) => k.kid === header.kid);
   if (!jwk) return null;
   try {
     const key = await crypto.subtle.importKey('jwk', { kty: jwk.kty, n: jwk.n, e: jwk.e },
@@ -486,11 +642,25 @@ export async function verifyAppleToken(token, env, now = Date.now()) {
   } catch {
     return null;
   }
-  const audience = env.APPLE_AUDIENCE || APPLE_AUDIENCE;
-  const audOK = Array.isArray(claims.aud) ? claims.aud.includes(audience) : claims.aud === audience;
-  if (claims.iss !== APPLE_ISSUER || !audOK || typeof claims.sub !== 'string' || !claims.sub) return null;
+  const aud = [].concat(claims.aud);
+  if (!issuers.includes(claims.iss) || !aud.some((a) => audiences.includes(a))) return null;
+  if (typeof claims.sub !== 'string' || !claims.sub) return null;
   if (typeof claims.exp !== 'number' || claims.exp * 1000 <= now) return null;
   return claims;
+}
+
+/// A Sign in with Apple identity token for this app.
+export async function verifyAppleToken(token, env, now = Date.now()) {
+  const keys = await signingKeys(env, 'APPLE', 'https://appleid.apple.com/auth/keys', now);
+  return verifyJWT(token, keys, [APPLE_ISSUER], [env.APPLE_AUDIENCE || APPLE_AUDIENCE], now);
+}
+
+/// A Google ID token for one of this app's OAuth clients (GOOGLE_CLIENT_IDS, comma-separated).
+export async function verifyGoogleToken(token, env, now = Date.now()) {
+  const audiences = String(env.GOOGLE_CLIENT_IDS || '').split(',').map((s) => s.trim()).filter(Boolean);
+  if (!audiences.length) return null;
+  const keys = await signingKeys(env, 'GOOGLE', 'https://www.googleapis.com/oauth2/v3/certs', now);
+  return verifyJWT(token, keys, GOOGLE_ISSUERS, audiences, now);
 }
 
 function base64url(value) {

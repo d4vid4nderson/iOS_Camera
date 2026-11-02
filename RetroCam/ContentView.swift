@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 private extension Font {
@@ -142,6 +143,7 @@ struct ContentView: View {
         .fullScreenCover(item: $incomingUser) { user in
             UserProfileView(userID: user.id, camera: camera, accent: accent)
         }
+        .onReceive(Account.shared.$headshotVersion.dropFirst()) { _ in profile = Profile.load() }
         .onOpenURL { url in
             if let film = FilmCode.film(from: url) {
                 withAnimation(.snappy(duration: 0.2)) { incomingFilm = film }
