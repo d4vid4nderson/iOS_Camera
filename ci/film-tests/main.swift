@@ -241,7 +241,11 @@ curves.greenHighlights = 1
 curves.blueHighlights = -1
 check(curves.map(0, 0, 0) == (0, 0, 0) && curves.map(1, 1, 1) == (1, 1, 1), "curves keep black and white")
 let lifted = curves.map(0.667, 0.667, 0.667)
-check(lifted.1 > 0.75 && lifted.2 < 0.6 && abs(lifted.0 - 0.667) < 1e-9, "green lifted, blue lowered in the highlights")
+check(lifted.1 > 0.72 && lifted.2 < 0.62 && abs(lifted.0 - 0.667) < 1e-9, "green lifted, blue lowered in the highlights")
+var midTone = ColorGrade()
+midTone.shadowAmount = 1; midTone.highlightAmount = 1
+let grey50 = midTone.map(0.5, 0.5, 0.5)
+check(abs(grey50.0 - 0.5) < 1e-9 && abs(grey50.2 - 0.5) < 1e-9, "split toning leaves mid-grey alone")
 
 var split = ColorGrade()
 split.shadowHue = 0.6; split.shadowAmount = 1      // blue
@@ -284,7 +288,7 @@ for film in colorFilms {
     check(decoded == film, "\(film.id) saves and loads")
 }
 check(!FilmCode.film(from: FilmCode.url(for: .pan50)!)!.color, "black & white links stay black & white")
-for film in colorFilms { check(film.strength <= 0.6, "\(film.id) starts subtle (strength \(film.strength))") }
+for film in colorFilms { check(film.strength <= 0.75, "\(film.id) starts subtle (strength \(film.strength))") }
 var soft = FilmStock.tide200
 soft.strength = 0.3
 check(abs(FilmCode.film(from: FilmCode.url(for: soft)!)!.strength - 0.3) < 0.01, "a link keeps the film's strength")

@@ -208,13 +208,13 @@ enum FilmLook {
     }
 
     /// White balance on gamma-encoded colour: warm adds red and takes blue, tint trades
-    /// green for magenta.
+    /// green for magenta. Kept gentle: it shifts whites too.
     private static func whiteBalance(_ image: CIImage, warmth w: CGFloat, tint t: CGFloat) -> CIImage {
         let matrix = CIFilter.colorMatrix()
         matrix.inputImage = image
-        matrix.rVector = CIVector(x: 1 + 0.12 * w + 0.04 * t, y: 0, z: 0, w: 0)
-        matrix.gVector = CIVector(x: 0, y: 1 + 0.02 * w - 0.07 * t, z: 0, w: 0)
-        matrix.bVector = CIVector(x: 0, y: 0, z: 1 - 0.14 * w + 0.04 * t, w: 0)
+        matrix.rVector = CIVector(x: 1 + 0.07 * w + 0.03 * t, y: 0, z: 0, w: 0)
+        matrix.gVector = CIVector(x: 0, y: 1 + 0.01 * w - 0.05 * t, z: 0, w: 0)
+        matrix.bVector = CIVector(x: 0, y: 0, z: 1 - 0.08 * w + 0.03 * t, w: 0)
         matrix.aVector = CIVector(x: 0, y: 0, z: 0, w: 1)
         return matrix.outputImage?.applyingFilter("CIColorClamp") ?? image
     }

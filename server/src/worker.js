@@ -860,17 +860,17 @@ function colorScale(film, steps) {
   };
   const tint = (h) => { const c = hueRGB(h); const y = luma(...c); return c.map((v) => v - y); };
   const st = tint(film.shadowHue), ht = tint(film.highlightHue);
-  const gains = [1 + 0.12 * film.warmth + 0.04 * film.tint, 1 + 0.02 * film.warmth - 0.07 * film.tint, 1 - 0.14 * film.warmth + 0.04 * film.tint];
+  const gains = [1 + 0.07 * film.warmth + 0.03 * film.tint, 1 + 0.01 * film.warmth - 0.05 * film.tint, 1 - 0.08 * film.warmth + 0.03 * film.tint];
   const bends = [[film.redShadows, film.redHighlights], [film.greenShadows, film.greenHighlights], [film.blueShadows, film.blueHighlights]];
   return Array.from({ length: steps }, (_, i) => {
     const x = film.blackLift + (i / (steps - 1)) * (film.whitePoint - film.blackLift);
     let c = gains.map((k) => clamp(x * k));
-    c = c.map((v, j) => clamp(v + 0.12 * (bends[j][0] * 6.75 * v * (1 - v) ** 2 + bends[j][1] * 6.75 * v * v * (1 - v))));
+    c = c.map((v, j) => clamp(v + 0.08 * (bends[j][0] * 6.75 * v * (1 - v) ** 2 + bends[j][1] * 6.75 * v * v * (1 - v))));
     let y = luma(...c);
     c = c.map((v) => clamp(y + film.saturation * (v - y)));
     y = luma(...c);
-    const ws = film.shadowAmount * (1 - y) ** 2, wh = film.highlightAmount * y * y;
-    c = c.map((v, j) => clamp(v + 0.4 * (ws * st[j] + wh * ht[j])));
+    const ws = film.shadowAmount * Math.max(0, 1 - y / 0.5) ** 2, wh = film.highlightAmount * Math.max(0, (y - 0.5) / 0.5) ** 2;
+    c = c.map((v, j) => clamp(v + 0.3 * (ws * st[j] + wh * ht[j])));
     // STRENGTH mixes the look back toward plain grey.
     const g = i / (steps - 1);
     c = c.map((v) => g + film.strength * (v - g));

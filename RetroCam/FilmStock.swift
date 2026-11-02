@@ -386,7 +386,8 @@ extension FilmStock {
 
     // Colour films. Original looks, tuned against reference photos: a warm portrait
     // negative (highlights well below white, warm mids, neutral shadows) and four
-    // cinematic grades. NORTH 400 matches a published blue-hour grade within a few levels.
+    // cinematic grades, kept subtle: STRENGTH starts at 70, and each tint stays in its
+    // own end of the tonal range so dim interiors aren't washed in one colour.
 
     /// Warm portrait negative: highlights that roll off below white, warm cream mids,
     /// near-neutral deep shadows, calm colour, fine grain.
@@ -394,12 +395,12 @@ extension FilmStock {
         id: "warm400", name: "WARM 400", iso: 400,
         blurb: "Warm skin, soft highlights",
         red: 0.33, green: 0.52, blue: 0.15,
-        contrast: 0.22, blackLift: 0.03, whitePoint: 0.86,
+        contrast: 0.22, blackLift: 0.03, whitePoint: 0.9,
         grain: 0.16, grainSize: 1.1,
         vignette: 0.2,
         bloom: 0.12,
-        color: true, strength: 0.5, saturation: 0.86, warmth: 0.3, tint: 0.04,
-        shadowHue: 0.5, shadowAmount: 0.12, highlightHue: 0.09, highlightAmount: 0.08,
+        color: true, strength: 0.7, saturation: 0.9, warmth: 0.3, tint: 0.04,
+        shadowHue: 0.5, shadowAmount: 0.12, highlightHue: 0.09, highlightAmount: 0.15,
         aqua: 0.25, redShadows: 0.1, redHighlights: 0.15, greenShadows: -0.1, greenHighlights: -0.05,
         blueShadows: -0.25, blueHighlights: -0.15,
         halation: 0.12)
@@ -410,13 +411,13 @@ extension FilmStock {
         id: "north400", name: "NORTH 400", iso: 400,
         blurb: "Blue shadows, a warm glow",
         red: 0.33, green: 0.52, blue: 0.15,
-        contrast: 0.35, blackLift: 0.035, whitePoint: 1.0,
+        contrast: 0.3, blackLift: 0.035, whitePoint: 1.0,
         grain: 0.22, grainSize: 1.3,
         vignette: 0.45,
         bloom: 0.25,
-        color: true, strength: 0.5, saturation: 0.82, warmth: -0.2,
-        shadowHue: 0.555, shadowAmount: 0.6, highlightHue: 0.1, highlightAmount: 0.4,
-        aqua: 0.45, redShadows: -0.2, blueShadows: 0.2)
+        color: true, strength: 0.7, saturation: 0.88, warmth: -0.1,
+        shadowHue: 0.555, shadowAmount: 0.55, highlightHue: 0.1, highlightAmount: 0.35,
+        aqua: 0.4, redShadows: -0.12, blueShadows: 0.12)
 
     /// Dusk turned teal-green: green lifted, blue held down in the highlights (so a
     /// violet sky goes pale gold), teal shadows.
@@ -428,8 +429,8 @@ extension FilmStock {
         grain: 0.3, grainSize: 1.5,
         vignette: 0.4,
         bloom: 0.3,
-        color: true, strength: 0.5, saturation: 0.9, warmth: 0.05, tint: -0.06,
-        shadowHue: 0.48, shadowAmount: 0.3, highlightHue: 0.13, highlightAmount: 0.22,
+        color: true, strength: 0.7, saturation: 0.9, warmth: 0.05, tint: -0.06,
+        shadowHue: 0.48, shadowAmount: 0.35, highlightHue: 0.13, highlightAmount: 0.25,
         aqua: 0.3, redShadows: -0.15, redHighlights: 0.1, greenShadows: 0.05, greenHighlights: 0.2,
         blueShadows: 0.1, blueHighlights: -0.4,
         halation: 0.2)
@@ -439,13 +440,13 @@ extension FilmStock {
         id: "tide200", name: "TIDE 200", iso: 200,
         blurb: "Teal water, orange light",
         red: 0.33, green: 0.52, blue: 0.15,
-        contrast: 0.62, blackLift: 0.01, whitePoint: 0.96,
+        contrast: 0.45, blackLift: 0.02, whitePoint: 0.96,
         grain: 0.18, grainSize: 1.2,
         vignette: 0.5,
         bloom: 0.15,
-        color: true, strength: 0.5, saturation: 1.08,
-        shadowHue: 0.52, shadowAmount: 0.42, highlightHue: 0.08, highlightAmount: 0.4,
-        aqua: 0.5, redShadows: -0.18, redHighlights: 0.15, blueShadows: 0.25, blueHighlights: -0.25,
+        color: true, strength: 0.7, saturation: 1.0,
+        shadowHue: 0.52, shadowAmount: 0.45, highlightHue: 0.08, highlightAmount: 0.4,
+        aqua: 0.4, redShadows: -0.15, redHighlights: 0.1, blueShadows: 0.15, blueHighlights: -0.15,
         halation: 0.15)
 
     /// Golden hour: rich contrast, warm highlights and mids, deep warm shadows.
@@ -453,13 +454,13 @@ extension FilmStock {
         id: "golden100", name: "GOLDEN 100", iso: 100,
         blurb: "Low sun, rich and warm",
         red: 0.33, green: 0.52, blue: 0.15,
-        contrast: 0.5, blackLift: 0.01, whitePoint: 0.95,
+        contrast: 0.35, blackLift: 0.02, whitePoint: 0.95,
         grain: 0.12, grainSize: 1.0,
         vignette: 0.45,
         bloom: 0.35,
-        color: true, strength: 0.5, saturation: 1.12, warmth: 0.45,
+        color: true, strength: 0.7, saturation: 1.04, warmth: 0.3,
         shadowHue: 0.06, shadowAmount: 0.2, highlightHue: 0.1, highlightAmount: 0.45,
-        redHighlights: 0.15, blueShadows: -0.15, blueHighlights: -0.3,
+        redHighlights: 0.1, blueShadows: -0.05, blueHighlights: -0.15,
         halation: 0.3)
 
     static let noir = FilmStock(

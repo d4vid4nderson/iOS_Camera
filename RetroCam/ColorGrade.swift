@@ -36,9 +36,9 @@ struct ColorGrade: Hashable {
     }
 
     /// How far a full curve bend moves a channel at its peak.
-    static let curveReach = 0.12
+    static let curveReach = 0.08
     /// How far full split toning moves a colour toward its tint.
-    static let toneReach = 0.4
+    static let toneReach = 0.3
 
     /// Grade one colour (each channel 0...1).
     func map(_ r: Double, _ g: Double, _ b: Double) -> (Double, Double, Double) {
@@ -73,10 +73,13 @@ struct ColorGrade: Hashable {
         }
 
         // 4. Split toning: shadows lean toward one hue, highlights toward another, without
-        //    changing brightness (the tint's own luminance is taken out).
+        //    changing brightness (the tint's own luminance is taken out). Each reaches only
+        //    its own half of the range and fades out before mid-grey, so mid-tones (and
+        //    skin) keep their colour, and a dim room isn't tinted all over.
         if shadowAmount > 0 || highlightAmount > 0 {
-            let shadowWeight = shadowAmount * (1 - y) * (1 - y)
-            let highlightWeight = highlightAmount * y * y
+            let s = max(0, 1 - y / 0.5), h = max(0, (y - 0.5) / 0.5)
+            let shadowWeight = shadowAmount * s * s
+            let highlightWeight = highlightAmount * h * h
             let st = Self.tint(shadowHue), ht = Self.tint(highlightHue)
             r = clamp(r + Self.toneReach * (shadowWeight * st.0 + highlightWeight * ht.0))
             g = clamp(g + Self.toneReach * (shadowWeight * st.1 + highlightWeight * ht.1))
