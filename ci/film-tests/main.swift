@@ -188,6 +188,18 @@ check(ShareLinks.rollID(from: URL(string: "exposures://r/AbCd234xyz")!) == "AbCd
 check(ShareLinks.rollID(from: URL(string: "https://evil.example.com/r/AbCd234xyz")!, host: "exposures.example.workers.dev") == nil, "roll links from other sites are ignored")
 check(ShareLinks.rollID(from: URL(string: "exposures://r/short")!) == nil, "bad roll ids are rejected")
 
+// Roll names.
+var named = Roll(number: 7)
+named.expose(film: "CLASSIC 400")
+check(named.title == "Roll 07" && named.albumTitle == "Roll 07 · CLASSIC 400", "unnamed roll titles")
+named.name = Roll.cleanName("  Beach day  ")
+check(named.title == "Beach day" && named.albumTitle == "Roll 07 · Beach day", "named roll titles")
+check(Roll.cleanName("   ") == nil, "an empty name clears it")
+check(Roll.cleanName(String(repeating: "x", count: 40))?.count == Roll.maxNameLength, "names are capped")
+let namedBack = try! JSONDecoder().decode(Roll.self, from: JSONEncoder().encode(named))
+check(namedBack.name == "Beach day", "roll names are saved")
+check(named.next().name == nil, "a new roll starts unnamed")
+
 // Share card captions.
 check(FilmStock.pan50.shareCaption == "Black & white  ·  ISO 50  ·  Fine grain", "PAN 50 caption: \(FilmStock.pan50.shareCaption)")
 check(FilmStock.selenium.shareCaption.hasPrefix("Selenium toned"), "selenium film says it's toned")

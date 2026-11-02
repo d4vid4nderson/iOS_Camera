@@ -50,6 +50,10 @@ struct Roll: Codable, Equatable {
     var developMode: DevelopMode?
     /// When the last frame was shot, or the roll was finished early.
     var finishedAt: Date?
+    /// A name you gave the roll ("Beach day"). nil = just its number.
+    var name: String?
+
+    static let maxNameLength = 24
 
     var develop: DevelopMode { developMode ?? .instant }
 
@@ -65,11 +69,23 @@ struct Roll: Codable, Equatable {
 
     var isFinished: Bool { frames >= Self.length }
 
-    /// "Roll 07 · CLASSIC 400"
+    /// "Roll 07"
+    var numberTitle: String { String(format: "Roll %02d", number) }
+
+    /// The roll's name if you gave it one, else "Roll 07".
+    var title: String { name ?? numberTitle }
+
+    /// "Roll 07 · Beach day" for a named roll, else "Roll 07 · CLASSIC 400".
     var albumTitle: String {
-        let n = String(format: "Roll %02d", number)
-        guard let film, !film.isEmpty else { return n }
-        return "\(n) · \(film)"
+        if let name { return "\(numberTitle) · \(name)" }
+        guard let film, !film.isEmpty else { return numberTitle }
+        return "\(numberTitle) · \(film)"
+    }
+
+    /// A typed roll name, tidied: trimmed, at most 24 characters; empty = no name.
+    static func cleanName(_ raw: String) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : String(trimmed.prefix(maxNameLength))
     }
 
     /// Expose a frame. The first frame names the roll after the film loaded.

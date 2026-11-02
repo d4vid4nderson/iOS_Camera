@@ -62,6 +62,18 @@ enum RollAlbums {
         return deleted
     }
 
+    /// Retitle a roll's album after it's renamed. Does nothing without Full Access or before
+    /// the album exists (it's then created with the new title).
+    static func rename(rollNumber: Int, to title: String) async throws {
+        let ids = UserDefaults.standard.dictionary(forKey: albumsKey) as? [String: String] ?? [:]
+        guard let id = ids[String(rollNumber)],
+              let album = PHAssetCollection.fetchAssetCollections(withLocalIdentifiers: [id], options: nil).firstObject
+        else { return }
+        try await PHPhotoLibrary.shared().performChanges {
+            PHAssetCollectionChangeRequest(for: album)?.title = title
+        }
+    }
+
     /// The roll's album, created (inside the Exposures folder) the first time it's needed.
     private static func album(for roll: Roll) async throws -> PHAssetCollection {
         var ids = UserDefaults.standard.dictionary(forKey: albumsKey) as? [String: String] ?? [:]
