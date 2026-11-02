@@ -81,7 +81,7 @@ select,button,input,textarea{font:inherit;color:var(--fg)}
 /* Opened: the same slide, larger, with the before/after in its window */
 .film-open{grid-column:1/-1;margin:6px 0 14px;display:grid;justify-items:center;gap:12px}
 .film-open[hidden]{display:none}
-.slide{--card:#ece3cf;--card2:#ddd1b6;--print:#3a2d1f;--print2:#6f604c;position:relative;width:min(100%,700px);border-radius:16px;color:var(--print);
+.slide{--card:#ece3cf;--card2:#ddd1b6;--print:#3a2d1f;--print2:#6f604c;position:relative;width:min(100%,calc((100vh - 96px) / .86));width:min(100%,calc((100svh - 96px) / .86));border-radius:clamp(12px,2vw,20px);color:var(--print);
   background:linear-gradient(155deg,var(--card),var(--card2));display:flex;flex-direction:column;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.6),inset 0 -3px 0 rgba(0,0,0,.12),0 2px 0 rgba(0,0,0,.4),0 30px 60px -24px rgba(0,0,0,.9)}
 .slide.bw{--card:#e6e5e1;--card2:#cfcdc7;--print:#26262a;--print2:#5d5c5a}
