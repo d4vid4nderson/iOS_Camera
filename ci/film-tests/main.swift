@@ -1,5 +1,5 @@
 // Tests for the film model and library, compiled with swiftc in CI (no simulator needed):
-//   swiftc RetroCam/FilmStock.swift RetroCam/FilmLibrary.swift ci/film-tests/main.swift
+//   swiftc RetroCam/FilmStock.swift RetroCam/FilmLibrary.swift RetroCam/Roll.swift ci/film-tests/main.swift
 import CoreGraphics
 import Foundation
 
@@ -100,5 +100,23 @@ check(loaded == lib, "library survives save/load")
 lib.delete(id: "custom-1")
 check(lib.original(id: "custom-1") == nil && !lib.isEdited(id: "custom-1"), "delete removes film and edits")
 defaults.removePersistentDomain(forName: suite)
+
+// Rolls: numbering, naming, frame counting, persistence.
+var roll = Roll(number: 7)
+check(roll.albumTitle == "Roll 07", "unnamed roll title")
+roll.expose(film: "CLASSIC 400")
+roll.expose(film: "NOIR 400")
+check(roll.frames == 2 && roll.film == "CLASSIC 400" && roll.albumTitle == "Roll 07 · CLASSIC 400", "first frame names the roll")
+for _ in 0..<50 { roll.expose(film: "X") }
+check(roll.frames == Roll.length && roll.isFinished, "roll stops at 36")
+check(roll.next().number == 8 && roll.next().frames == 0 && roll.next().film == nil, "next roll is fresh")
+var one = Roll(number: 1); one.expose(film: "PAN 50"); one.unexpose()
+check(one.frames == 0 && one.film == nil, "a failed first frame un-names the roll")
+let rollSuite = "roll-tests-\(UUID().uuidString)"
+let rollDefaults = UserDefaults(suiteName: rollSuite)!
+check(Roll.load(from: rollDefaults) == Roll(number: 1), "fresh install starts on roll 1")
+roll.save(to: rollDefaults)
+check(Roll.load(from: rollDefaults) == roll, "roll survives save/load")
+rollDefaults.removePersistentDomain(forName: rollSuite)
 
 if failures == 0 { print("film tests: all passed") } else { print("film tests: \(failures) failed"); exit(1) }

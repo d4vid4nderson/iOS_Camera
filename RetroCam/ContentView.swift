@@ -110,8 +110,8 @@ struct ContentView: View {
             }
         }
         .sensoryFeedback(.impact(weight: .medium), trigger: camera.framesShot)
-        .sheet(isPresented: $showingPrint) {
-            if let print = camera.lastPrint { PrintView(image: print) }
+        .fullScreenCover(isPresented: $showingPrint) {
+            RollViewer(camera: camera, accent: accent)
         }
     }
 
@@ -149,11 +149,16 @@ struct ContentView: View {
 
     private var topPlate: some View {
         HStack(alignment: .center) {
-            Text(String(format: "%02d", camera.framesShot) + "/\(CameraModel.rollLength)")
-                .font(.mono(15, .bold)).foregroundStyle(accent)
-                .contentTransition(.numericText())
+            VStack(alignment: .leading, spacing: 1) {
+                Text(String(format: "ROLL %02d", camera.roll.number))
+                    .font(.mono(8, .semibold)).foregroundStyle(.secondary)
+                Text(String(format: "%02d", camera.framesShot) + "/\(CameraModel.rollLength)")
+                    .font(.mono(15, .bold)).foregroundStyle(accent)
+                    .contentTransition(.numericText())
+            }
                 .frame(width: 90, alignment: .leading)
-                .accessibilityLabel("Frame \(camera.framesShot) of \(CameraModel.rollLength)")
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Roll \(camera.roll.number), frame \(camera.framesShot) of \(CameraModel.rollLength)")
                 // Hidden: long-press for a camera-orientation readout (for bug reports).
                 .onLongPressGesture { camera.showDiagnostics.toggle() }
 
@@ -864,6 +869,7 @@ struct ContentView: View {
                 .animation(.snappy(duration: 0.3), value: camera.uiRotation)
             }
             .disabled(camera.lastPrint == nil)
+            .accessibilityLabel("Your rolls")
 
             Spacer()
 
@@ -1240,28 +1246,6 @@ private struct ShutterButtonStyle: ButtonStyle {
                     LinearGradient(colors: [Color.black.opacity(pressed ? 0.6 : 0.45), .clear],
                                    startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.45)))
             )
-    }
-}
-
-private struct PrintView: View {
-    let image: UIImage
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        ZStack(alignment: .topTrailing) {
-            Color.black.ignoresSafeArea()
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFit()
-                .padding(12)
-                .background(Color(white: 0.95))   // white print border
-                .padding(20)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            Button { dismiss() } label: {
-                Image(systemName: "xmark").font(.system(size: 16, weight: .bold)).padding()
-            }
-            .foregroundStyle(.white)
-        }
     }
 }
 
