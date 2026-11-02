@@ -55,12 +55,28 @@ select,button,input,textarea{font:inherit;color:var(--fg)}
 .counter{display:inline-flex;align-items:baseline;gap:10px;font:700 15px/1 var(--mono);color:var(--muted);letter-spacing:.08em;margin-bottom:22px}
 .counter b{font-size:30px;color:var(--accent);letter-spacing:0}
 .films{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin:28px 0}
-.film{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 14px 16px}
+.film{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 14px 16px;text-align:left;cursor:pointer;color:var(--fg);font:inherit;transition:border-color .15s,transform .15s}
+.film:hover,.film:focus-visible{border-color:var(--accent);outline:none;transform:translateY(-1px)}
 .film .tones{display:flex;gap:3px;margin-bottom:12px}.film .tones i{flex:1;height:12px;border-radius:3px}
 .film b{display:block;font-size:17px;letter-spacing:-.01em}.film span{font-size:13px;color:var(--muted)}
 .features{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:12px 0 28px}
 .feature{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px}
 .feature h3{margin:0 0 8px;color:var(--accent)}.feature p{margin:0;color:#c9c6c0;font-size:15px}
+/* Before / after viewer */
+.viewer{border:1px solid var(--line);border-radius:18px;background:var(--panel);color:var(--fg);padding:18px;width:min(960px,94vw);max-height:94vh}
+.viewer::backdrop{background:rgba(0,0,0,.75)}
+.viewer-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.viewer h2{margin:0 0 4px}.viewer-head p{margin:0}.viewer .eyebrow{margin:0 0 6px}
+.close,.viewer-foot button{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--panel2);cursor:pointer;font-size:16px;flex:none}
+.compare{--split:50%;position:relative;margin:14px 0 10px;border-radius:12px;overflow:hidden;aspect-ratio:3/2;background:#000;user-select:none}
+.compare img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.compare .after{clip-path:inset(0 0 0 var(--split))}
+.compare .handle{position:absolute;top:0;bottom:0;left:var(--split);width:2px;margin-left:-1px;background:var(--fg);pointer-events:none}
+.compare .handle span{position:absolute;top:50%;left:50%;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;background:var(--fg);box-shadow:0 2px 10px rgba(0,0,0,.5)}
+.compare .tag{position:absolute;top:10px;font:700 11px/1 var(--mono);letter-spacing:.1em;padding:6px 8px;border-radius:6px;background:rgba(0,0,0,.55);pointer-events:none}
+.compare .tag.left{left:10px}.compare .tag.right{right:10px;color:var(--accent)}
+.compare input[type=range]{position:absolute;inset:0;width:100%;height:100%;opacity:0;margin:0;cursor:ew-resize}
+.viewer-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:center}
 /* Long documents */
 .doc p,.doc li{color:#d4d1cb}.doc ul{padding-left:20px}.doc li{margin:6px 0}
 .doc .updated{font:600 12px/1 var(--mono);letter-spacing:.08em;color:var(--muted);margin-bottom:28px}
@@ -94,21 +110,76 @@ export function siteFooter(year = new Date().getUTCFullYear()) {
 <nav><a href="/support">Support</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></nav></footer>`;
 }
 
-// A few of the app's films, with their tone strips (black to white through each film).
-const SHOWCASE = [
-  ['PAN 50', 'Fine grain, smooth tones', ['#0b0b0b', '#2b2b2b', '#4f4f4f', '#777', '#a0a0a0', '#c9c9c9', '#efefef']],
-  ['SEPIA', 'Warm-toned print', ['#120b05', '#3a2a1c', '#634a33', '#8c6c4e', '#b59371', '#d7bf9e', '#f3e7d1']],
-  ['CYANOTYPE', 'Prussian blue on white', ['#08203f', '#1b3b63', '#33597f', '#55779a', '#8099b4', '#b3c4d3', '#eef1f1']],
-  ['WARM 400', 'Warm skin, soft highlights', ['#120e0b', '#3a2f27', '#665546', '#927c68', '#b9a48e', '#d6c5b0', '#e6dacb']],
-  ['EARTH 200', 'Tan and olive, clean whites', ['#0a0907', '#2a251c', '#4e4535', '#776a52', '#a09277', '#c9bfaa', '#f1efe9']],
-  ['TIDE 200', 'Teal water, orange light', ['#041014', '#12303a', '#2f525a', '#6e7a78', '#b59f86', '#e0c3a1', '#f6e7d4']],
-  ['NORTH 400', 'Blue shadows, a warm glow', ['#081422', '#1d3550', '#3d5a74', '#6c8396', '#a3b0b8', '#d6d4cc', '#f7f0e2']],
-  ['MEADOW 400', 'Bright, hazy, sun-bleached', ['#211c15', '#4b4234', '#776a56', '#a19580', '#c8bea9', '#e6dfd0', '#fbf8f1']],
-];
+import { FILM_PREVIEWS } from './film-previews.js';
+
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function filmCard(f) {
+  return `<button class="film" type="button" data-film="${esc(f.id)}" aria-label="See ${esc(f.name)} before and after">
+<div class="tones">${f.tones.map((c) => `<i style="background:${esc(c)}"></i>`).join('')}</div>
+<b>${esc(f.name)}</b><span>${esc(f.blurb)}</span></button>`;
+}
+
+/// The before/after viewer: the same photo, as shot and through the film, with a slider
+/// between them. Arrow buttons (and the arrow keys) step through the films.
+function filmViewer() {
+  const data = JSON.stringify(FILM_PREVIEWS.map(({ id, name, blurb, iso }) => ({ id, name, blurb, iso }))).replace(/</g, '\\u003c');
+  return `<dialog class="viewer" id="viewer" aria-label="Film before and after">
+  <div class="viewer-head"><div><p class="eyebrow" id="viewer-iso"></p><h2 id="viewer-name"></h2><p class="muted" id="viewer-blurb"></p></div>
+  <button class="close" type="button" id="viewer-close" aria-label="Close">✕</button></div>
+  <div class="compare" id="compare">
+    <img class="before" src="/films/before.jpg" alt="The photo as shot" width="1200" height="800">
+    <img class="after" id="viewer-after" alt="" width="1200" height="800">
+    <div class="handle" aria-hidden="true"><span></span></div>
+    <span class="tag left">BEFORE</span><span class="tag right" id="viewer-tag"></span>
+    <input type="range" id="slider" min="0" max="100" value="50" aria-label="Drag to compare before and after">
+  </div>
+  <div class="viewer-foot"><button type="button" id="prev" aria-label="Previous film">←</button>
+  <span class="muted small">Drag to compare. A preview of the film on a sample photo.</span>
+  <button type="button" id="next" aria-label="Next film">→</button></div>
+</dialog>
+<script>
+(() => {
+  const films = ${data};
+  const dialog = document.getElementById('viewer');
+  const after = document.getElementById('viewer-after');
+  const slider = document.getElementById('slider');
+  const compare = document.getElementById('compare');
+  let index = 0;
+  const set = (v) => compare.style.setProperty('--split', v + '%');
+  const show = (i) => {
+    index = (i + films.length) % films.length;
+    const f = films[index];
+    after.src = '/films/' + f.id + '.jpg';
+    after.alt = 'The photo through ' + f.name;
+    document.getElementById('viewer-name').textContent = f.name;
+    document.getElementById('viewer-blurb').textContent = f.blurb;
+    document.getElementById('viewer-iso').textContent = 'ISO ' + f.iso;
+    document.getElementById('viewer-tag').textContent = f.name;
+    new Image().src = '/films/' + films[(index + 1) % films.length].id + '.jpg';
+  };
+  document.querySelectorAll('[data-film]').forEach((card) => card.addEventListener('click', () => {
+    show(films.findIndex((f) => f.id === card.dataset.film));
+    slider.value = 50; set(50);
+    dialog.showModal();
+  }));
+  slider.addEventListener('input', () => set(slider.value));
+  document.getElementById('prev').onclick = () => show(index - 1);
+  document.getElementById('next').onclick = () => show(index + 1);
+  document.getElementById('viewer-close').onclick = () => dialog.close();
+  dialog.addEventListener('click', (e) => { if (e.target === dialog) dialog.close(); });
+  dialog.addEventListener('keydown', (e) => {
+    if (e.target === slider) return;
+    if (e.key === 'ArrowLeft') show(index - 1);
+    if (e.key === 'ArrowRight') show(index + 1);
+  });
+})();
+</script>`;
+}
 
 export function homeBody(store) {
-  const films = SHOWCASE.map(([name, blurb, tones]) => `<div class="film"><div class="tones">${tones.map((c) => `<i style="background:${c}"></i>`).join('')}</div>
-<b>${name}</b><span>${blurb}</span></div>`).join('');
+  const bw = FILM_PREVIEWS.filter((f) => !f.color).map(filmCard).join('');
+  const color = FILM_PREVIEWS.filter((f) => f.color).map(filmCard).join('');
   const get = store
     ? `<div class="inline-buttons"><a class="button primary" href="${store}">Get Film Exposures</a></div>`
     : '<div class="inline-buttons"><span class="button disabled">Coming soon to the App Store</span></div>';
@@ -125,9 +196,15 @@ export function homeBody(store) {
   <div class="feature"><h3>Black &amp; white and color</h3><p>Classic monochrome, toned prints and cinematic color films, each with grain, glow and lens character. Make your own and save them.</p></div>
   <div class="feature"><h3>Share a film</h3><p>Send a film as a link. Everything travels with it, from curve and grade to grain and effects, so a friend loads exactly your look.</p></div>
 </section>
-<h2 id="films">Some of the films</h2>
-<div class="films">${films}</div>
-<p class="muted small">Your photos stay on your phone. Nothing is uploaded unless you share a roll or put one on your profile.</p>`;
+<h2 id="films">The films</h2>
+<p class="muted">Tap a film to see what it does to the same photo.</p>
+<h3>Black &amp; white</h3>
+<div class="films">${bw}</div>
+<h3>Color</h3>
+<div class="films">${color}</div>
+<p class="muted small">Sample photo by <a href="https://unsplash.com/photos/umcc42T8fD4">Lou Levit</a> on Unsplash. Previews approximate the app's films.</p>
+<p class="muted small">Your photos stay on your phone. Nothing is uploaded unless you share a roll or put one on your profile.</p>
+${filmViewer()}`;
 }
 
 export function privacyBody() {

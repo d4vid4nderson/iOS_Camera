@@ -14,6 +14,11 @@ routes = [
   { pattern = "www.filmexposures.com", custom_domain = true },
 ]
 
+# Static files (the website's film previews, rendered by server/tools/render_previews.py).
+# A request for one of these paths is served straight from here, before the Worker runs.
+[assets]
+directory = "./public"
+
 [[r2_buckets]]
 binding = "ROLLS"
 bucket_name = "exposures-rolls"
