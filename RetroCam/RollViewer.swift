@@ -7,10 +7,10 @@ private extension Font {
     }
 }
 
-/// Your rolls, read-only: a contact sheet per roll and a full-screen view to swipe
-/// through the frames. Nothing here edits or deletes — a roll is what you shot. You can
-/// share a frame or the whole roll as a contact sheet, finish the roll in the camera
-/// early, and choose how new rolls develop.
+/// Your rolls: a contact sheet per roll and a full-screen view to swipe through the
+/// frames. Frames can't be edited or deleted one by one — a roll is what you shot — but a
+/// whole roll can be deleted. You can share a frame or the whole roll as a contact sheet,
+/// load a new roll (ending the one in the camera early), and choose how new rolls develop.
 struct RollViewer: View {
     @ObservedObject var camera: CameraModel
     let accent: Color
@@ -24,6 +24,7 @@ struct RollViewer: View {
     @State private var sharing: ShareItems?
     @State private var makingSheet = false
     @State private var confirmFinish = false
+    @State private var deleting: Roll?
 
     private var roll: Roll? { rolls.first { $0.number == selected } }
     private var isInCamera: Bool { selected == camera.roll.number }
@@ -49,10 +50,13 @@ struct RollViewer: View {
             .padding(.top, 12)
             .padding(.bottom, 8)
         }
+        .overlay {
+            if let target = deleting { deleteCard(target) }
+        }
         .preferredColorScheme(.dark)
         .onAppear(perform: reload)
         .onChange(of: camera.rollsVersion) { _, _ in reload() }
-        .onChange(of: selected) { _, _ in loadFrames(); confirmFinish = false }
+        .onChange(of: selected) { _, _ in loadFrames() }
         .fullScreenCover(item: $viewing) { ref in
             FramePager(roll: ref.roll, frames: developedFrames, start: ref.frame, accent: accent)
         }
@@ -162,26 +166,42 @@ struct RollViewer: View {
         }
     }
 
-    // MARK: Footer: share, finish, develop mode
+    // MARK: Footer: share, delete, new roll, develop mode
 
     private var footer: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 if !developedFrames.isEmpty, let roll {
                     chip(makingSheet ? "PRINTING…" : "SHARE SHEET", selected: true) { shareContactSheet(roll) }
                         .disabled(makingSheet)
                 }
                 Spacer(minLength: 0)
-                if isInCamera, camera.roll.frames > 0 {
-                    chip(confirmFinish ? "TAP TO FINISH ROLL" : "FINISH ROLL", selected: confirmFinish) {
-                        if confirmFinish {
-                            camera.rewindRoll()
-                            confirmFinish = false
-                        } else {
-                            withAnimation(.snappy(duration: 0.15)) { confirmFinish = true }
+                if let roll {
+                    deleteChip("DELETE ROLL") { withAnimation(.snappy(duration: 0.15)) { deleting = roll } }
+                }
+            }
+
+            // The roll in the camera, and loading a new one.
+            VStack(alignment: .leading, spacing: 6) {
+                Text("IN CAMERA").font(.mono(9, .semibold)).foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    Text(cameraRollLine).font(.mono(11, .bold)).foregroundStyle(.white).lineLimit(1)
+                    Spacer(minLength: 0)
+                    if camera.roll.frames > 0 {
+                        chip(confirmFinish ? "TAP FOR NEW ROLL" : "NEW ROLL", selected: confirmFinish) {
+                            if confirmFinish {
+                                camera.rewindRoll()
+                                confirmFinish = false
+                            } else {
+                                withAnimation(.snappy(duration: 0.15)) { confirmFinish = true }
+                            }
                         }
+                        .sensoryFeedback(.warning, trigger: confirmFinish) { _, new in new }
                     }
-                    .sensoryFeedback(.warning, trigger: confirmFinish) { _, new in new }
+                }
+                if confirmFinish {
+                    Text(String(format: "Roll %02d ends at frame %d; the rest stays blank.", camera.roll.number, camera.roll.frames))
+                        .font(.mono(9)).foregroundStyle(.secondary)
                 }
             }
 
@@ -196,6 +216,85 @@ struct RollViewer: View {
                 .sensoryFeedback(.selection, trigger: camera.developMode)
             }
         }
+    }
+
+    private var cameraRollLine: String {
+        let r = camera.roll
+        let name = String(format: "ROLL %02d", r.number)
+        guard r.frames > 0 else { return "\(name) · NEW, NOTHING SHOT YET" }
+        return "\(name) · \(r.frames)/\(Roll.length)" + (r.film.map { " · \($0)" } ?? "")
+    }
+
+    private func deleteChip(_ text: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(text)
+                .font(.mono(10, .bold))
+                .lineLimit(1)
+                .padding(.horizontal, 10).padding(.vertical, 7)
+                .background(Capsule().fill(Color.red.opacity(0.12)))
+                .foregroundStyle(Color(red: 1, green: 0.45, blue: 0.4))
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: Delete a roll
+
+    private func deleteCard(_ target: Roll) -> some View {
+        let name = String(format: "ROLL %02d", target.number)
+        return ZStack {
+            Color.black.opacity(0.6).ignoresSafeArea()
+                .onTapGesture { withAnimation(.snappy(duration: 0.15)) { deleting = nil } }
+            VStack(alignment: .leading, spacing: 12) {
+                Text("DELETE \(name)?").font(.mono(15, .bold)).foregroundStyle(accent)
+                Text(deleteDetail(target))
+                    .font(.mono(10)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                cardButton("DELETE FROM EXPOSURES", destructive: false) {
+                    camera.deleteRoll(target.number, deletingPhotos: false)
+                    deleting = nil
+                }
+                cardButton("DELETE ROLL + ITS PHOTOS", destructive: true) {
+                    camera.deleteRoll(target.number, deletingPhotos: true)
+                    deleting = nil
+                }
+                cardButton("CANCEL", destructive: false, quiet: true) {
+                    withAnimation(.snappy(duration: 0.15)) { deleting = nil }
+                }
+            }
+            .padding(18)
+            .background(RoundedRectangle(cornerRadius: 18).fill(Color(white: 0.11)))
+            .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color(white: 0.2), lineWidth: 1))
+            .padding(.horizontal, 22)
+        }
+        .transition(.opacity)
+    }
+
+    private func deleteDetail(_ target: Roll) -> String {
+        let stored = RollStore.frames(of: target.number)
+        let waiting = RollStore.pendingFrames(of: target.number).count
+        var lines = ["\(stored.count) \(stored.count == 1 ? "frame" : "frames"). Can't be undone."]
+        lines.append("DELETE FROM EXPOSURES keeps the photos in Photos, in the album \"\(target.albumTitle)\".")
+        lines.append("DELETE ROLL + ITS PHOTOS also removes that album and its photos from Photos. iOS asks you to confirm.")
+        if waiting > 0 {
+            lines.append("\(waiting) \(waiting == 1 ? "frame hasn't" : "frames haven't") developed yet and will be lost.")
+        }
+        if target.number == camera.roll.number {
+            lines.append("It's the roll in the camera, so a new roll is loaded.")
+        }
+        return lines.joined(separator: "\n\n")
+    }
+
+    private func cardButton(_ text: String, destructive: Bool, quiet: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(text)
+                .font(.mono(11, .bold))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 11)
+                .background(Capsule().fill(destructive ? Color.red.opacity(0.16) : quiet ? .clear : Color(white: 0.17)))
+                .overlay(Capsule().stroke(destructive ? Color.red.opacity(0.6) : .clear, lineWidth: 1))
+                .foregroundStyle(destructive ? Color(red: 1, green: 0.45, blue: 0.4) : quiet ? Color(white: 0.55) : Color.white)
+        }
+        .buttonStyle(.plain)
     }
 
     private func chip(_ text: String, selected: Bool, action: @escaping () -> Void) -> some View {

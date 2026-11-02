@@ -599,6 +599,42 @@ final class CameraModel: NSObject, ObservableObject {
         developReadyRolls()
     }
 
+    /// Delete a roll from Exposures; with `deletingPhotos`, its album and photos in Photos
+    /// too (iOS asks first). Deleting the roll that's in the camera loads a fresh one.
+    func deleteRoll(_ number: Int, deletingPhotos: Bool) {
+        guard developing == 0 else {
+            message = "Wait for the last frame to finish developing, then delete the roll."
+            return
+        }
+        let name = String(format: "ROLL %02d", number)
+        let previous = saveChain
+        saveChain = Task {
+            await previous?.value
+            var photosNote = ""
+            do {
+                let removed = try await RollAlbums.remove(rollNumber: number, deletingPhotos: deletingPhotos)
+                if deletingPhotos {
+                    photosNote = removed == nil ? " (ITS PHOTOS WEREN'T FOUND IN PHOTOS)" : " AND ITS PHOTOS"
+                }
+            } catch {
+                await MainActor.run { self.message = "\(name) wasn't deleted: its photos weren't removed from Photos." }
+                return
+            }
+            do {
+                try RollStore.delete(roll: number)
+            } catch {
+                await MainActor.run { self.message = "Couldn't delete \(name): \(error.localizedDescription)" }
+                return
+            }
+            await MainActor.run {
+                if number == self.roll.number, self.roll.frames > 0 { self.roll = self.roll.next() }
+                self.rollsVersion += 1
+                self.lastPrint = RollStore.latestThumbnail()
+                self.message = "\(name)\(photosNote) DELETED"
+            }
+        }
+    }
+
     /// Develop every finished roll whose time has come: file its waiting frames into its
     /// Photos album, in order, and reveal them in the roll viewer.
     func developReadyRolls() {
