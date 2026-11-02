@@ -280,7 +280,8 @@ struct ProfileSheet: View {
     }
 
     private func thumb(_ roll: Roll) -> some View {
-        let first = RollStore.frames(of: roll.number).first { !RollStore.isPending(roll: roll.number, frame: $0) }
+        let developed = RollStore.frames(of: roll.number).filter { !RollStore.isPending(roll: roll.number, frame: $0) }
+        let first = roll.cover.flatMap { developed.contains($0) ? $0 : nil } ?? developed.first
         let image = first.flatMap { UIImage(contentsOfFile: RollStore.thumbURL(roll: roll.number, frame: $0).path) }
         return Group {
             if let image {

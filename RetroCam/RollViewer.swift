@@ -39,6 +39,10 @@ struct RollViewer: View {
     private var roll: Roll? { rolls.first { $0.number == selected } }
     private var isInCamera: Bool { selected == camera.roll.number }
     private var developedFrames: [Int] { frames.filter { !pending.contains($0) } }
+    /// The roll's cover: the frame picked for it, or else its first developed frame.
+    private var coverFrame: Int? {
+        roll?.cover.flatMap { developedFrames.contains($0) ? $0 : nil } ?? developedFrames.first
+    }
 
     var body: some View {
         ZStack {
@@ -192,13 +196,36 @@ struct RollViewer: View {
                             }
                             .aspectRatio(3 / 4, contentMode: .fit)
                             .clipped()
+                            .overlay(alignment: .topLeading) {
+                                if !waiting, frame == coverFrame {
+                                    Text("COVER")
+                                        .font(.mono(8, .bold))
+                                        .padding(.horizontal, 5).padding(.vertical, 3)
+                                        .background(RoundedRectangle(cornerRadius: 3).fill(accent))
+                                        .foregroundStyle(.black)
+                                        .padding(4)
+                                }
+                            }
                             Text(String(format: "%02d", frame))
                                 .font(.mono(9, .semibold)).foregroundStyle(.secondary)
                         }
                     }
                     .buttonStyle(.plain)
                     .disabled(waiting)
-                    .accessibilityLabel(waiting ? "Frame \(frame), developing" : "Frame \(frame)")
+                    .contextMenu {
+                        if !waiting, let number = selected {
+                            if frame == coverFrame, roll?.cover != nil {
+                                Button("Use the First Frame as Cover", systemImage: "arrow.uturn.backward") {
+                                    camera.setCover(ofRoll: number, to: nil)
+                                }
+                            } else if frame != coverFrame {
+                                Button("Set as Roll Cover", systemImage: "photo") {
+                                    camera.setCover(ofRoll: number, to: frame)
+                                }
+                            }
+                        }
+                    }
+                    .accessibilityLabel(waiting ? "Frame \(frame), developing" : "Frame \(frame)" + (frame == coverFrame ? ", cover" : ""))
                 }
             }
             .padding(.bottom, 12)

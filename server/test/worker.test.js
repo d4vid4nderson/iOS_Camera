@@ -641,3 +641,40 @@ test('Leaving Sign in with Apple keeps an account that has another sign-in', asy
   assert.equal((await (await googleIn(e, google, 'g-1')).json()).me.id, me.id, 'Google still signs in');
   assert.notEqual((await signIn(e, apple, 'apple-1', 'Dave')).me.id, me.id, 'Apple no longer does');
 });
+
+// MARK: Roll covers
+
+test('a roll\'s cover frame shows on its owner\'s profile, and can be changed', async () => {
+  const { e, apple } = await accountEnv();
+  const { token: account, me } = await signIn(e, apple, 'apple-1', 'Dave');
+  await call(e, 'POST', '/api/me/terms', { account });
+  const roll = await liveRoll(e, 3, account);
+  assert.equal((await call(e, 'POST', `/api/rolls/${roll.id}/visibility`, { type: 'application/json', account, body: '{"public":true}' })).status, 200);
+  const cover = async () => (await (await call(e, 'GET', `/u/${me.id}/profile.json`)).json()).rolls[0].cover;
+  assert.match(await cover(), /frame-01\.jpg$/, 'the first frame until one is chosen');
+
+  const set = (n, auth) => call(e, 'POST', `/api/rolls/${roll.id}/cover`, { type: 'application/json', ...auth, body: JSON.stringify({ cover: n }) });
+  assert.equal((await set(3, { token: roll.token })).status, 200, 'with the roll\'s token');
+  assert.match(await cover(), /frame-03\.jpg$/);
+  assert.equal((await (await call(e, 'GET', `/r/${roll.id}/roll.json`)).json()).cover, 3);
+  assert.equal((await set(2, { account })).status, 200, 'or as its owner');
+  assert.match(await cover(), /frame-02\.jpg$/);
+  assert.equal((await set(4, { token: roll.token })).status, 400, 'only frames the roll has');
+  assert.equal((await set(1, {})).status, 401, 'not just anyone');
+  const other = await signIn(e, apple, 'apple-2', 'Someone');
+  assert.equal((await set(1, { account: other.token })).status, 401, 'not someone else');
+});
+
+test('a cover can be chosen when the roll is shared', async () => {
+  const e = env();
+  const publish = async (cover) => {
+    const { id, token } = await (await call(e, 'POST', '/api/rolls', { type: 'application/json', body: JSON.stringify({ frames: 4, cover, title: 'x' }) })).json();
+    for (let n = 1; n <= 4; n++) await call(e, 'PUT', `/api/rolls/${id}/frame-0${n}.jpg`, { body: jpeg(), token });
+    await call(e, 'PUT', `/api/rolls/${id}/card.jpg`, { body: jpeg(), token });
+    assert.equal((await call(e, 'POST', `/api/rolls/${id}/publish`, { token })).status, 200);
+    return (await (await call(e, 'GET', `/r/${id}/roll.json`)).json()).cover;
+  };
+  assert.equal(await publish(3), 3);
+  assert.equal(await publish(9), 1, 'out of range falls back to the first frame');
+  assert.equal(await publish(undefined), 1);
+});
