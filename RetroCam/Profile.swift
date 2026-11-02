@@ -8,10 +8,13 @@ struct Profile: Equatable {
     var photo: UIImage?
     /// Put the headshot and name on share cards.
     var showOnCards: Bool = true
+    /// Film cards show your latest frame shot on the film (else its tone scale).
+    var filmCardsUsePhoto: Bool = true
 
     static let maxNameLength = 24
     private static let nameKey = "profile.name"
     private static let showKey = "profile.showOnCards"
+    private static let photoCardKey = "profile.filmCardsUsePhoto"
     private static let headshotSize: CGFloat = 600
 
     var isEmpty: Bool { name.isEmpty && photo == nil }
@@ -24,12 +27,14 @@ struct Profile: Equatable {
     static func load(from defaults: UserDefaults = .standard) -> Profile {
         Profile(name: defaults.string(forKey: nameKey) ?? "",
                 photo: UIImage(contentsOfFile: photoURL.path),
-                showOnCards: defaults.object(forKey: showKey) as? Bool ?? true)
+                showOnCards: defaults.object(forKey: showKey) as? Bool ?? true,
+                filmCardsUsePhoto: defaults.object(forKey: photoCardKey) as? Bool ?? true)
     }
 
     func saveSettings(to defaults: UserDefaults = .standard) {
         defaults.set(name, forKey: Self.nameKey)
         defaults.set(showOnCards, forKey: Self.showKey)
+        defaults.set(filmCardsUsePhoto, forKey: Self.photoCardKey)
     }
 
     static func cleanName(_ raw: String) -> String {

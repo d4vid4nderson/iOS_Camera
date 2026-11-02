@@ -7,8 +7,8 @@ private extension Font {
     }
 }
 
-/// Your profile: the headshot and name that go on cards you share. Opened from your
-/// photo in the top-right corner of the camera, or from a share sheet. Kept on this
+/// Your profile: the headshot and name that go on cards you share, and what film cards
+/// show. Opened from your photo in the top-right corner of the camera. Kept on this
 /// phone only.
 struct ProfileSheet: View {
     let accent: Color
@@ -71,6 +71,17 @@ struct ProfileSheet: View {
                     }
                 }
 
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("FILM CARDS SHOW").font(.mono(9, .semibold)).foregroundStyle(.secondary)
+                    HStack(spacing: 6) {
+                        chip("MY LATEST FRAME", selected: profile.filmCardsUsePhoto) { setPhotoCards(true) }
+                        chip("TONE SCALE", selected: !profile.filmCardsUsePhoto) { setPhotoCards(false) }
+                    }
+                    Text("A frame you shot on the film, when there is one; otherwise its tone scale.")
+                        .font(.mono(9)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
                 Text("Kept on this phone. Your photo and name only appear on film and roll cards you share.")
                     .font(.mono(10)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -105,6 +116,12 @@ struct ProfileSheet: View {
         let name = Profile.cleanName(nameDraft)
         guard name != profile.name else { return }
         profile.name = name
+        profile.saveSettings()
+        onChange(profile)
+    }
+
+    private func setPhotoCards(_ on: Bool) {
+        profile.filmCardsUsePhoto = on
         profile.saveSettings()
         onChange(profile)
     }
