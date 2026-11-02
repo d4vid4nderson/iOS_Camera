@@ -10,7 +10,8 @@ private extension Font {
 /// Your rolls: a contact sheet per roll and a full-screen view to swipe through the
 /// frames. Frames can't be edited or deleted one by one — a roll is what you shot — but a
 /// whole roll can be deleted. You can share a frame or the whole roll as a contact sheet,
-/// load a new roll (ending the one in the camera early), and choose how new rolls develop.
+/// switch between part-shot rolls (a food roll, a holiday roll…), load a new roll, finish
+/// the one in the camera, and choose how new rolls develop.
 struct RollViewer: View {
     @ObservedObject var camera: CameraModel
     let accent: Color
@@ -86,7 +87,7 @@ struct RollViewer: View {
                     if let roll { startRenaming(roll) }
                 } label: {
                     HStack(spacing: 6) {
-                        Text(roll?.albumTitle.uppercased() ?? String(format: "ROLL %02d", camera.roll.number))
+                        Text((roll ?? camera.roll).title.uppercased())
                             .font(.mono(15, .bold)).foregroundStyle(accent)
                             .lineLimit(1)
                         Image(systemName: "pencil")
@@ -119,7 +120,11 @@ struct RollViewer: View {
             parts.append(started.formatted(.dateTime.month(.abbreviated).day().year()).uppercased())
         }
         if !pending.isEmpty { parts.append(developNote(roll)) }
-        if isInCamera { parts.append("IN CAMERA") }
+        if isInCamera {
+            parts.append("IN CAMERA")
+        } else if roll.isOpen {
+            parts.append("PART-SHOT")
+        }
         return parts.joined(separator: " · ")
     }
 
@@ -139,7 +144,14 @@ struct RollViewer: View {
                 ForEach(rolls, id: \.number) { r in
                     let on = r.number == selected
                     Button { selected = r.number } label: {
-                        Text(String(format: "ROLL %02d", r.number))
+                        HStack(spacing: 5) {
+                            if r.number == camera.roll.number {
+                                Image(systemName: "camera.fill").font(.system(size: 8, weight: .bold))
+                            } else if r.isOpen {
+                                Image(systemName: "circle.lefthalf.filled").font(.system(size: 8, weight: .bold))
+                            }
+                            Text(r.title.uppercased()).lineLimit(1)
+                        }
                             .font(.mono(10, .bold))
                             .padding(.horizontal, 10).padding(.vertical, 6)
                             .background(Capsule().fill(on ? accent.opacity(0.18) : Color(white: 0.15)))
@@ -147,6 +159,7 @@ struct RollViewer: View {
                             .foregroundStyle(on ? accent : .white)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(r.title + (r.number == camera.roll.number ? ", in camera" : r.isOpen ? ", part-shot" : ""))
                 }
             }
         }
@@ -214,6 +227,9 @@ struct RollViewer: View {
                         .disabled(makingSheet)
                 }
                 Spacer(minLength: 0)
+                if let roll, roll.isOpen, !isInCamera {
+                    chip("LOAD IN CAMERA", selected: true) { load(roll.number) }
+                }
                 if let roll {
                     chip("RENAME", selected: false) { startRenaming(roll) }
                 }
@@ -233,14 +249,19 @@ struct RollViewer: View {
                 }
             }
 
-            // The roll in the camera, and loading a new one.
+            // The roll in the camera: switch to another part-shot roll, load a new one, or
+            // finish this one.
             VStack(alignment: .leading, spacing: 6) {
                 Text("IN CAMERA").font(.mono(9, .semibold)).foregroundStyle(.secondary)
-                HStack(spacing: 8) {
-                    Text(cameraRollLine).font(.mono(11, .bold)).foregroundStyle(.white).lineLimit(1)
-                    Spacer(minLength: 0)
-                    if camera.roll.frames > 0 {
-                        chip(confirmFinish ? "TAP FOR NEW ROLL" : "NEW ROLL", selected: confirmFinish) {
+                Text(cameraRollLine).font(.mono(11, .bold)).foregroundStyle(.white).lineLimit(1)
+                if camera.roll.frames > 0 {
+                    HStack(spacing: 6) {
+                        chip("NEW ROLL", selected: false) {
+                            confirmFinish = false
+                            camera.loadNewRoll()
+                            selected = camera.roll.number
+                        }
+                        chip(confirmFinish ? "TAP TO FINISH" : "FINISH ROLL", selected: confirmFinish) {
                             if confirmFinish {
                                 camera.rewindRoll()
                                 confirmFinish = false
@@ -249,11 +270,26 @@ struct RollViewer: View {
                             }
                         }
                         .sensoryFeedback(.warning, trigger: confirmFinish) { _, new in new }
+                        Spacer(minLength: 0)
                     }
-                }
-                if confirmFinish {
-                    Text(String(format: "Roll %02d ends at frame %d; the rest stays blank.", camera.roll.number, camera.roll.frames))
+                    Text(confirmFinish
+                         ? "\(camera.roll.title) ends at frame \(camera.roll.frames); the rest stays blank\(camera.roll.develop == .instant ? "." : ", and it goes to be developed.")"
+                         : "New roll keeps \(camera.roll.title) part-shot, to come back to.")
                         .font(.mono(9)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                let others = camera.openRolls()
+                if !others.isEmpty {
+                    Text("SWITCH TO").font(.mono(9, .semibold)).foregroundStyle(.secondary).padding(.top, 4)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(others, id: \.number) { other in
+                                chip("\(other.title.uppercased()) · \(other.frames)/\(Roll.length)", selected: false) {
+                                    load(other.number)
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -270,9 +306,16 @@ struct RollViewer: View {
         }
     }
 
+    /// Put a part-shot roll in the camera and go back to shooting.
+    private func load(_ number: Int) {
+        confirmFinish = false
+        camera.loadRoll(number)
+        if camera.roll.number == number { dismiss() }
+    }
+
     private var cameraRollLine: String {
         let r = camera.roll
-        let name = String(format: "ROLL %02d", r.number)
+        let name = r.title.uppercased()
         guard r.frames > 0 else { return "\(name) · NEW, NOTHING SHOT YET" }
         return "\(name) · \(r.frames)/\(Roll.length)" + (r.film.map { " · \($0)" } ?? "")
     }
@@ -301,7 +344,7 @@ struct RollViewer: View {
             Color.black.opacity(0.6).ignoresSafeArea()
                 .onTapGesture { withAnimation(.snappy(duration: 0.15)) { renaming = nil } }
             VStack(alignment: .leading, spacing: 12) {
-                Text("NAME \(target.numberTitle.uppercased())").font(.mono(15, .bold)).foregroundStyle(accent)
+                Text("NAME THIS ROLL").font(.mono(15, .bold)).foregroundStyle(accent)
                 TextField("", text: $nameDraft,
                           prompt: Text("E.G. BEACH DAY").foregroundStyle(Color(white: 0.4)))
                     .font(.mono(14, .semibold))
@@ -351,7 +394,7 @@ struct RollViewer: View {
     // MARK: Delete a roll
 
     private func deleteCard(_ target: Roll) -> some View {
-        let name = String(format: "ROLL %02d", target.number)
+        let name = target.title.uppercased()
         return ZStack {
             Color.black.opacity(0.6).ignoresSafeArea()
                 .onTapGesture { withAnimation(.snappy(duration: 0.15)) { deleting = nil } }
@@ -424,7 +467,7 @@ struct RollViewer: View {
     // MARK: Share a roll as a link
 
     private func shareCard(_ target: Roll) -> some View {
-        let name = String(format: "ROLL %02d", target.number)
+        let name = target.title.uppercased()
         let count = developedFrames.count
         return ZStack {
             Color.black.opacity(0.6).ignoresSafeArea()

@@ -199,6 +199,20 @@ named.expose(film: "CLASSIC 400")
 check(named.title == "Roll 07" && named.albumTitle == "Roll 07 · CLASSIC 400", "unnamed roll titles")
 named.name = Roll.cleanName("  Beach day  ")
 check(named.title == "Beach day" && named.albumTitle == "Roll 07 · Beach day", "named roll titles")
+
+// Part-shot rolls can go back in the camera; finished or full ones can't.
+var food = Roll(number: 3)
+check(!food.isOpen, "a roll with nothing shot isn't part-shot")
+food.expose(film: "CLASSIC 400")
+check(food.isOpen, "a part-shot roll can be loaded again")
+var finishedEarly = food
+finishedEarly.finish()
+check(!finishedEarly.isOpen, "a finished roll stays finished")
+var full = Roll(number: 4)
+for _ in 0..<Roll.length { full.expose(film: "CLASSIC 400") }
+check(!full.isOpen, "a full roll can't be loaded again")
+check(Roll.freshNumber(after: [3, 9, 4]) == 10, "new rolls get a number no roll has")
+check(Roll.freshNumber(after: []) == 1, "the first roll is roll 1")
 check(Roll.cleanName("   ") == nil, "an empty name clears it")
 check(Roll.cleanName(String(repeating: "x", count: 40))?.count == Roll.maxNameLength, "names are capped")
 let namedBack = try! JSONDecoder().decode(Roll.self, from: JSONEncoder().encode(named))

@@ -69,6 +69,15 @@ struct Roll: Codable, Equatable {
 
     var isFinished: Bool { frames >= Self.length }
 
+    /// Part-shot and not finished: it can go back in the camera to carry on shooting.
+    var isOpen: Bool { frames > 0 && frames < Self.length && finishedAt == nil }
+
+    /// A number for a new roll that no roll already has.
+    static func freshNumber(after existing: [Int]) -> Int { (existing.max() ?? 0) + 1 }
+
+    /// The roll numbered after this one, loaded fresh.
+    func next() -> Roll { Roll(number: number + 1) }
+
     /// "Roll 07"
     var numberTitle: String { String(format: "Roll %02d", number) }
 
@@ -111,8 +120,6 @@ struct Roll: Codable, Equatable {
         if frames == 0 { film = nil; started = nil; developMode = nil }
     }
 
-    /// The next roll, loaded fresh.
-    func next() -> Roll { Roll(number: number + 1) }
 
     // MARK: Persistence
 

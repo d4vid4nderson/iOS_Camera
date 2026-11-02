@@ -200,7 +200,7 @@ struct ContentView: View {
                 showingPrint = true
             } label: {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(camera.roll.name?.uppercased() ?? String(format: "ROLL %02d", camera.roll.number))
+                    Text(camera.roll.title.uppercased())
                         .font(.mono(8, .semibold)).foregroundStyle(.secondary)
                         .lineLimit(1)
                     Text(String(format: "%02d", camera.framesShot) + "/\(CameraModel.rollLength)")
@@ -211,7 +211,7 @@ struct ContentView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Roll \(camera.roll.number), frame \(camera.framesShot) of \(CameraModel.rollLength)")
+            .accessibilityLabel("\(camera.roll.title), frame \(camera.framesShot) of \(CameraModel.rollLength)")
             .accessibilityHint("Open this roll")
             // Hidden: long-press for a camera-orientation readout (for bug reports).
             .simultaneousGesture(LongPressGesture(minimumDuration: 0.8).onEnded { _ in camera.showDiagnostics.toggle() })
