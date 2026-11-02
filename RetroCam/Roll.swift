@@ -52,6 +52,9 @@ struct Roll: Codable, Equatable {
     var finishedAt: Date?
     /// A name you gave the roll ("Beach day"). nil = just its number.
     var name: String?
+    /// The frame you picked as the roll's cover (long-press it in the roll). nil = the first
+    /// developed frame.
+    var cover: Int?
 
     static let maxNameLength = 24
 

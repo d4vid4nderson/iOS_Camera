@@ -639,6 +639,18 @@ final class CameraModel: NSObject, ObservableObject {
         Roll.freshNumber(after: RollStore.rolls().map(\.number) + [roll.number])
     }
 
+    /// Make `frame` the roll's cover (or nil for the first frame again). A shared roll's
+    /// cover changes on the server too, so profiles show it.
+    func setCover(ofRoll number: Int, to frame: Int?) {
+        if number == roll.number { roll.cover = frame }
+        guard var target = RollStore.rolls().first(where: { $0.number == number }) ?? (number == roll.number ? roll : nil)
+        else { return }
+        target.cover = frame
+        RollStore.updateInfo(target)
+        rollsVersion += 1
+        Task { try? await RollShare.updateCover(of: target) }
+    }
+
     /// Name a roll ("Beach day"); an empty name goes back to just its number. Renames its
     /// album in Photos too ("Roll 07 · Beach day").
     func renameRoll(_ number: Int, to raw: String) {

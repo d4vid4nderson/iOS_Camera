@@ -10,6 +10,7 @@
 //   DELETE /api/rolls/<id>          unshare: delete everything          (Bearer token, or admin)
 //   POST /api/rolls/<id>/report     report a roll; 3 reports hide it until reviewed
 //   POST /api/rolls/<id>/visibility { public }   put a roll on your profile, or take it off (account)
+//   POST /api/rolls/<id>/cover { cover }  which frame (1-based) is the roll's cover (Bearer token, or owner)
 //   GET  /api/rolls/<id>/likes      { counts: { "<frame>": n }, mine: [frame] }  (account optional)
 //   PUT|DELETE /api/rolls/<id>/frames/<n>/like   like or unlike a frame          (account)
 //
@@ -122,6 +123,9 @@ export async function route(request, env, now = Date.now()) {
   if ((m = path.match(new RegExp(`^/api/rolls/${ROLL}/visibility$`))) && method === 'POST') {
     return setVisibility(request, env, m[1], url, now);
   }
+  if ((m = path.match(new RegExp(`^/api/rolls/${ROLL}/cover$`))) && method === 'POST') {
+    return setCover(request, env, m[1], now);
+  }
   if ((m = path.match(new RegExp(`^/api/rolls/${ROLL}/likes$`))) && method === 'GET') {
     return listLikes(request, env, m[1], now);
   }
@@ -211,6 +215,7 @@ async function createRoll(request, env, url, now) {
     createdAt: now,
     expiresAt: now + TTL_DAYS * DAY,
     frames,
+    cover: coverFrame(body.cover, frames),
     title: clean(body.title, 60) || 'A roll',
     film: {
       name: clean(body.film?.name, 24),
@@ -401,6 +406,26 @@ async function setVisibility(request, env, id, url, now) {
   }
   await putMeta(env, meta);
   return json(200, { public: meta.public, expiresAt: meta.expiresAt == null ? null : new Date(meta.expiresAt).toISOString() });
+}
+
+/// The roll's cover frame (1-based); anything out of range is the first frame.
+function coverFrame(value, frames) {
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 1 && n <= frames ? n : 1;
+}
+
+/// Choose which frame is the roll's cover (on profiles). Its owner, or its token.
+async function setCover(request, env, id, now) {
+  const meta = await getMeta(env, id);
+  if (!meta || expired(meta, now)) return json(404, { error: 'gone' });
+  const user = await currentUser(request, env);
+  if (!(user && meta.owner === user.id) && !(await authorised(request, meta, env))) return json(401, { error: 'unauthorised' });
+  const body = (await readJSON(request)) || {};
+  const n = Number(body.cover);
+  if (!Number.isInteger(n) || n < 1 || n > meta.frames) return json(400, { error: 'cover out of range' });
+  meta.cover = n;
+  await putMeta(env, meta);
+  return json(200, { cover: n });
 }
 
 async function listLikes(request, env, id, now) {
@@ -697,7 +722,7 @@ async function publicProfile(env, id, url, now) {
       const base = `${url.origin}/r/${meta.id}`;
       rolls.push({
         id: meta.id, title: meta.title, film: meta.film.name || null, frames: meta.frames, shotAt: meta.shotAt,
-        cover: `${base}/frame-01.jpg`, card: `${base}/card.jpg`, url: base, createdAt: meta.createdAt,
+        cover: `${base}/${frameName(coverFrame(meta.cover, meta.frames))}`, card: `${base}/card.jpg`, url: base, createdAt: meta.createdAt,
       });
     }
   }
@@ -890,6 +915,7 @@ async function rollPayload(env, meta, url) {
     sharer,
     shotAt: meta.shotAt,
     frames: Array.from({ length: meta.frames }, (_, i) => `${base}/${frameName(i + 1)}`),
+    cover: coverFrame(meta.cover, meta.frames),
     card: `${base}/card.jpg`,
     public: Boolean(meta.public && owner),
     expiresAt: meta.expiresAt == null ? null : new Date(meta.expiresAt).toISOString(),

@@ -31,6 +31,8 @@ enum RollShare {
         var isPublic: Bool?
         /// The account it belongs to, when it was shared signed in.
         var owner: String?
+        /// The roll's frame numbers in the order they were uploaded (frame-01, -02…).
+        var frames: [Int]?
 
         var onProfile: Bool { isPublic == true }
     }
@@ -45,6 +47,8 @@ enum RollShare {
         var sharer: Sharer
         var shotAt: String?
         var frames: [URL]
+        /// The cover frame, numbered from 1.
+        var cover: Int?
         var expiresAt: String?
         var `public`: Bool?
     }
@@ -153,6 +157,7 @@ enum RollShare {
         var sharer: [String: Any] = ["id": sharerID]
         if showProfile { sharer["name"] = profile.name }
         var body: [String: Any] = ["frames": frames.count, "title": title, "film": filmInfo, "sharer": sharer]
+        if let cover = roll.cover, let index = frames.firstIndex(of: cover) { body["cover"] = index + 1 }
         if let started = roll.started { body["shotAt"] = started.formatted(.dateTime.month(.abbreviated).day().year()) }
 
         let account = Account.sessionToken
@@ -165,21 +170,18 @@ enum RollShare {
         let expires = (info["expiresAt"] as? String).flatMap(parseDate)
             ?? Date().addingTimeInterval(Double(lifetimeDays) * 86_400)
         let record = Record(id: id, token: token, url: link, expiresAt: expires, isPublic: false,
-                            owner: account == nil ? nil : Account.storedID)
+                            owner: account == nil ? nil : Account.storedID, frames: frames)
         let files = base.appendingPathComponent("api/rolls").appendingPathComponent(id)
 
         do {
-            var thumbs: [UIImage] = []
             let total = frames.count + 1
             for (i, frame) in frames.enumerated() {
                 let data = try Data(contentsOf: RollStore.frameURL(roll: roll.number, frame: frame))
                 _ = try await send(files.appendingPathComponent(String(format: "frame-%02d.jpg", i + 1)),
                                    method: "PUT", token: token, body: data, type: "image/jpeg")
-                if thumbs.count < 9, let thumb = UIImage(contentsOfFile: RollStore.thumbURL(roll: roll.number, frame: frame).path) {
-                    thumbs.append(thumb)
-                }
                 await progress(i + 1, total)
             }
+            let thumbs = cardFrames(roll, from: frames).compactMap { UIImage(contentsOfFile: RollStore.thumbURL(roll: roll.number, frame: $0).path) }
             let cardSharer = showProfile ? FilmCodeCard.Sharer(name: profile.name, avatar: profile.photo) : nil
             let card = RollCard.render(title: title, filmName: film?.name ?? roll.film, frameCount: frames.count,
                                        frames: thumbs, url: link, sharer: cardSharer)
@@ -199,6 +201,21 @@ enum RollShare {
             _ = try? await send(files, method: "DELETE", token: token)
             throw error
         }
+    }
+
+    /// Up to 9 frames for the roll's card, its cover first.
+    static func cardFrames(_ roll: Roll, from frames: [Int]) -> [Int] {
+        guard let cover = roll.cover, frames.contains(cover) else { return Array(frames.prefix(9)) }
+        return Array(([cover] + frames.filter { $0 != cover }).prefix(9))
+    }
+
+    /// The roll's cover on the server, if it's shared: the frame you picked (or the first).
+    /// Rolls shared before covers existed don't know their upload order, so they're left.
+    static func updateCover(of roll: Roll) async throws {
+        guard let base = ShareLinks.base, let record = record(for: roll.number), let uploaded = record.frames else { return }
+        let index = roll.cover.flatMap { uploaded.firstIndex(of: $0) }.map { $0 + 1 } ?? 1
+        _ = try await send(base.appendingPathComponent("api/rolls").appendingPathComponent(record.id).appendingPathComponent("cover"),
+                           method: "POST", token: record.token, json: ["cover": index])
     }
 
     /// Delete a shared roll from the server (and forget the link).
@@ -281,7 +298,7 @@ enum RollShare {
     /// The card for a roll you've already shared, to share the link again.
     static func card(for roll: Roll, record: Record, film: FilmStock?, profile: Profile) -> UIImage? {
         let frames = RollStore.frames(of: roll.number).filter { !RollStore.isPending(roll: roll.number, frame: $0) }
-        let thumbs = frames.prefix(9).compactMap { UIImage(contentsOfFile: RollStore.thumbURL(roll: roll.number, frame: $0).path) }
+        let thumbs = cardFrames(roll, from: frames).compactMap { UIImage(contentsOfFile: RollStore.thumbURL(roll: roll.number, frame: $0).path) }
         let showProfile = profile.showOnCards && !profile.isEmpty
         return RollCard.render(title: roll.title, filmName: film?.name ?? roll.film,
                                frameCount: frames.count, frames: Array(thumbs), url: record.url,
