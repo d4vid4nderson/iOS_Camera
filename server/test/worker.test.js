@@ -469,6 +469,17 @@ test('colour film links decode like the app', async () => {
   const page = await (await call(env(), 'GET', `/f/${code}`)).text();
   assert.match(page, /TIDE 200/);
   assert.match(page, /Saturation/);
-  assert.equal(decodeFilm(Buffer.from([3, ...bytes.slice(1)]).toString('base64url')), null, 'unknown versions are refused');
+  assert.equal(decodeFilm(Buffer.from([4, ...bytes.slice(1)]).toString('base64url')), null, 'unknown versions are refused');
   assert.equal(decodeFilm(Buffer.from(bytes.slice(0, 30)).toString('base64url')), null, 'short colour codes are refused');
+});
+
+test('version 3 colour codes carry strength; version 2 opens at full strength', () => {
+  const name = [...new TextEncoder().encode('SOFT')];
+  const v3 = decodeFilm(Buffer.from([3, ...Array(18).fill(128), ...Array(15).fill(128), 64, 0, 0, 0x01, 0x90, ...name]).toString('base64url'));
+  assert.equal(v3.color, true);
+  assert.ok(Math.abs(v3.strength - 64 / 255) < 0.001);
+  assert.equal(v3.name, 'SOFT');
+  const v2 = decodeFilm(Buffer.from([2, ...Array(18).fill(128), ...Array(15).fill(128), 0, 0, 0x01, 0x90, ...name]).toString('base64url'));
+  assert.equal(v2.strength, 1);
+  assert.equal(v2.name, 'SOFT');
 });

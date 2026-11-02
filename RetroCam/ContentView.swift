@@ -918,9 +918,9 @@ struct ContentView: View {
                 if !AdjustParam.cases(for: camera.stock).contains(adjusting) { adjusting = .contrast }
                 proxy.scrollTo(adjusting, anchor: .center)
             }
-            .onChange(of: camera.stock.color) { _, _ in
-                // Colour and black & white films have different settings.
-                if !AdjustParam.cases(for: camera.stock).contains(adjusting) { adjusting = .contrast }
+            .onChange(of: camera.stock.color) { _, color in
+                // Colour and black & white films have different settings; colour starts on STRENGTH.
+                if !AdjustParam.cases(for: camera.stock).contains(adjusting) { adjusting = color ? .strength : .contrast }
             }
             .onChange(of: adjusting) { _, param in
                 withAnimation(.snappy(duration: 0.25)) { proxy.scrollTo(param, anchor: .center) }
@@ -1132,14 +1132,14 @@ private extension View {
 private enum AdjustParam: String, CaseIterable, Identifiable {
     case filter, contrast, key, fade, whites, tone, toneAmount, glow, grainSize, vignette, softness, fog
     // Colour films.
-    case saturation, warmth, tint, shadowHue, shadowAmount, highlightHue, highlightAmount, aqua
+    case strength, saturation, warmth, tint, shadowHue, shadowAmount, highlightHue, highlightAmount, aqua
     case redShadows, redHighlights, greenShadows, greenHighlights, blueShadows, blueHighlights, halation
 
     /// The settings a film has, in panel order: black & white films have a filter and
     /// toning; colour films have white balance, a grade and halation.
     static func cases(for stock: FilmStock) -> [AdjustParam] {
         if stock.color {
-            return [.contrast, .key, .fade, .whites,
+            return [.strength, .contrast, .key, .fade, .whites,
                     .saturation, .warmth, .tint,
                     .shadowHue, .shadowAmount, .highlightHue, .highlightAmount, .aqua,
                     .redShadows, .redHighlights, .greenShadows, .greenHighlights, .blueShadows, .blueHighlights,
@@ -1165,6 +1165,7 @@ private enum AdjustParam: String, CaseIterable, Identifiable {
         case .vignette: return "VIGNETTE"
         case .softness: return "SOFTNESS"
         case .fog: return "FOG"
+        case .strength: return "STRENGTH"
         case .saturation: return "SATURATION"
         case .warmth: return "WARMTH"
         case .tint: return "TINT"
@@ -1196,6 +1197,7 @@ private enum AdjustParam: String, CaseIterable, Identifiable {
         case .vignette: return \.vignette
         case .softness: return \.edgeSoftness
         case .fog: return \.fog
+        case .strength: return \.strength
         case .saturation: return \.saturation
         case .warmth: return \.warmth
         case .tint: return \.tint

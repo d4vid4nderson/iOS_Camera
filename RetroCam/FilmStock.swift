@@ -61,6 +61,9 @@ struct FilmStock: Identifiable, Hashable, Codable {
 
     /// A colour film: skips the black & white conversion and the print toning.
     var color: Bool = false
+    /// How much of the film's colour and tone to apply: 0 = the scene as shot, 1 = the
+    /// full look.
+    var strength: CGFloat = 1
     /// 0 = no colour, 1 = as seen, up to 1.6.
     var saturation: CGFloat = 1
     /// White balance: cool (-1) ... warm (+1), and green (-1) ... magenta (+1).
@@ -263,7 +266,7 @@ extension FilmStock {
         case id, name, iso, blurb, red, green, blue, contrast, blackLift, whitePoint
         case grain, grainSize, vignette, tone, toneAmount, bloom, edgeSoftness, exposure, key, fog
         case effect, effectAmount, effectX, effectY
-        case color, saturation, warmth, tint, shadowHue, shadowAmount, highlightHue, highlightAmount, aqua
+        case color, strength, saturation, warmth, tint, shadowHue, shadowAmount, highlightHue, highlightAmount, aqua
         case redShadows, redHighlights, greenShadows, greenHighlights, blueShadows, blueHighlights, halation
     }
 
@@ -296,6 +299,7 @@ extension FilmStock {
         effectX = value(.effectX, 0.5)
         effectY = value(.effectY, 0.5)
         color = value(.color, false)
+        strength = value(.strength, 1)
         saturation = value(.saturation, 1)
         warmth = value(.warmth, 0)
         tint = value(.tint, 0)
@@ -326,6 +330,7 @@ extension FilmStock {
         try c.encode(effectX, forKey: .effectX); try c.encode(effectY, forKey: .effectY)
         if color {
             try c.encode(color, forKey: .color)
+            try c.encode(strength, forKey: .strength)
             try c.encode(saturation, forKey: .saturation)
             try c.encode(warmth, forKey: .warmth); try c.encode(tint, forKey: .tint)
             try c.encode(shadowHue, forKey: .shadowHue); try c.encode(shadowAmount, forKey: .shadowAmount)
@@ -393,7 +398,7 @@ extension FilmStock {
         grain: 0.16, grainSize: 1.1,
         vignette: 0.2,
         bloom: 0.12,
-        color: true, saturation: 0.86, warmth: 0.3, tint: 0.04,
+        color: true, strength: 0.5, saturation: 0.86, warmth: 0.3, tint: 0.04,
         shadowHue: 0.5, shadowAmount: 0.12, highlightHue: 0.09, highlightAmount: 0.08,
         aqua: 0.25, redShadows: 0.1, redHighlights: 0.15, greenShadows: -0.1, greenHighlights: -0.05,
         blueShadows: -0.25, blueHighlights: -0.15,
@@ -409,7 +414,7 @@ extension FilmStock {
         grain: 0.22, grainSize: 1.3,
         vignette: 0.45,
         bloom: 0.25,
-        color: true, saturation: 0.82, warmth: -0.2,
+        color: true, strength: 0.5, saturation: 0.82, warmth: -0.2,
         shadowHue: 0.555, shadowAmount: 0.6, highlightHue: 0.1, highlightAmount: 0.4,
         aqua: 0.45, redShadows: -0.2, blueShadows: 0.2)
 
@@ -423,7 +428,7 @@ extension FilmStock {
         grain: 0.3, grainSize: 1.5,
         vignette: 0.4,
         bloom: 0.3,
-        color: true, saturation: 0.9, warmth: 0.05, tint: -0.06,
+        color: true, strength: 0.5, saturation: 0.9, warmth: 0.05, tint: -0.06,
         shadowHue: 0.48, shadowAmount: 0.3, highlightHue: 0.13, highlightAmount: 0.22,
         aqua: 0.3, redShadows: -0.15, redHighlights: 0.1, greenShadows: 0.05, greenHighlights: 0.2,
         blueShadows: 0.1, blueHighlights: -0.4,
@@ -438,7 +443,7 @@ extension FilmStock {
         grain: 0.18, grainSize: 1.2,
         vignette: 0.5,
         bloom: 0.15,
-        color: true, saturation: 1.08,
+        color: true, strength: 0.5, saturation: 1.08,
         shadowHue: 0.52, shadowAmount: 0.42, highlightHue: 0.08, highlightAmount: 0.4,
         aqua: 0.5, redShadows: -0.18, redHighlights: 0.15, blueShadows: 0.25, blueHighlights: -0.25,
         halation: 0.15)
@@ -452,7 +457,7 @@ extension FilmStock {
         grain: 0.12, grainSize: 1.0,
         vignette: 0.45,
         bloom: 0.35,
-        color: true, saturation: 1.12, warmth: 0.45,
+        color: true, strength: 0.5, saturation: 1.12, warmth: 0.45,
         shadowHue: 0.06, shadowAmount: 0.2, highlightHue: 0.1, highlightAmount: 0.45,
         redHighlights: 0.15, blueShadows: -0.15, blueHighlights: -0.3,
         halation: 0.3)

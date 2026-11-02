@@ -770,6 +770,8 @@ const COLOR_FIELDS = [
   ['greenHighlights', -1, 1], ['blueShadows', -1, 1], ['blueHighlights', -1, 1],
   ['halation', 0, 1],
 ];
+// Version 3 adds how strongly the colour look applies.
+const V3_FIELDS = [['strength', 0, 1]];
 export const TONES = ['neutral', 'warm', 'cool', 'selenium', 'split', 'gold', 'platinum', 'cyanotype', 'tintype'];
 const TONE_NAMES = {
   warm: 'Sepia', cool: 'Cool', selenium: 'Selenium', split: 'Split', gold: 'Gold',
@@ -801,12 +803,12 @@ export function decodeFilm(code) {
   } catch {
     return null;
   }
-  if (bytes[0] !== 1 && bytes[0] !== 2) return null;
-  const isColor = bytes[0] === 2;
-  const packed = isColor ? FIELDS.concat(COLOR_FIELDS) : FIELDS;
+  if (![1, 2, 3].includes(bytes[0])) return null;
+  const isColor = bytes[0] !== 1;
+  const packed = bytes[0] === 3 ? FIELDS.concat(COLOR_FIELDS, V3_FIELDS) : isColor ? FIELDS.concat(COLOR_FIELDS) : FIELDS;
   const fixed = 1 + packed.length + 2 + 2;
   if (bytes.length < fixed) return null;
-  const film = { color: isColor };
+  const film = { color: isColor, strength: 1 };
   packed.forEach(([name, lo, hi], i) => { film[name] = lo + (bytes[1 + i] / 255) * (hi - lo); });
   let at = 1 + packed.length;
   if (bytes[at] >= TONES.length || bytes[at + 1] >= EFFECTS.length) return null;
@@ -869,6 +871,9 @@ function colorScale(film, steps) {
     y = luma(...c);
     const ws = film.shadowAmount * (1 - y) ** 2, wh = film.highlightAmount * y * y;
     c = c.map((v, j) => clamp(v + 0.4 * (ws * st[j] + wh * ht[j])));
+    // STRENGTH mixes the look back toward plain grey.
+    const g = i / (steps - 1);
+    c = c.map((v) => g + film.strength * (v - g));
     return `rgb(${c.map((v) => Math.round(v * 255)).join(',')})`;
   });
 }
@@ -878,7 +883,7 @@ function settingsList(film) {
   if (film.color) {
     const deg = (h) => `${Math.round(h * 360) % 360}°`;
     const signed = (v) => `${v > 0 ? '+' : ''}${Math.round(v * 100)}`;
-    const rows = [['Contrast', pct(film.contrast)], ['Saturation', pct(film.saturation)], ['Warmth', signed(film.warmth)]];
+    const rows = [['Strength', pct(film.strength)], ['Contrast', pct(film.contrast)], ['Saturation', pct(film.saturation)], ['Warmth', signed(film.warmth)]];
     if (film.shadowAmount > 0.02) rows.push(['Shadow color', `${deg(film.shadowHue)} ${pct(film.shadowAmount)}`]);
     if (film.highlightAmount > 0.02) rows.push(['Light color', `${deg(film.highlightHue)} ${pct(film.highlightAmount)}`]);
     if (film.halation > 0.02) rows.push(['Halation', pct(film.halation)]);

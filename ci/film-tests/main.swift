@@ -12,7 +12,7 @@ func near(_ a: CGFloat, _ b: CGFloat, _ tol: CGFloat = 1e-6) -> Bool { abs(a - b
 // Built-in films: unique ids, sane values inside the ADJUST panel's ranges.
 let ids = FilmStock.all.map(\.id)
 check(Set(ids).count == ids.count, "film ids are unique")
-check(FilmStock.all.count == 15, "15 built-in films, got \(FilmStock.all.count)")
+check(FilmStock.all.count == 20, "20 built-in films (15 black & white, 5 colour), got \(FilmStock.all.count)")
 for f in FilmStock.all {
     check(!f.isCustom, "\(f.id) is not custom")
     check((0...1).contains(f.contrast), "\(f.id) contrast in range")
@@ -275,7 +275,8 @@ for film in colorFilms {
     for (name, a, b) in [("saturation", film.saturation, back.saturation), ("warmth", film.warmth, back.warmth),
                          ("shadow hue", film.shadowHue, back.shadowHue), ("highlights", film.highlightAmount, back.highlightAmount),
                          ("green high", film.greenHighlights, back.greenHighlights), ("blue high", film.blueHighlights, back.blueHighlights),
-                         ("halation", film.halation, back.halation), ("contrast", film.contrast, back.contrast)] {
+                         ("halation", film.halation, back.halation), ("contrast", film.contrast, back.contrast),
+                         ("strength", film.strength, back.strength)] {
         check(abs(a - b) < 0.01, "\(film.id) link keeps \(name)")
     }
     let json = try! JSONEncoder().encode(film)
@@ -283,6 +284,11 @@ for film in colorFilms {
     check(decoded == film, "\(film.id) saves and loads")
 }
 check(!FilmCode.film(from: FilmCode.url(for: .pan50)!)!.color, "black & white links stay black & white")
+for film in colorFilms { check(film.strength <= 0.6, "\(film.id) starts subtle (strength \(film.strength))") }
+var soft = FilmStock.tide200
+soft.strength = 0.3
+check(abs(FilmCode.film(from: FilmCode.url(for: soft)!)!.strength - 0.3) < 0.01, "a link keeps the film's strength")
+
 let oldSaved = try! JSONEncoder().encode(FilmStock.noir)
 check(!(try! JSONDecoder().decode(FilmStock.self, from: oldSaved)).color, "films saved before colour load as black & white")
 

@@ -45,12 +45,27 @@ enum FilmLook {
         image = image.applyingFilter("CILinearToSRGBToneCurve")
 
         // 2b. Colour: white balance before the curve, like the film's own colour response.
+        let natural = image
         if stock.color, stock.warmth != 0 || stock.tint != 0 {
             image = whiteBalance(image, warmth: stock.warmth, tint: stock.tint)
         }
 
         // 3. Characteristic curve: S-curve for contrast, mid-tone key, lifted blacks, dimmed whites.
         image = toneCurve(image, stock: stock)
+
+        // 3'. Colour: the grade (RGB curves, aqua blues, saturation, split toning), then
+        //     STRENGTH mixes the film's whole colour and tone back toward the scene as shot.
+        if stock.color {
+            image = grade(image, stock.grade)
+            let strength = min(max(stock.strength, 0), 1)
+            if strength < 1 {
+                let mix = CIFilter.dissolveTransition()
+                mix.inputImage = natural
+                mix.targetImage = image
+                mix.time = Float(strength)
+                image = mix.outputImage?.cropped(to: extent) ?? image
+            }
+        }
 
         // 3a. Uneven chemical fog (old / expired film): soft blotches lifting the shadows.
         if stock.fog > 0 {
@@ -70,10 +85,7 @@ enum FilmLook {
         image = LensFX.print(image, stock: stock)
 
         // 4. Black & white: print toning (split: separate ink, mid and paper colours).
-        //    Colour: the grade (RGB curves, aqua blues, saturation, split toning).
-        if stock.color {
-            image = grade(image, stock.grade)
-        } else if stock.toneAmount > 0, stock.tone != .neutral {
+        if !stock.color, stock.toneAmount > 0, stock.tone != .neutral {
             image = tone(image, toning: stock.tone, amount: stock.toneAmount)
         }
 
