@@ -539,31 +539,44 @@ struct ContentView: View {
     private func canister(_ stock: FilmStock) -> some View {
         let selected = stock.id == camera.stock.id
         let edited = camera.library.isEdited(id: stock.id)
-        return VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 5) {
-                if stock.isCustom {
-                    Image(systemName: "person.crop.square").font(.system(size: 9, weight: .bold))
+        // Styled like the film's share card: its tone strip over the name, on a dark card.
+        return VStack(alignment: .leading, spacing: 8) {
+            ToneStrip(film: stock)
+                .frame(height: 12)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 5) {
+                    if stock.isCustom {
+                        Image(systemName: "person.crop.square").font(.system(size: 10, weight: .semibold))
+                    }
+                    Text(stock.name)
+                        .font(.system(size: 15, weight: .bold))
+                        .tracking(-0.2)
+                        .lineLimit(1)
+                    if edited {
+                        Circle().fill(accent).frame(width: 5, height: 5)
+                            .accessibilityLabel("Edited")
+                    }
                 }
-                Text(stock.name).font(.mono(11, .bold)).lineLimit(1)
-                if edited {
-                    Circle().fill(accent).frame(width: 5, height: 5)
-                        .accessibilityLabel("Edited")
-                }
+                .foregroundStyle(selected ? accent : Color(red: 0.949, green: 0.941, blue: 0.925))
+                Text(stock.blurb)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(Color(white: 0.55))
+                    .lineLimit(1)
             }
-            Text(stock.blurb).font(.mono(9)).foregroundStyle(.secondary).lineLimit(1)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .frame(width: 160, alignment: .leading)
+        .padding(.horizontal, 11)
+        .padding(.top, 10)
+        .padding(.bottom, 9)
+        .frame(width: 168, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(selected ? accent.opacity(0.15) : Color(white: 0.17))
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(red: 0.055, green: 0.055, blue: 0.059))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(selected ? accent : .clear, lineWidth: 1.2)
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(selected ? accent : Color(white: 0.22), lineWidth: selected ? 1.5 : 0.5)
         )
-        .foregroundStyle(selected ? accent : .white)
+        .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
     }
 
