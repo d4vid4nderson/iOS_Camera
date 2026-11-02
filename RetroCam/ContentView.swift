@@ -149,11 +149,16 @@ struct ContentView: View {
 
     private var topPlate: some View {
         HStack(alignment: .center) {
-            Text(String(format: "%02d", camera.framesShot) + "/\(CameraModel.rollLength)")
-                .font(.mono(15, .bold)).foregroundStyle(accent)
-                .contentTransition(.numericText())
+            VStack(alignment: .leading, spacing: 1) {
+                Text(String(format: "ROLL %02d", camera.roll.number))
+                    .font(.mono(8, .semibold)).foregroundStyle(.secondary)
+                Text(String(format: "%02d", camera.framesShot) + "/\(CameraModel.rollLength)")
+                    .font(.mono(15, .bold)).foregroundStyle(accent)
+                    .contentTransition(.numericText())
+            }
                 .frame(width: 90, alignment: .leading)
-                .accessibilityLabel("Frame \(camera.framesShot) of \(CameraModel.rollLength)")
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Roll \(camera.roll.number), frame \(camera.framesShot) of \(CameraModel.rollLength)")
                 // Hidden: long-press for a camera-orientation readout (for bug reports).
                 .onLongPressGesture { camera.showDiagnostics.toggle() }
 

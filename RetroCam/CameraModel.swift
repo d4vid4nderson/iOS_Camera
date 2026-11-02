@@ -31,7 +31,7 @@ final class CameraModel: NSObject, ObservableObject {
         case failed(String)
     }
 
-    static let rollLength = 36
+    static let rollLength = Roll.length
     /// GRAIN control: multiplier on the film's own grain, in 25% clicks.
     /// GRAIN dial positions: 0% to 200% in 10% clicks. Snapped to 2 decimals so stored
     /// values compare exactly.
@@ -128,7 +128,11 @@ final class CameraModel: NSObject, ObservableObject {
     /// Lenses this phone can offer for the current camera side (discovered at runtime).
     @Published private(set) var lenses: [LensOption] = []
     @Published private(set) var lens: LensOption?
-    @Published private(set) var framesShot = 0
+    /// The roll in the camera. Saved on every change, so it survives quitting the app.
+    @Published private(set) var roll = Roll.load() {
+        didSet { roll.save() }
+    }
+    var framesShot: Int { roll.frames }
     @Published private(set) var lastPrint: UIImage?
     @Published private(set) var shutterBlink = false
     @Published private(set) var developing = 0
@@ -142,7 +146,12 @@ final class CameraModel: NSObject, ObservableObject {
         didSet { if !showDiagnostics { diagnostics = nil } }
     }
 
-    var rollFinished: Bool { framesShot >= Self.rollLength }
+    var rollFinished: Bool { roll.isFinished }
+
+    /// Library saves run one after another, so frames of a new roll can't race to
+    /// create its album twice.
+    private var saveChain: Task<Void, Never>?
+    private var toldAboutAlbums = false
 
     /// The selected film with the GRAIN setting applied; used for preview and capture alike.
     var developedStock: FilmStock {
@@ -560,8 +569,9 @@ final class CameraModel: NSObject, ObservableObject {
         }
     }
 
+    /// Wind on to a fresh roll (its album is made when its first frame is saved).
     func rewindRoll() {
-        framesShot = 0
+        roll = roll.next()
     }
 
     // MARK: - Capture
@@ -573,7 +583,8 @@ final class CameraModel: NSObject, ObservableObject {
         let stampText = stampMode.text(for: Date())
         let finish = PrintFinish(border: border, seed: UInt32.random(in: 0...UInt32.max), width: borderWidth)
 
-        framesShot += 1
+        roll.expose(film: self.stock.name)
+        let frameRoll = roll
         developing += 1
         shutterBlink = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { self.shutterBlink = false }
@@ -603,20 +614,30 @@ final class CameraModel: NSObject, ObservableObject {
             let processor = PhotoCaptureProcessor(stock: stock, stampText: stampText, finish: finish) { [weak self] result in
                 guard let self else { return }
                 self.sessionQueue.async { self.inFlight[id] = nil }
-                DispatchQueue.main.async { self.finish(result) }
+                DispatchQueue.main.async { self.finish(result, roll: frameRoll) }
             }
             self.inFlight[id] = processor
             self.photoOutput.capturePhoto(with: settings, delegate: processor)
         }
     }
 
-    private func finish(_ result: Result<Darkroom.Print, Error>) {
+    private func finish(_ result: Result<Darkroom.Print, Error>, roll frameRoll: Roll) {
         switch result {
         case .success(let print):
             lastPrint = print.thumbnail
-            Task {
+            let previous = saveChain
+            saveChain = Task {
+                await previous?.value
                 do {
-                    try await Darkroom.saveToLibrary(print.jpeg)
+                    let outcome = try await RollAlbums.save(print.jpeg, to: frameRoll)
+                    if case .savedUnfiled = outcome {
+                        await MainActor.run {
+                            if !self.toldAboutAlbums {
+                                self.toldAboutAlbums = true
+                                self.message = "Saved. Allow Full Access to Photos in Settings to file each roll in its own album."
+                            }
+                        }
+                    }
                 } catch {
                     await MainActor.run { self.message = error.localizedDescription }
                 }
@@ -624,7 +645,7 @@ final class CameraModel: NSObject, ObservableObject {
             }
         case .failure(let error):
             developing -= 1
-            framesShot = max(0, framesShot - 1)   // didn't expose, give the frame back
+            if roll.number == frameRoll.number { roll.unexpose() }   // didn't expose, give the frame back
             message = error.localizedDescription
         }
     }
