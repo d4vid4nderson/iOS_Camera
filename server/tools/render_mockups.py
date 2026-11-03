@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Photos for the website's phone mockups, each through the film its roll is shot on.
+"""Photos for the website's phone mockups, each through the film its roll is shot on,
+printed with one of the app's borders (white, black, or a slide mount).
 
 The sources are Unsplash photos (Unsplash licence), fetched through picsum.photos by id,
 cropped to the app's 3:4 tiles and run through the same film pipeline as the film
@@ -13,7 +14,7 @@ import urllib.request
 from pathlib import Path
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 sys.path.insert(0, str(Path(__file__).parent))
 import render_previews as films   # noqa: E402
@@ -22,6 +23,13 @@ OUT = Path(__file__).resolve().parents[1] / 'public/mock'
 W, H = 480, 640
 
 # (file name, picsum id, film id, photographer, Unsplash page[, crop focus 0-1])
+# The border each roll was printed with (RetroCam/PrintBorder.swift: white, black, slide).
+BORDER = {'roll': 'white', 'profile-1': 'white', 'profile-2': 'black', 'profile-3': 'slide', 'profile-4': 'white',
+          'feed-1': 'black', 'feed-2': 'white', 'feed-3': 'slide', 'feed-4': 'black'}
+FILM_NAMES = {'golden100': 'GOLDEN 100', 'classic400': 'CLASSIC 400', 'dusk800': 'DUSK 800', 'pan50': 'PAN 50',
+              'north400': 'NORTH 400', 'noir': 'NOIR 400', 'tide200': 'TIDE 200', 'silver100': 'SILVER 100'}
+FONT = '/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf'
+
 PHOTOS = [
     # The roll: a coast weekend on GOLDEN 100.
     ('roll-1', 14, 'golden100', 'Paul Jarvis', 'https://unsplash.com/photos/IQ1kOQTJrOQ'),
@@ -49,13 +57,53 @@ def fetch(pid):
         return Image.open(io.BytesIO(r.read())).convert('RGB')
 
 
-def tile(img, focus=0.5):
-    """Crop to 3:4 portrait at the tile size, around `focus` (0 left, 1 right)."""
+def crop(img, size, focus=0.5):
+    """Crop to the shape of `size` around `focus` (0 left, 1 right), then scale to it."""
     w, h = img.size
-    cw = round(h * W / H)
-    x = round((w - cw) * focus)
-    img = img.crop((x, 0, x + cw, h))
-    return img.resize((W, H), Image.LANCZOS)
+    tw, th = size
+    if w / h > tw / th:
+        cw = round(h * tw / th)
+        x = round((w - cw) * focus)
+        img = img.crop((x, 0, x + cw, h))
+    else:
+        ch = round(w * th / tw)
+        y = (h - ch) // 2
+        img = img.crop((0, y, w, y + ch))
+    return img.resize(size, Image.LANCZOS)
+
+
+def window(border):
+    """Where the picture sits in a W x H print with this border."""
+    if border in ('white', 'black'):
+        m = round(W * 0.06)
+        return (m, m, W - m, H - m)
+    if border == 'slide':
+        return (round(W * 0.12), round(H * 0.15), W - round(W * 0.12), H - round(H * 0.15))
+    return (0, 0, W, H)
+
+
+def print_with(border, picture, film, number):
+    """The picture on its print: a white or black border, or a slide mount with the film's
+    name and the frame number printed on the card."""
+    if border not in ('white', 'black', 'slide'):
+        return picture
+    box = window(border)
+    if border == 'slide':
+        card = Image.new('RGB', (W, H))
+        d = ImageDraw.Draw(card)
+        for y in range(H):   # the mount's card, a little darker toward the bottom
+            t = y / (H - 1)
+            d.line([(0, y), (W, y)], fill=tuple(round(a + (b - a) * t) for a, b in zip((236, 227, 207), (221, 209, 182))))
+        font = ImageFont.truetype(FONT, 22)
+        ink = (58, 45, 31)
+        d.text((box[0], round(H * 0.06)), FILM_NAMES.get(film, film.upper()), font=font, fill=ink)
+        num = f'{number:02d}'
+        d.text((box[2] - d.textlength(num, font=font), round(H * 0.06)), num, font=font, fill=(111, 96, 76))
+        d.rounded_rectangle((box[0] - 2, box[1] - 2, box[2] + 1, box[3] + 1), 6, fill=(150, 135, 110))
+    else:
+        card = Image.new('RGB', (W, H), (244, 241, 234) if border == 'white' else (10, 10, 10))
+    card.paste(picture, box[:2])
+    return card
 
 
 def main(cache=None):
@@ -63,10 +111,14 @@ def main(cache=None):
     by_id = {f['id']: f for f in films.read_films()}
     for name, pid, film, _, _, *focus in PHOTOS:
         src = Image.open(Path(cache) / f'{pid}.jpg').convert('RGB') if cache else fetch(pid)
-        arr = np.asarray(tile(src, *focus)).astype(np.float32) / 255
+        border = BORDER.get(name, BORDER.get(name.split('-')[0]))
+        box = window(border)
+        arr = np.asarray(crop(src, (box[2] - box[0], box[3] - box[1]), *focus)).astype(np.float32) / 255
         out = np.clip(films.apply(by_id[film], arr), 0, 1)
-        Image.fromarray((out * 255 + 0.5).astype(np.uint8)).save(OUT / f'{name}.jpg', quality=80, optimize=True, progressive=True)
-        print('wrote', name, film)
+        picture = Image.fromarray((out * 255 + 0.5).astype(np.uint8))
+        number = int(name.split('-')[1]) if name.startswith('roll') else 12
+        print_with(border, picture, film, number).save(OUT / f'{name}.jpg', quality=80, optimize=True, progressive=True)
+        print('wrote', name, film, border)
 
 
 if __name__ == '__main__':
