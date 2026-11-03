@@ -215,7 +215,7 @@ struct SharedRollView: View {
 
     private func reportCard(_ roll: RollShare.RemoteRoll) -> some View {
         overlayCard(title: "REPORT THIS ROLL", detail: "Tell us what's wrong. Rolls with several reports are hidden until they're reviewed.") {
-            ForEach(["Nudity or sexual content", "Violence or abuse", "Hate or harassment", "Spam", "Something else"], id: \.self) { reason in
+            ForEach(["Nudity or sexual content", "Violence or abuse", "Hate or harassment", "Spam", "The person may be under 13", "Something else"], id: \.self) { reason in
                 cardButton(reason.uppercased()) {
                     reporting = false
                     Task {

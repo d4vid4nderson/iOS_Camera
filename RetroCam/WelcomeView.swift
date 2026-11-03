@@ -22,7 +22,7 @@ struct WelcomeView: View {
     static func isNeeded() -> Bool {
         guard ShareLinks.isConfigured else { return false }
         let account = Account.shared
-        if account.isSignedIn { return account.me?.handle == nil }
+        if account.isSignedIn { return account.needsSetup }
         return !UserDefaults.standard.bool(forKey: skipKey)
     }
 
@@ -36,9 +36,9 @@ struct WelcomeView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     Text("FILM EXPOSURES").font(.mono(12, .bold)).foregroundStyle(accent)
                         .padding(.top, 24)
-                    if (account.isSignedIn && account.me?.handle == nil) || settingUp {
+                    if (account.isSignedIn && account.needsSetup) || settingUp {
                         Text("SET UP YOUR PROFILE").font(.mono(10, .semibold)).foregroundStyle(.secondary)
-                        AccountSetup(accent: accent, onStart: { settingUp = true }) {
+                        AccountSetup(accent: accent, onStart: { settingUp = true }, onRefused: { settingUp = false }) {
                             settingUp = false
                             onFinish()
                         }
@@ -77,7 +77,7 @@ struct WelcomeView: View {
                 note = nil
                 // A returning account with a handle goes straight to the camera; a new one
                 // picks its handle and photo first.
-                if account.me?.handle != nil { onFinish() }
+                if !account.needsSetup { onFinish() }
             })
             Button {
                 UserDefaults.standard.set(true, forKey: Self.skipKey)

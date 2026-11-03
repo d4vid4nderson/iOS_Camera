@@ -173,7 +173,14 @@ async function signIn(e, apple, sub, name) {
     type: 'application/json', body: JSON.stringify({ identityToken: await apple.sign({ sub }), name }),
   });
   assert.equal(res.status, 200);
-  return res.json();
+  const out = await res.json();
+  // Accounts confirm they're 13 or older before a handle, the rules, following or sharing.
+  if (!out.me.ageConfirmed) {
+    const age = await call(e, 'POST', '/api/me/age', { account: out.token, type: 'application/json', body: JSON.stringify({ born: '1990-05-01' }) });
+    assert.equal(age.status, 200);
+    out.me = await age.json();
+  }
+  return out;
 }
 
 async function liveRoll(e, frames, account, now) {

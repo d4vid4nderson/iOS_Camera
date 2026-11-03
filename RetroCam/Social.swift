@@ -151,6 +151,11 @@ enum Social {
         _ = try await call("api/users/\(id)/block", method: on ? "POST" : "DELETE")
     }
 
+    /// Report a person (for example, someone who seems to be under 13); it goes to the admin page.
+    static func report(_ id: String, reason: String) async throws {
+        _ = try await call("api/users/\(id)/report", method: "POST", json: ["reason": reason])
+    }
+
     private struct RollPage: Decodable { var rolls: [RollTile]; var after: String? }
 
     /// Everyone's public rolls, newest first, a page at a time: pass the previous page's `after`.

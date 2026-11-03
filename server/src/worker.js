@@ -32,6 +32,9 @@
 //   PUT|DELETE /api/me/avatar               your headshot (JPEG)             (account)
 //   PUT  /api/me/preview                    your profile's link preview (JPEG, 1200x630) (account)
 //   POST /api/me/terms                      agree to the rules for public rolls (account)
+//   POST /api/me/age { born: "YYYY-MM-DD" }  confirm you're 13 or older (account). The date isn't
+//        kept. Under 13: the account is deleted and its sign-ins can't make a new one until the
+//        child turns 13. A handle and the rules (so following and sharing) need this first.
 //   GET  /u/<id>                            a profile page; /u/<id>/profile.json for the app
 //        (signed in: also the rolls shared with your followers or with you, and whether you follow)
 //
@@ -42,6 +45,7 @@
 //   POST|DELETE /api/users/<id>/follow       ask to follow (they approve) / unfollow or cancel
 //   GET  /api/users/<id>/followers|following  who follows them / whom they follow
 //   POST|DELETE /api/users/<id>/block        block: no following, finding or sharing either way
+//   POST /api/users/<id>/report { reason }   report a person (for example, someone under 13)
 //   GET  /api/me/requests                    people asking to follow you
 //   POST /api/me/requests/<id> { accept }    approve or turn down a follow request
 //   DELETE /api/me/followers/<id>            remove a follower
@@ -60,6 +64,11 @@
 //   POST /api/support                       a support message (stored; no email address is published)
 //   GET  /admin                             the support inbox (password: the ADMIN_TOKEN secret)
 //   GET|DELETE /api/admin/support[/<id>]    read / clear support messages (Bearer ADMIN_TOKEN)
+//   GET  /api/admin/reports                 reported rolls and people              (Bearer ADMIN_TOKEN)
+//   GET  /api/admin/rolls/<id>/<file>.jpg    a reported roll's photo, even when hidden (Bearer ADMIN_TOKEN)
+//   POST /api/admin/rolls/<id> { action }   "restore" (show it again) or "remove" (delete it)
+//   POST /api/admin/users/<id> { action, reason }  "dismiss" the reports, or "remove" the account
+//        and stop its sign-ins making a new one (reason "under13" or "rules")
 //   GET  /.well-known/apple-app-site-association   lets these links open the app
 //
 // "(account)" means an X-Account header with the session token from /api/auth/*.
@@ -73,6 +82,7 @@ export const TTL_DAYS = 30;
 export const MAX_FRAMES = 36;
 export const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 export const HIDE_AFTER_REPORTS = 3;
+export const MIN_AGE = 13;
 export const APPLE_ISSUER = 'https://appleid.apple.com';
 export const APPLE_AUDIENCE = 'com.davidanderson.retrocam';
 export const GOOGLE_ISSUERS = ['https://accounts.google.com', 'accounts.google.com'];
@@ -125,8 +135,14 @@ export async function route(request, env, now = Date.now()) {
   }
   if (path === '/api/support' && method === 'POST') return submitSupport(request, env, now);
   if (path === '/admin' && method === 'GET') {
-    return html(200, layout({ title: 'Support inbox · Film Exposures', description: 'Support inbox', env, body: inboxBody(), noindex: true }));
+    return html(200, layout({ title: 'Admin · Film Exposures', description: 'Support and reports', env, body: inboxBody(), noindex: true }));
   }
+  if (path === '/api/admin/reports' && method === 'GET') return listReports(request, env, url);
+  if ((m = path.match(/^\/api\/admin\/rolls\/([A-Za-z0-9]{10})\/(frame-\d{2}\.jpg|card\.jpg)$/)) && method === 'GET') {
+    return adminPhoto(request, env, m[1], m[2]);
+  }
+  if ((m = path.match(/^\/api\/admin\/rolls\/([A-Za-z0-9]{10})$/)) && method === 'POST') return moderateRoll(request, env, m[1], now);
+  if ((m = path.match(new RegExp(`^/api/admin/users/${USER}$`))) && method === 'POST') return moderateUser(request, env, m[1], now);
   if (path === '/api/admin/support' && method === 'GET') return listSupport(request, env);
   if ((m = path.match(/^\/api\/admin\/support\/([A-Za-z0-9-]{8,64})$/)) && method === 'DELETE') return closeSupport(request, env, m[1]);
 
@@ -187,8 +203,10 @@ export async function route(request, env, now = Date.now()) {
   if (path === '/api/me' && method === 'DELETE') return deleteAccount(request, env);
   if (path === '/api/me/avatar' && (method === 'PUT' || method === 'DELETE')) return updateAvatar(request, env, url, method === 'PUT');
   if (path === '/api/me/preview' && method === 'PUT') return updatePreview(request, env, url);
+  if (path === '/api/me/age' && method === 'POST') return confirmAge(request, env, url, now);
   if (path === '/api/me/terms' && method === 'POST') {
     return withUser(request, env, async (user) => {
+      if (!user.ageAt) return json(403, { error: 'age', reason: 'Confirm your age first.' });
       user.termsAt = user.termsAt || now;
       await putUser(env, user);
       return json(200, mePayload(user, url));
@@ -203,6 +221,7 @@ export async function route(request, env, now = Date.now()) {
   if ((m = path.match(new RegExp(`^/api/users/${USER}/(followers|following)$`))) && method === 'GET') {
     return followList(request, env, url, m[1], m[2]);
   }
+  if ((m = path.match(new RegExp(`^/api/users/${USER}/report$`))) && method === 'POST') return reportUser(request, env, m[1], now);
   if ((m = path.match(new RegExp(`^/api/users/${USER}/block$`))) && (method === 'POST' || method === 'DELETE')) {
     return block(request, env, m[1], method === 'POST');
   }
@@ -370,7 +389,7 @@ async function reportRoll(request, env, id, now) {
   } else if (type.includes('form')) {
     reason = clean((await request.formData()).get('reason'), 200) || reason;
   }
-  await env.ROLLS.put(`reports/${id}/${now}.json`, JSON.stringify({ id, reason, at: new Date(now).toISOString() }));
+  await env.ROLLS.put(`reports/${id}/${now}-${randomID(4)}.json`, JSON.stringify({ id, reason, at: new Date(now).toISOString() }));
   meta.reports = (meta.reports || 0) + 1;
   if (meta.reports >= HIDE_AFTER_REPORTS && meta.status === 'live') meta.status = 'hidden';
   await putMeta(env, meta);
@@ -459,6 +478,183 @@ async function closeSupport(request, env, id) {
       await env.ROLLS.put(`support-done/${id}.json`, await object.text());
       await env.ROLLS.delete(`support/${id}.json`);
     }
+    return json(200, { ok: true });
+  });
+}
+
+// MARK: Age, reports about people, moderation
+
+const LOCK_REASONS = {
+  under13: 'Film Exposures accounts are for people 13 and older. You can still use the camera without an account.',
+  rules: 'This account was removed for breaking the Film Exposures rules.',
+};
+
+/// A sign-in that may not make an account (under 13 until their 13th birthday, or removed
+/// for breaking the rules), or null. Only the sign-in's hash and the date are kept.
+async function lockOf(env, key, now) {
+  const object = await env.ROLLS.get(`locks/${key}.json`);
+  if (!object) return null;
+  const lock = JSON.parse(await object.text());
+  if (lock.until && now >= lock.until) {
+    await env.ROLLS.delete(`locks/${key}.json`);
+    return null;
+  }
+  return lock;
+}
+
+async function lockLogins(env, user, reason, until, now) {
+  for (const key of Object.values(logins(user)).filter(Boolean)) {
+    await env.ROLLS.put(`locks/${key}.json`, JSON.stringify({ reason, until: until || null, at: now }));
+  }
+}
+
+/// A birth date ("YYYY-MM-DD") as the moment that person turns `years`, or null if it isn't a real, past date.
+export function birthdayAt(born, years) {
+  const m = typeof born === 'string' && born.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const date = new Date(Date.UTC(y, mo - 1, d));
+  if (date.getUTCFullYear() !== y || date.getUTCMonth() !== mo - 1 || date.getUTCDate() !== d || y < 1900) return null;
+  // Born on 29 February: in other years Date.UTC rolls the birthday over to 1 March.
+  return Date.UTC(y + years, mo - 1, d);
+}
+
+/// Confirm you're 13 or older. The birth date is checked and not kept: the account only
+/// records when it was confirmed. Under 13, the account and everything it shared are deleted
+/// and its sign-ins can't make a new account until the 13th birthday (a day's grace for time zones).
+async function confirmAge(request, env, url, now) {
+  return withUser(request, env, async (user) => {
+    if (user.ageAt) return json(200, mePayload(user, url));
+    const body = (await readJSON(request)) || {};
+    const thirteen = birthdayAt(body.born, MIN_AGE);
+    if (thirteen == null || birthdayAt(body.born, 0) > now) return json(400, { error: 'born', reason: 'Enter your date of birth.' });
+    if (now + DAY < thirteen) {
+      await lockLogins(env, user, 'under13', thirteen + DAY, now);
+      await removeUser(env, user);
+      return json(403, { error: 'under13', reason: LOCK_REASONS.under13 });
+    }
+    user.ageAt = now;
+    await putUser(env, user);
+    return json(200, mePayload(user, url));
+  });
+}
+
+/// Report a person (signed in or not). Kept for the admin page until it's dealt with.
+async function reportUser(request, env, id, now) {
+  const target = await getUser(env, id);
+  if (!target) return json(404, { error: 'no such person' });
+  const reporter = await currentUser(request, env);
+  const reason = clean((await readJSON(request))?.reason, 200) || 'Something else';
+  await env.ROLLS.put(`user-reports/${id}/${now}-${randomID(4)}.json`, JSON.stringify({ reason, by: reporter?.id || null, at: new Date(now).toISOString() }));
+  return json(200, { ok: true });
+}
+
+async function readAll(env, prefix) {
+  const out = [];
+  for await (const keys of listKeys(env, prefix)) {
+    for (const key of keys) {
+      const object = await env.ROLLS.get(key);
+      if (object) out.push({ key, ...JSON.parse(await object.text()) });
+    }
+  }
+  return out;
+}
+
+/// Move reports to reports-done/ (kept as a record) once they're dealt with.
+async function closeReports(env, prefix, decision, now) {
+  for (const r of await readAll(env, prefix)) {
+    const { key, ...rest } = r;
+    await env.ROLLS.put(key.replace(/^(user-)?reports\//, (x) => x.replace('reports/', 'reports-done/')), JSON.stringify({ ...rest, decision, closedAt: new Date(now).toISOString() }));
+    await env.ROLLS.delete(key);
+  }
+}
+
+const personOf = (user) => user ? { id: user.id, handle: user.handle || null, name: user.name || null, removed: false } : { removed: true };
+
+/// Everything waiting for a decision: reported rolls (with their photos, through the admin
+/// photo route) and reported people, oldest report first.
+async function listReports(request, env, url) {
+  return adminOnly(request, env, async () => {
+    const byRoll = new Map();
+    for (const r of await readAll(env, 'reports/')) {
+      const id = r.key.split('/')[1];
+      if (!byRoll.has(id)) byRoll.set(id, []);
+      byRoll.get(id).push({ reason: r.reason, at: r.at });
+    }
+    const rolls = [];
+    for (const [id, reports] of byRoll) {
+      const meta = await getMeta(env, id);
+      const owner = meta?.owner ? await getUser(env, meta.owner) : null;
+      rolls.push({
+        id, reports, gone: !meta,
+        title: meta?.title || null, status: meta?.status || null, audience: meta ? audienceOf(meta) : null,
+        owner: meta?.owner ? personOf(owner) : null, sharer: meta?.sharer?.name || null,
+        photos: meta ? ['card.jpg', ...Array.from({ length: meta.frames }, (_, i) => `frame-${String(i + 1).padStart(2, '0')}.jpg`)]
+          .map((f) => `${url.origin}/api/admin/rolls/${id}/${f}`) : [],
+      });
+    }
+    const byUser = new Map();
+    for (const r of await readAll(env, 'user-reports/')) {
+      const id = r.key.split('/')[1];
+      if (!byUser.has(id)) byUser.set(id, []);
+      byUser.get(id).push({ reason: r.reason, at: r.at });
+    }
+    const people = [];
+    for (const [id, reports] of byUser) {
+      const user = await getUser(env, id);
+      people.push({ ...personOf(user), id, reports, avatar: user?.avatar ? `${url.origin}/u/${id}/avatar.jpg?v=${user.avatar}` : null,
+        profile: `${url.origin}/u/${id}`, createdAt: user?.createdAt ? new Date(user.createdAt).toISOString() : null });
+    }
+    const first = (x) => x.reports.map((r) => r.at).sort()[0];
+    rolls.sort((a, b) => (first(a) < first(b) ? -1 : 1));
+    people.sort((a, b) => (first(a) < first(b) ? -1 : 1));
+    return json(200, { rolls, people });
+  });
+}
+
+async function adminPhoto(request, env, id, file) {
+  return adminOnly(request, env, async () => {
+    const object = await env.ROLLS.get(`rolls/${id}/${file}`);
+    if (!object) return text(404, 'Not found');
+    return new Response(object.body, { headers: { 'content-type': 'image/jpeg', 'cache-control': 'private, no-store' } });
+  });
+}
+
+async function moderateRoll(request, env, id, now) {
+  return adminOnly(request, env, async () => {
+    const action = (await readJSON(request))?.action;
+    const meta = await getMeta(env, id);
+    if (action === 'restore') {
+      if (meta) {
+        if (meta.status === 'hidden') meta.status = 'live';
+        meta.reports = 0;
+        await putMeta(env, meta);
+      }
+    } else if (action === 'remove') {
+      if (meta) await deleteRoll(env, id);
+    } else {
+      return json(400, { error: 'action must be restore or remove' });
+    }
+    await closeReports(env, `reports/${id}/`, action, now);
+    return json(200, { ok: true });
+  });
+}
+
+async function moderateUser(request, env, id, now) {
+  return adminOnly(request, env, async () => {
+    const body = (await readJSON(request)) || {};
+    if (body.action === 'remove') {
+      const user = await getUser(env, id);
+      if (user) {
+        const reason = body.reason === 'under13' ? 'under13' : 'rules';
+        // Someone reported as under 13 can come back once they're 13; there's no birthday to go on, so a year.
+        await lockLogins(env, user, reason, reason === 'under13' ? now + 365 * DAY : null, now);
+        await removeUser(env, user);
+      }
+    } else if (body.action !== 'dismiss') {
+      return json(400, { error: 'action must be dismiss or remove' });
+    }
+    await closeReports(env, `user-reports/${id}/`, body.action, now);
     return json(200, { ok: true });
   });
 }
@@ -641,6 +837,8 @@ async function facebookFetch(env, href) {
 /// don't have one of your own, and is kept so you can go back to it.
 async function signIn(request, env, url, now, provider, sub, { name, photo }) {
   const key = await sha256(`${provider}:${sub}`);
+  const lock = await lockOf(env, key, now);
+  if (lock) return json(403, { error: lock.reason === 'under13' ? 'under13' : 'removed', reason: LOCK_REASONS[lock.reason] || LOCK_REASONS.rules });
   const link = await env.ROLLS.get(`accounts/${key}.json`);
   const linkedID = link ? JSON.parse(await link.text()).id : null;
   const current = await currentUser(request, env);
@@ -748,6 +946,7 @@ async function updateMe(request, env, url) {
     if (typeof body.name === 'string') user.name = clean(body.name, 24);
     if (typeof body.discoverable === 'boolean') user.discoverable = body.discoverable;
     if (typeof body.handle === 'string') {
+      if (!user.ageAt) return json(403, { error: 'age', reason: 'Confirm your age first.' });
       const handle = body.handle.trim().replace(/^@/, '').toLowerCase();
       if (handle !== user.handle) {
         if (!validHandle(handle)) return json(400, { error: 'handle', reason: 'Use 3 to 20 letters, numbers, _ or .' });
@@ -891,6 +1090,7 @@ function mePayload(user, url) {
     avatar: user.avatar ? `${url.origin}/u/${user.id}/avatar.jpg?v=${user.avatar}` : null,
     url: `${url.origin}/u/${user.id}`,
     termsAccepted: Boolean(user.termsAt),
+    ageConfirmed: Boolean(user.ageAt),
     logins: PROVIDERS.filter((p) => logins(user)[p]),
     avatarSource: user.avatar ? user.avatarSource || 'own' : null,
     photos: PROVIDERS.filter((p) => user.photos?.[p]),
