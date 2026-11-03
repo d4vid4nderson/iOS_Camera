@@ -536,6 +536,7 @@ struct ProfileSheet: View {
                     busy[roll.number] = "UPLOADING \(done)/\(total)"
                 }
                 records[roll.number] = record
+                Task.detached { await RollShare.uploadProfilePreview() }
             } catch RollShare.ProfileError.terms {
                 await account.refresh()
                 askingTerms = roll
@@ -559,6 +560,7 @@ struct ProfileSheet: View {
             do {
                 try await RollShare.unshare(roll: roll.number)
                 records[roll.number] = nil
+                Task.detached { await RollShare.uploadProfilePreview() }
             } catch {
                 note = error.localizedDescription.uppercased()
             }
@@ -667,6 +669,8 @@ struct ProfileSheet: View {
             if let remote = try? await RollShare.fetchProfile(id: me.id) {
                 card = await ProfileCard.make(for: remote)
             }
+            // So the link you're about to send shows a fresh preview.
+            await RollShare.uploadProfilePreview()
             makingCard = false
             sharing = ShareItems(items: [card as Any?, me.url].compactMap { $0 })
         }

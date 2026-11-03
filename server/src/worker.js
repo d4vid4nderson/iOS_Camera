@@ -30,6 +30,7 @@
 //        here or deleted their Apple Account; that sign-in (or the whole account) is removed
 //   GET|PUT|DELETE /api/me                  your profile: { name } / delete your account (account)
 //   PUT|DELETE /api/me/avatar               your headshot (JPEG)             (account)
+//   PUT  /api/me/preview                    your profile's link preview (JPEG, 1200x630) (account)
 //   POST /api/me/terms                      agree to the rules for public rolls (account)
 //   GET  /u/<id>                            a profile page; /u/<id>/profile.json for the app
 //        (signed in: also the rolls shared with your followers or with you, and whether you follow)
@@ -182,6 +183,7 @@ export async function route(request, env, now = Date.now()) {
   if (path === '/api/me' && method === 'PUT') return updateMe(request, env, url);
   if (path === '/api/me' && method === 'DELETE') return deleteAccount(request, env);
   if (path === '/api/me/avatar' && (method === 'PUT' || method === 'DELETE')) return updateAvatar(request, env, url, method === 'PUT');
+  if (path === '/api/me/preview' && method === 'PUT') return updatePreview(request, env, url);
   if (path === '/api/me/terms' && method === 'POST') {
     return withUser(request, env, async (user) => {
       user.termsAt = user.termsAt || now;
@@ -217,6 +219,11 @@ export async function route(request, env, now = Date.now()) {
     const profile = await publicProfile(env, m[1], url, now, await currentUser(request, env));
     if (!profile) return json(404, { error: 'gone' });
     return json(200, profile);
+  }
+  if ((m = path.match(new RegExp(`^/u/${USER}/preview\\.jpg$`))) && method === 'GET') {
+    const object = await env.ROLLS.get(`users/${m[1]}/preview.jpg`);
+    if (!object) return text(404, 'Not found');
+    return new Response(object.body, { headers: { 'content-type': 'image/jpeg', 'cache-control': 'public, max-age=300' } });
   }
   if ((m = path.match(new RegExp(`^/u/${USER}/avatar\\.jpg$`))) && method === 'GET') {
     const object = await env.ROLLS.get(`users/${m[1]}/avatar.jpg`);
@@ -744,6 +751,20 @@ async function updateMe(request, env, url) {
   });
 }
 
+/// The picture link previews show for your profile (made by the app from your public rolls).
+async function updatePreview(request, env, url) {
+  return withUser(request, env, async (user) => {
+    const bytes = await request.arrayBuffer();
+    if (bytes.byteLength === 0 || bytes.byteLength > MAX_IMAGE_BYTES) return json(413, { error: 'image too large' });
+    const head = new Uint8Array(bytes, 0, 3);
+    if (head[0] !== 0xff || head[1] !== 0xd8 || head[2] !== 0xff) return json(415, { error: 'JPEG only' });
+    await env.ROLLS.put(`users/${user.id}/preview.jpg`, bytes, { httpMetadata: { contentType: 'image/jpeg' } });
+    user.preview = (user.preview || 0) + 1;   // a version, so link previews pick up a new one
+    await putUser(env, user);
+    return json(200, { preview: `${url.origin}/u/${user.id}/preview.jpg?v=${user.preview}` });
+  });
+}
+
 async function updateAvatar(request, env, url, upload) {
   return withUser(request, env, async (user) => {
     if (upload) {
@@ -844,6 +865,7 @@ async function publicProfile(env, id, url, now, viewer = null) {
   const { id: uid, name, avatar, url: link, handle } = mePayload(user, url);
   const profile = {
     id: uid, name, avatar, url: link, handle, rolls: rolls.map(({ createdAt, ...r }) => r),
+    preview: user.preview ? `${url.origin}/u/${user.id}/preview.jpg?v=${user.preview}` : null,
     followers: await countKeys(env, `followers/${id}/`),
     following: await countKeys(env, `following/${id}/`),
   };
@@ -1703,7 +1725,8 @@ function profilePage(profile, url, env) {
   return layout({
     title: `${profile.name || 'Profile'} on Film Exposures`,
     description: `${profile.rolls.length} ${profile.rolls.length === 1 ? 'roll' : 'rolls'} of film on Film Exposures.`,
-    image: profile.rolls[0]?.card, url: url.href, env, appArgument: url.href,
+    // The app's link preview, else the site's own (never a cropped icon).
+    image: profile.preview || `${url.origin}/og-image.png`, url: url.href, env, appArgument: url.href,
     body: `
       <p class="eyebrow">FILM EXPOSURES · PROFILE</p>
       <div class="profile-head">${avatar}<div><h1>${who}</h1>
