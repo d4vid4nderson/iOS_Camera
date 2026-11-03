@@ -44,7 +44,7 @@ h3{font:700 12px/1.3 var(--mono);letter-spacing:.1em;text-transform:uppercase;co
 .who{display:flex;align-items:center;gap:10px;margin-bottom:16px;font-weight:600;color:var(--fg);text-decoration:none}
 .profile-head{display:flex;align-items:center;gap:16px;margin-bottom:20px}.profile-head .avatar{width:72px;height:72px}
 .profile-head h1{font-size:32px;margin:0}
-.rolls{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:20px 0}
+.rolls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:20px 0}
 .rolls a{text-decoration:none;color:var(--fg)}.rolls img{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:10px;display:block;background:var(--panel2)}
 .rolls b{display:block;font-size:14px;margin-top:6px}.rolls span{font-size:12px;color:var(--muted)}
 .avatar{width:40px;height:40px;border-radius:50%;object-fit:cover}
@@ -58,6 +58,62 @@ select,button,input,textarea{font:inherit;color:var(--fg)}
 .hero .app-icon{width:104px;height:104px;display:block;margin:0 0 22px;filter:drop-shadow(0 10px 24px rgba(0,0,0,.45))}
 .counter{display:inline-flex;align-items:baseline;gap:10px;font:700 15px/1 var(--mono);color:var(--muted);letter-spacing:.08em;margin-bottom:22px}
 .counter b{font-size:30px;color:var(--accent);letter-spacing:0}
+/* Home: hero with the phone */
+.hero-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:40px;align-items:center}
+.phone{--w:min(300px,78vw);position:relative;justify-self:center;width:var(--w);aspect-ratio:9/19.5;margin:0;padding:calc(var(--w)*.035);border-radius:calc(var(--w)*.16);
+  background:linear-gradient(145deg,#3a3633,#1b1917 45%,#2c2926);box-shadow:inset 0 0 0 1.5px #4a4540,inset 0 0 0 4px #0c0b0a,0 40px 80px -30px rgba(0,0,0,.9),0 0 0 1px #000}
+.phone .screen{position:relative;height:100%;border-radius:calc(var(--w)*.13);overflow:hidden;background:#050505}
+.phone .screen>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.phone .island{position:absolute;top:2.2%;left:50%;width:32%;height:3.6%;margin-left:-16%;border-radius:99px;background:#000;z-index:2}
+.phone .hud{position:absolute;left:0;right:0;display:flex;justify-content:space-between;align-items:center;padding:0 7%;font:700 calc(var(--w)*.038)/1 var(--mono);letter-spacing:.08em;color:#f6ecd6;text-shadow:0 1px 3px rgba(0,0,0,.8);z-index:1}
+.phone .hud.top{top:9%}.phone .hud.top b{color:var(--accent);font-size:1.35em;letter-spacing:0}
+.phone .hud.bottom{bottom:0;padding:9% 7% 10%;background:linear-gradient(transparent,rgba(0,0,0,.75) 45%);justify-content:space-between}
+.phone .shutter{width:calc(var(--w)*.2);height:calc(var(--w)*.2);border-radius:50%;background:radial-gradient(circle at 35% 30%,#f39a5c,var(--accent) 55%,#b9561c);box-shadow:0 0 0 4px rgba(246,236,214,.85),0 0 0 7px rgba(0,0,0,.5)}
+.phone .chip{padding:.55em .8em;border-radius:99px;background:rgba(20,17,15,.7);border:1px solid rgba(246,236,214,.25)}
+.phone .frameline{position:absolute;left:7%;right:7%;top:27%;bottom:30%;border:1.5px solid rgba(246,236,214,.55);border-radius:4px;z-index:1}
+.phone figcaption{position:absolute;left:0;right:0;bottom:-34px;text-align:center;font:600 11px/1 var(--mono);letter-spacing:.1em;color:var(--muted)}
+/* Home: sections */
+.section{margin:72px 0 0}
+.section>h2{font-size:clamp(28px,4.2vw,40px);line-height:1.08;letter-spacing:-.02em;margin:0 0 10px}
+.section>.lede{margin-bottom:28px}
+.steps{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.steps li,.card3,.feature{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px 18px 20px}
+.steps b{display:block;font:700 26px/1 var(--mono);color:var(--accent);margin-bottom:12px}
+.steps h3,.card3 h3,.feature h3{margin:0 0 8px;color:var(--fg)}
+.steps p,.card3 p,.feature p{margin:0;color:#c9c6c0;font-size:15px}
+.features{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:0}
+.idea{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:32px;align-items:center}
+.idea blockquote{margin:0;font-size:clamp(20px,2.6vw,26px);line-height:1.35;letter-spacing:-.01em;color:var(--fg)}
+.idea blockquote span{color:var(--accent)}
+.idea p{color:#c9c6c0;margin:0 0 12px}
+.formats{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;align-items:end}
+.format{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;justify-items:center;text-align:center}
+.format .pic{width:100%;border-radius:3px;overflow:hidden;background:#000;box-shadow:0 0 0 1px var(--line)}
+.format .pic img{width:100%;height:100%;object-fit:cover;display:block}
+.format b{font:700 13px/1 var(--mono);letter-spacing:.06em}
+.format span{font:600 11px/1.3 var(--mono);color:var(--muted)}
+.format em{font:700 12px/1 var(--mono);font-style:normal;color:var(--accent)}
+.borders{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.border,.format,.steps li,.feature,.card3{min-width:0}
+.border{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;text-align:center;font:700 12px/1 var(--mono);letter-spacing:.08em;color:var(--muted)}
+.border .print{aspect-ratio:1;display:grid;grid-template-columns:minmax(0,1fr);place-items:center;border-radius:6px;background:#1a1816}
+.border .print img{min-width:0;max-width:100%;width:100%;height:auto;aspect-ratio:3/2;object-fit:cover;display:block}
+.borders{align-items:center}
+.border .print.none,.border .print.white,.border .print.black{aspect-ratio:auto;border-radius:3px}
+.border .print.none{background:none}
+.border .print.white{background:#f4f1ea;padding:7%}
+.border .print.black{background:#060606;padding:7%;box-shadow:0 0 0 1px var(--line)}
+.border .print.slide{--card:#ece3cf;background:linear-gradient(155deg,#ece3cf,#ddd1b6);border-radius:9px;align-content:center;gap:0;position:relative}
+.border .print.slide img{width:74%;border-radius:2px;box-shadow:0 0 0 1px rgba(0,0,0,.35)}
+.border .print.slide i{position:absolute;top:9%;left:13%;right:13%;display:flex;justify-content:space-between;font:800 10px/1 var(--mono);font-style:normal;color:#3a2d1f;letter-spacing:.05em}
+.tools{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.tags span{font:700 10px/1 var(--mono);letter-spacing:.08em;padding:6px 8px;border-radius:99px;background:var(--panel2);color:#d9d3c8}
+.share3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.card3 .who{display:inline-flex;margin:0 0 12px;padding:6px 10px;border-radius:99px;font:700 11px/1 var(--mono);letter-spacing:.1em;background:var(--panel2);color:var(--fg)}
+.card3.on .who{background:rgba(232,118,46,.16);color:var(--accent)}
+@media (max-width:860px){.hero-grid,.idea{grid-template-columns:1fr}.phone{margin:8px 0 40px}.steps{grid-template-columns:repeat(2,minmax(0,1fr))}.formats{grid-template-columns:repeat(3,minmax(0,1fr));row-gap:22px}.tools,.share3{grid-template-columns:1fr}}
+@media (max-width:520px){.steps,.features{grid-template-columns:1fr}.borders{grid-template-columns:repeat(2,minmax(0,1fr))}}
 /* The films, as 35mm slides in their mounts */
 .shelf{display:flex;align-items:center;gap:10px;font:700 11px/1 var(--mono);letter-spacing:.16em;color:var(--muted);text-transform:uppercase;margin:30px 0 14px}
 .shelf::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--line),transparent)}
@@ -131,13 +187,12 @@ select,button,input,textarea{font:inherit;color:var(--fg)}
 .msg button{padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:var(--panel2);cursor:pointer}
 .site-foot{border-top:1px solid var(--line);margin-top:24px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
 .site-foot nav{display:flex;gap:16px;flex-wrap:wrap}.site-foot a{color:var(--muted);text-decoration:none}.site-foot a:hover{color:var(--fg)}
-@media (max-width:640px){.features{grid-template-columns:1fr}}
-@media (max-width:520px){h1{font-size:36px}.nav{gap:12px}.nav .optional{display:none}.films{grid-template-columns:repeat(2,1fr);gap:14px 12px}.mount .label{font-size:12px}.mount .note{font-size:11px}}
+@media (max-width:520px){h1{font-size:36px}.nav{gap:12px}.nav .optional{display:none}.films{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 12px}.mount .label{font-size:12px}.mount .note{font-size:11px}}
 `;
 
 export function siteHeader() {
   return `<header class="site-head"><a class="brand" href="/"><img src="/app-icon.png" alt="" width="28" height="28">FILM EXPOSURES</a>
-<nav class="nav"><a class="optional" href="/#films">FILMS</a><a href="/support">SUPPORT</a></nav></header>`;
+<nav class="nav"><a class="optional" href="/#how">HOW IT WORKS</a><a class="optional" href="/#films">FILMS</a><a href="/support">SUPPORT</a></nav></header>`;
 }
 
 export function siteFooter(year = new Date().getUTCFullYear()) {
@@ -267,20 +322,98 @@ export function homeBody(store) {
   const get = store
     ? `<div class="inline-buttons"><a class="button primary" href="${store}">Get Film Exposures</a></div>`
     : '<div class="inline-buttons"><span class="button disabled">Coming soon to the App Store</span></div>';
+  // A frame in each format, cut from the same sample photo.
+  const formats = [
+    ['35MM', '3:2', 24, 3 / 2], ['6×4.5', '4:3', 36, 4 / 3], ['6×6', '1:1', 36, 1],
+    ['4×5', '5:4', 50, 5 / 4], ['16:9', '16:9', 24, 16 / 9], ['XPAN', '65:24', 24, 65 / 24],
+  ].map(([name, ratio, mp, r]) => `<div class="format"><div class="pic" style="aspect-ratio:${r}"><img src="/films/thumbs/golden100.jpg" alt="" loading="lazy" width="420" height="280"></div>
+<b>${name}</b><span>${ratio}</span><em>UP TO ${mp} MP</em></div>`).join('');
+  const border = (kind, label) => `<div class="border"><div class="print ${kind}">${kind === 'slide' ? '<i><span>CLASSIC 400</span><span>12</span></i>' : ''}<img src="/films/thumbs/classic400.jpg" alt="" loading="lazy" width="420" height="280"></div>${label}</div>`;
+  const tags = (list) => `<div class="tags">${list.map((t) => `<span>${t}</span>`).join('')}</div>`;
   return `
 <section class="hero">
+<div class="hero-grid">
+<div>
   <img class="app-icon" src="/app-icon.png" alt="The Film Exposures app icon" width="104" height="104">
   <div class="counter">ROLL 01 <b>01/36</b></div>
   <h1>A film camera<br>for your iPhone.</h1>
   <p class="lede">Load a roll of 36, shoot it on a film you choose, and let it develop: right away, when the roll is done, or the next morning, like dropping it at a lab.</p>
   ${get}
+</div>
+<figure class="phone" aria-label="Film Exposures on an iPhone: the viewfinder with the roll's frame counter, the film and the shutter">
+  <div class="screen">
+    <span class="island"></span>
+    <img src="/films/golden100.jpg" alt="" width="1200" height="800">
+    <div class="hud top"><span>ROLL 03</span><b>12/36</b></div>
+    <span class="frameline"></span>
+    <div class="hud bottom"><span class="chip">GOLDEN 100</span><i class="shutter"></i><span class="chip">35MM</span></div>
+  </div>
+</figure>
+</div>
 </section>
-<section class="features">
-  <div class="feature"><h3>Rolls of 36</h3><p>Every frame counts. Keep several rolls going, a food roll and a holiday roll, and switch between them. Each roll gets its own album in Photos.</p></div>
-  <div class="feature"><h3>Develop later</h3><p>Instant, at the end of the roll, or the next morning at 9. No peeking, no retakes.</p></div>
-  <div class="feature"><h3>Black &amp; white and color</h3><p>Seven black &amp; white films and seven cinematic color films, each with grain, glow and lens character. Make your own and save them.</p></div>
-  <div class="feature"><h3>Share a film</h3><p>Send a film as a link. Everything travels with it, from curve and grade to grain and effects, so a friend loads exactly your look.</p></div>
+
+<section class="section" id="how">
+<p class="eyebrow">How it works</p>
+<h2>Shoot a roll. Wait for it.</h2>
+<p class="lede">Film Exposures works like the camera you'd load with film, with your iPhone's lenses behind it.</p>
+<ol class="steps">
+  <li><b>01</b><h3>Load a roll</h3><p>Pick a film and how the roll develops. A roll is 36 frames. Keep several going, a food roll and a holiday roll, and switch between them.</p></li>
+  <li><b>02</b><h3>Shoot</h3><p>Choose a format, a lens and a border, then press the shutter. The counter climbs toward 36, and every press uses a frame.</p></li>
+  <li><b>03</b><h3>Develop</h3><p>Instantly, when the roll is done, or the next morning at 9. Can't wait? Tap one frame to develop it early, and hide it again if you'd rather be surprised.</p></li>
+  <li><b>04</b><h3>Keep or share</h3><p>Developed frames go into the roll's own album in Photos. Keep the roll to yourself, send it as a link, or put it on your profile.</p></li>
+</ol>
 </section>
+
+<section class="section">
+<div class="idea">
+  <blockquote>Thirty-six frames make you <span>choose</span>. A day's wait makes you <span>forget</span>, so the roll comes back as a surprise.</blockquote>
+  <div>
+    <p>A phone camera never runs out, so most photos get taken, glanced at and lost in the library. A roll of film is different: you think before you press, and you find out later what you got.</p>
+    <p>Film Exposures keeps that limit and that wait. A roll is a little project with a name, a film and a cover photo: a weekend, a city, one dinner party. Once it's developed, print it as a contact sheet or share it.</p>
+  </div>
+</div>
+</section>
+
+<section class="section">
+<p class="eyebrow">Formats &amp; resolution</p>
+<h2>From 35mm to a 4×5 sheet.</h2>
+<p class="lede">Crop as you shoot, like changing cameras: square 6×6, wide XPAN, or a big 4×5. Larger formats keep more of your iPhone's detail. Shoot in landscape or portrait.</p>
+<div class="formats">${formats}</div>
+<p class="muted small">The most each format keeps. What you get depends on your iPhone's camera: on a 48 MP camera a 4×5 frame comes out around 46 MP, and an older 12 MP camera gives less. Photos are saved in Display P3 colour.</p>
+</section>
+
+<section class="section">
+<p class="eyebrow">Borders</p>
+<h2>Finish every frame.</h2>
+<p class="lede">Print it edge to edge, give it a white or black border of the width you like, or mount it as a slide with the film's name and the frame number on the card.</p>
+<div class="borders">${border('none', 'NONE')}${border('white', 'WHITE')}${border('black', 'BLACK')}${border('slide', 'SLIDE')}</div>
+</section>
+
+<section class="section">
+<p class="eyebrow">Make it yours</p>
+<h2>Edit a film, or make your own.</h2>
+<div class="tools">
+  <div class="feature"><h3>The film</h3><p>Change any film: exposure, contrast, black and white points, grain and its size, vignette, bloom, fog and soft edges. Tone black &amp; white prints, or grade colour with RGB curves, saturation and split toning.</p>
+  ${tags(['SEPIA', 'SELENIUM', 'SPLIT', 'GOLD', 'PLATINUM', 'CYANO', 'TINTYPE'])}</div>
+  <div class="feature"><h3>Lenses &amp; effects</h3><p>Classic lenses from 21 to 135mm, wherever your iPhone's cameras can crop to them cleanly. Lens and print effects for when a roll calls for something strange.</p>
+  ${tags(['FISHEYE', 'SWIRL', 'TILT-SHIFT', 'ZOOM', 'DRAG', 'DOUBLE', 'PRISM', 'RIPPLE', 'KALEIDO', 'HALFTONE', 'ETCH'])}</div>
+  <div class="feature"><h3>The camera</h3><p>A date back that burns the date, or date and time, into the corner. Seven shutter finishes, and the app icon changes to match. Send a film to a friend as a link, and they load your exact look.</p>
+  ${tags(['COPPER', 'SILVER', 'BLACK', 'RED', 'COBALT', 'OLIVE', 'BRASS'])}</div>
+</div>
+</section>
+
+<section class="section" id="sharing">
+<p class="eyebrow">Sharing</p>
+<h2>Your rolls, your call.</h2>
+<p class="lede">Every roll starts private. Share one only when you want to, and change your mind whenever you like.</p>
+<div class="share3">
+  <div class="card3 on"><span class="who">PRIVATE</span><h3>Just you</h3><p>Rolls live on your phone and in Photos. Nothing is uploaded unless you share it.</p></div>
+  <div class="card3"><span class="who">LINK</span><h3>Anyone with the link</h3><p>Send a roll as a link, even one you're still shooting: new frames appear as they develop. The link lasts 30 days, and you can unshare it any time.</p></div>
+  <div class="card3"><span class="who">PROFILE</span><h3>Everyone</h3><p>Sign in and put a roll on your public profile. People can like single frames or the whole roll and see who liked them. Make it private again with a tap.</p></div>
+</div>
+</section>
+
+<section class="section">
 <h2 id="films">The films</h2>
 <p class="muted">Tap a film to see what it does to the same photo.</p>
 <p class="shelf">Black &amp; white</p>
@@ -288,7 +421,8 @@ export function homeBody(store) {
 <p class="shelf">Color</p>
 <div class="films">${color}</div>
 <p class="muted small">Your photos stay on your phone. Nothing is uploaded unless you share a roll or put one on your profile.</p>
-${filmViewer()}`;
+${filmViewer()}
+</section>`;
 }
 
 export function privacyBody() {
