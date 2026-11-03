@@ -62,15 +62,20 @@ def icon():
     ImageDraw.Draw(mask).rounded_rectangle((0, 0, ww - 1, wh - 1), wr, fill=255)
     big.paste(light_leak(ww, wh), (wx, wy), mask)
 
-    # The brand mark across the top: the dot, then FILM EXPOSURES right after it.
+    # The brand mark across the top, as in the website's header: the orange dot with its
+    # faint halo, then FILM EXPOSURES in bold monospace, widely spaced (0.14 em), the dot
+    # about as tall as the letters.
     row = int(wy * 0.52)
-    dot = int(N * 0.034)
-    dx = wx + dot
-    d.ellipse((dx - dot, row - dot, dx + dot, row + dot), fill=ORANGE)
-    size = int(N * 0.052)
+    size = int(N * 0.056)
     font = ImageFont.truetype(FONT, size)
-    kern = int(size * 0.08)
-    x, top = dx + dot + int(N * 0.03), row - size * 0.55
+    dot = int(size * 0.46)
+    dx = wx + int(dot * 1.6)
+    halo = Image.new('L', (N, N), 0)
+    ImageDraw.Draw(halo).ellipse((dx - dot * 1.5, row - dot * 1.5, dx + dot * 1.5, row + dot * 1.5), fill=int(255 * 0.22))
+    big.paste(ORANGE, (0, 0), halo)
+    d.ellipse((dx - dot, row - dot, dx + dot, row + dot), fill=ORANGE)
+    kern = size * 0.14
+    x, top = dx + dot * 1.5 + size * 0.62, row - size * 0.58
     for ch in 'FILM EXPOSURES':
         d.text((x, top), ch, font=font, fill=INK)
         x += d.textlength(ch, font=font) + kern
