@@ -17,7 +17,8 @@ class FakeBucket {
   async head(key) { return this.objects.has(key) ? {} : null; }
   async delete(keys) { for (const k of [].concat(keys)) this.objects.delete(k); }
   async list({ prefix }) {
-    return { objects: [...this.objects.keys()].filter((k) => k.startsWith(prefix)).map((key) => ({ key })), truncated: false };
+    // Like R2: keys in lexicographic order.
+    return { objects: [...this.objects.keys()].filter((k) => k.startsWith(prefix)).sort().map((key) => ({ key })), truncated: false };
   }
 }
 

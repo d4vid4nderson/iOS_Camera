@@ -19,7 +19,8 @@ class FakeBucket {
   async head(key) { return this.objects.has(key) ? {} : null; }
   async delete(keys) { for (const k of [].concat(keys)) this.objects.delete(k); }
   async list({ prefix }) {
-    return { objects: [...this.objects.keys()].filter((k) => k.startsWith(prefix)).map((key) => ({ key })), truncated: false };
+    // Like R2: keys in lexicographic order.
+    return { objects: [...this.objects.keys()].filter((k) => k.startsWith(prefix)).sort().map((key) => ({ key })), truncated: false };
   }
 }
 
@@ -164,6 +165,31 @@ test('browsing lists findable people by handle, a page at a time', async () => {
   const [rest, end] = await names(ben, next);
   assert.ok(rest.length >= 1 && end === null, 'the last page ends');
   assert.ok(!rest.some((h) => first.includes(h)), 'no repeats');
+});
+
+test('browse lists everyone\'s public rolls, newest first', async () => {
+  const { e, ana, ben, cy } = await cast();
+  assert.equal((await call(e, 'GET', '/api/rolls/browse')).status, 401, 'signed in only');
+  const t0 = Date.now();
+  const share = async (who, body, at) => {
+    const { id } = await liveRoll(e, 2, who.token, at);
+    assert.equal((await call(e, 'POST', `/api/rolls/${id}/visibility`, { account: who.token, type: 'application/json', body: JSON.stringify(body), now: at })).status, 200);
+    return id;
+  };
+  const a1 = await share(ana, { audience: 'public' }, t0 + 1000);
+  const b1 = await share(ben, { audience: 'public' }, t0 + 2000);
+  await share(ana, { audience: 'followers' }, t0 + 3000);
+  await share(ben, { public: false }, t0 + 4000);   // a link share
+  const ids = async (who, after) => (await getJSON(e, `/api/rolls/browse${after ? `?after=${encodeURIComponent(after)}` : ''}`, who));
+  let page = await ids(cy);
+  assert.deepEqual(page.rolls.map((r) => r.id), [b1, a1], 'public only, newest first');
+  assert.equal(page.rolls[0].by.handle, 'ben.ito');
+  assert.equal(page.after, null);
+
+  await call(e, 'POST', `/api/rolls/${b1}/visibility`, { account: ben.token, type: 'application/json', body: JSON.stringify({ audience: 'followers' }) });
+  assert.deepEqual((await ids(cy)).rolls.map((r) => r.id), [a1], 'gone when it stops being public');
+  await call(e, 'POST', `/api/users/${cy.id}/block`, { account: ana.token });
+  assert.deepEqual((await ids(cy)).rolls, [], 'not from people who blocked you');
 });
 
 test('a profile link shows the preview the app made, or the site image', async () => {

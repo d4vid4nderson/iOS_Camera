@@ -257,6 +257,7 @@ struct ProfileSheet: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
                         chip("FOLLOWING", selected: true) { socialTab = SocialTabRef(tab: .feed) }
+                        chip("BROWSE ROLLS", selected: false) { socialTab = SocialTabRef(tab: .browse) }
                         chip("SHARED WITH YOU", selected: false) { socialTab = SocialTabRef(tab: .shared) }
                         chip("REQUESTS", selected: false) { socialTab = SocialTabRef(tab: .requests) }
                         chip("FIND PEOPLE", selected: false) { socialTab = SocialTabRef(tab: .find) }

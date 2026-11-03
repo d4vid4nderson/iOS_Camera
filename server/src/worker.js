@@ -46,6 +46,7 @@
 //   POST /api/me/requests/<id> { accept }    approve or turn down a follow request
 //   DELETE /api/me/followers/<id>            remove a follower
 //   GET  /api/feed                           recent rolls from people you follow
+//   GET  /api/rolls/browse?after=            everyone's public rolls, newest first, a page at a time
 //   GET  /api/me/inbox                       rolls shared with you
 //   POST /api/rolls/<id>/visibility { audience, people }  who sees a roll: private, people,
 //        followers, public, or link (anyone with the link, for 30 days)
@@ -206,6 +207,7 @@ export async function route(request, env, now = Date.now()) {
   if ((m = path.match(new RegExp(`^/api/me/requests/${USER}$`))) && method === 'POST') return answerRequest(request, env, url, m[1]);
   if ((m = path.match(new RegExp(`^/api/me/followers/${USER}$`))) && method === 'DELETE') return removeFollower(request, env, m[1]);
   if (path === '/api/feed' && method === 'GET') return feed(request, env, url, now);
+  if (path === '/api/rolls/browse' && method === 'GET') return browseRolls(request, env, url, now);
   if (path === '/api/me/inbox' && method === 'GET') return inbox(request, env, url, now);
 
   if ((m = path.match(new RegExp(`^/u/${USER}$`))) && method === 'GET') {
@@ -485,6 +487,7 @@ async function setVisibility(request, env, id, url, now) {
   meta.audience = audience;
   meta.people = people;
   meta.public = audience === 'public';
+  await indexPublic(env, meta, now);
   meta.expiresAt = SHARED.includes(audience) ? null : now + TTL_DAYS * DAY;
   await putMeta(env, meta);
   return json(200, {
@@ -1004,6 +1007,10 @@ export async function sweep(env, now = Date.now()) {
       if (meta && expired(meta, now)) {
         await deleteRoll(env, meta.id);
         removed++;
+      } else if (meta && !meta.publicKey && audienceOf(meta) === 'public') {
+        // Public before browsing existed: put it in the index.
+        await indexPublic(env, meta, meta.createdAt || now);
+        await putMeta(env, meta);
       }
     }
     cursor = page.truncated ? page.cursor : undefined;
@@ -1018,6 +1025,7 @@ async function deleteRoll(env, id) {
   await deletePrefix(env, `likes/${id}/`);
   if (meta?.owner) await env.ROLLS.delete(`users/${meta.owner}/rolls/${id}`);
   for (const pid of meta?.people || []) await env.ROLLS.delete(`inbox/${pid}/${id}`);
+  if (meta?.publicKey) await env.ROLLS.delete(meta.publicKey);
   await env.ROLLS.delete(`meta/${id}.json`);
 }
 
@@ -1363,6 +1371,69 @@ async function block(request, env, id, on) {
       `requests/${user.id}/${id}`, `requests/${id}/${user.id}`,
     ]);
     return json(200, { blocked: true });
+  });
+}
+
+// MARK: Browse: everyone's public rolls
+
+/// Public rolls are kept in an index, newest first: one key per roll, named so that
+/// listing it in order gives the latest first. A roll joins when it goes public and leaves
+/// when it doesn't (or is deleted). Callers save the roll's details afterwards.
+async function indexPublic(env, meta, now) {
+  const wanted = audienceOf(meta) === 'public' && Boolean(meta.owner);
+  if (wanted && !meta.publicKey) {
+    meta.publicKey = `public/${String(1e13 - now).padStart(13, '0')}-${meta.id}`;
+    await env.ROLLS.put(meta.publicKey, meta.id);
+  } else if (!wanted && meta.publicKey) {
+    await env.ROLLS.delete(meta.publicKey);
+    meta.publicKey = null;
+  }
+}
+
+/// Index every public roll that isn't yet (rolls made public before the index existed).
+async function backfillPublic(env, now) {
+  for await (const keys of listKeys(env, 'meta/')) {
+    for (const key of keys) {
+      const meta = await getMeta(env, key.slice(5, -5));
+      if (meta && !meta.publicKey && audienceOf(meta) === 'public' && !expired(meta, now)) {
+        await indexPublic(env, meta, meta.createdAt || now);
+        await putMeta(env, meta);
+      }
+    }
+  }
+}
+
+export const BROWSE_ROLLS_PAGE = 30;
+
+async function browseRolls(request, env, url, now) {
+  return withUser(request, env, async (user) => {
+    const after = /^public\/\d{13}-[A-Za-z0-9]{10}$/.test(url.searchParams.get('after') || '') ? url.searchParams.get('after') : '';
+    if (!after && (await env.ROLLS.list({ prefix: 'public/', limit: 1 })).objects.length === 0) await backfillPublic(env, now);
+    const rolls = [];
+    let last = null;
+    let more = false;
+    let cursor;
+    outer: do {
+      const page = await env.ROLLS.list({ prefix: 'public/', cursor, startAfter: after || undefined, limit: 100 });
+      for (const object of page.objects) {
+        if (after && object.key <= after) continue;
+        if (rolls.length >= BROWSE_ROLLS_PAGE) { more = true; break outer; }
+        const meta = await liveRoll(env, object.key.split('-').pop(), now);
+        if (!meta || audienceOf(meta) !== 'public' || !meta.owner) {
+          if (!meta || audienceOf(meta) !== 'public') await env.ROLLS.delete(object.key);   // stale
+          continue;
+        }
+        if (meta.owner !== user.id && (await blockedEitherWay(env, user.id, meta.owner))) continue;
+        const owner = await getUser(env, meta.owner);
+        if (!owner) continue;
+        rolls.push({ ...(await rollTile(env, meta, url, now)), by: personPayload(owner, url), sharedAt: new Date(meta.createdAt).toISOString() });
+        last = object.key;
+      }
+      cursor = page.truncated ? page.cursor : undefined;
+      if (cursor) more = true;
+    } while (cursor && rolls.length < BROWSE_ROLLS_PAGE);
+    if (!cursor && rolls.length < BROWSE_ROLLS_PAGE) more = false;
+    return json(200, { rolls, after: more ? last : null });
   });
 }
 
