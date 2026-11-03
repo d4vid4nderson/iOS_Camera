@@ -139,7 +139,8 @@ check(oldRoll.develop == .instant && oldRoll.finishedAt == nil && oldRoll.frames
 
 // Film recipe links: compact, round trip within a click of every dial, new id, old links
 // still open, junk rejected.
-var recipe = FilmStock.lith
+// EXPIRED 200 has a tint, so the tone has to survive too.
+var recipe = FilmStock.expired
 recipe.name = "MY LITH"; recipe.effect = .swirl; recipe.effectAmount = 0.7; recipe.contrast = 0.81
 recipe.effectX = 0.25; recipe.effectY = 0.6; recipe.key = -0.35; recipe.exposure = 0.3
 let link = FilmCode.url(for: recipe)!
@@ -221,7 +222,9 @@ check(named.next().name == nil, "a new roll starts unnamed")
 
 // Share card captions.
 check(FilmStock.pan50.shareCaption == "Black & white  ·  ISO 50  ·  Fine grain", "PAN 50 caption: \(FilmStock.pan50.shareCaption)")
-check(FilmStock.selenium.shareCaption.hasPrefix("Selenium toned"), "selenium film says it's toned")
+var toned = FilmStock.classic400
+toned.tone = .selenium; toned.toneAmount = 1
+check(toned.shareCaption.hasPrefix("Selenium toned"), "a selenium-toned film says it's toned")
 check(FilmStock.expired.shareCaption.hasPrefix("Black & white"), "a light tint still reads as black & white")
 check(FilmStock.push3200.shareCaption.hasSuffix("Heavy grain"), "push film is heavy grain")
 for film in FilmStock.all { check(film.shareCaption.contains("ISO \(film.iso)"), "\(film.id) caption has its ISO") }
