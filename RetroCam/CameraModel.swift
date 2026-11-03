@@ -754,6 +754,13 @@ final class CameraModel: NSObject, ObservableObject {
         }
     }
 
+    /// Peek at a frame that's still developing (or hide it again). Only Film Exposures
+    /// shows it: it goes into Photos with the rest of its roll when the roll develops.
+    func setPeeking(roll number: Int, frame: Int, _ on: Bool) {
+        RollStore.setPeeking(roll: number, frame: frame, on)
+        rollsVersion += 1
+    }
+
     // MARK: - Capture
 
     func shoot() {
