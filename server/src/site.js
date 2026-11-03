@@ -360,7 +360,7 @@ export function homeBody(store) {
   <li><b>01</b><h3>Load a roll</h3><p>Pick a film and how the roll develops. A roll is 36 frames. Keep several going, a food roll and a holiday roll, and switch between them.</p></li>
   <li><b>02</b><h3>Shoot</h3><p>Choose a format, a lens and a border, then press the shutter. The counter climbs toward 36, and every press uses a frame.</p></li>
   <li><b>03</b><h3>Develop</h3><p>Instantly, when the roll is done, or the next morning at 9. Can't wait? Tap one frame to develop it early, and hide it again if you'd rather be surprised.</p></li>
-  <li><b>04</b><h3>Keep or share</h3><p>Developed frames go into the roll's own album in Photos. Keep the roll to yourself, send it as a link, or put it on your profile.</p></li>
+  <li><b>04</b><h3>Keep or share</h3><p>Developed frames go into the roll's own album in Photos. Keep the roll to yourself, or share it with a few people, your followers or everyone.</p></li>
 </ol>
 </section>
 
@@ -405,11 +405,14 @@ export function homeBody(store) {
 <section class="section" id="sharing">
 <p class="eyebrow">Sharing</p>
 <h2>Your rolls, your call.</h2>
-<p class="lede">Every roll starts private. Share one only when you want to, and change your mind whenever you like.</p>
+<p class="lede">Every roll starts private. Choose who sees each one, from a few friends to everyone, and change your mind whenever you like. Photos shared with followers or specific people only load for them.</p>
 <div class="share3">
   <div class="card3 on"><span class="who">PRIVATE</span><h3>Just you</h3><p>Rolls live on your phone and in Photos. Nothing is uploaded unless you share it.</p></div>
+  <div class="card3"><span class="who">SPECIFIC PEOPLE</span><h3>Only who you pick</h3><p>Choose people by their @handle. The roll shows up in their Shared with you, and nobody else can open it, not even with the link.</p></div>
+  <div class="card3"><span class="who">FOLLOWERS</span><h3>People you approved</h3><p>Every follow is a request you approve. Rolls for followers appear in their feed, and you can remove a follower any time.</p></div>
+  <div class="card3"><span class="who">PUBLIC</span><h3>Everyone</h3><p>On your public profile, for anyone to see and like, and to see who liked it.</p></div>
   <div class="card3"><span class="who">LINK</span><h3>Anyone with the link</h3><p>Send a roll as a link, even one you're still shooting: new frames appear as they develop. The link lasts 30 days, and you can unshare it any time.</p></div>
-  <div class="card3"><span class="who">PROFILE</span><h3>Everyone</h3><p>Sign in and put a roll on your public profile. People can like single frames or the whole roll and see who liked them. Make it private again with a tap.</p></div>
+  <div class="card3"><span class="who">FIND PEOPLE</span><h3>Follow photographers</h3><p>Search by @handle or name and ask to follow. Block someone and they can't find you, follow you or see your rolls. Prefer not to be found? Turn search off.</p></div>
 </div>
 </section>
 
