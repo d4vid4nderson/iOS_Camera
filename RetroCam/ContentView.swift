@@ -1076,6 +1076,10 @@ struct ContentView: View {
                     RoundedRectangle(cornerRadius: 4).fill(Color(white: 0.15))
                     if let print = camera.lastPrint {
                         Image(uiImage: print).resizable().scaledToFill()
+                    } else if camera.developing == 0 {
+                        // Nothing developed yet (an empty roll, or frames waiting to develop):
+                        // still a way into your rolls and the DEVELOP setting.
+                        Image(systemName: "photo.stack").font(.system(size: 20)).foregroundStyle(Color(white: 0.5))
                     }
                     if camera.developing > 0 {
                         ProgressView().tint(accent)
@@ -1086,7 +1090,8 @@ struct ContentView: View {
                 .rotationEffect(.degrees(camera.uiRotation))
                 .animation(.snappy(duration: 0.3), value: camera.uiRotation)
             }
-            .disabled(camera.lastPrint == nil)
+            // Always opens: with ROLL END or NEXT MORNING nothing shows here until the roll
+            // develops, and the roll viewer is where DEVELOP is changed.
             .accessibilityLabel("Your rolls")
 
             Spacer()
