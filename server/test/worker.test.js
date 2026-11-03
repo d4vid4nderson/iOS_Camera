@@ -284,10 +284,36 @@ test('frames can be liked once per account', async () => {
   assert.equal((await (await like(b, 1)).json()).count, 2);
   await like(b, 3);
   let likes = await (await call(e, 'GET', `/api/rolls/${id}/likes`, { account: b.token })).json();
-  assert.deepEqual(likes, { counts: { 1: 2, 3: 1 }, mine: [1, 3] });
+  assert.deepEqual({ counts: likes.counts, mine: likes.mine }, { counts: { 1: 2, 3: 1 }, mine: [1, 3] });
   assert.equal((await (await like(b, 1, false)).json()).count, 1);
   likes = await (await call(e, 'GET', `/api/rolls/${id}/likes`)).json();
-  assert.deepEqual(likes, { counts: { 1: 1, 3: 1 }, mine: [] });
+  assert.deepEqual({ counts: likes.counts, mine: likes.mine }, { counts: { 1: 1, 3: 1 }, mine: [] });
+});
+
+test('likes show who liked each frame, and a whole roll can be liked', async () => {
+  const { e, apple } = await accountEnv();
+  const a = await signIn(e, apple, 'apple-1', 'Ana');
+  const b = await signIn(e, apple, 'apple-2', 'Ben');
+  const { id } = await liveRoll(e, 3, a.token);
+  await call(e, 'PUT', `/api/rolls/${id}/frames/2/like`, { account: a.token });
+  await call(e, 'PUT', `/api/rolls/${id}/frames/2/like`, { account: b.token });
+  assert.equal((await call(e, 'PUT', `/api/rolls/${id}/like`)).status, 401, 'needs an account');
+  assert.equal((await call(e, 'PUT', `/api/rolls/${id}/frames/0/like`, { account: b.token })).status, 400, 'frame 0 is the roll route');
+  assert.equal((await (await call(e, 'PUT', `/api/rolls/${id}/like`, { account: b.token })).json()).count, 1);
+
+  let likes = await (await call(e, 'GET', `/api/rolls/${id}/likes`, { account: b.token })).json();
+  assert.deepEqual(likes.counts, { 0: 1, 2: 2 });
+  assert.deepEqual(likes.mine, [0, 2]);
+  assert.deepEqual(likes.likers[0].map((p) => p.name), ['Ben']);
+  assert.deepEqual(likes.likers[2].map((p) => p.name), ['Ben', 'Ana'], 'you come first');
+  assert.equal(likes.likers[2][0].avatar, null);
+  assert.ok(!('logins' in likes.likers[2][0]), 'only the public parts of an account');
+
+  await call(e, 'DELETE', `/api/rolls/${id}/like`, { account: b.token });
+  await call(e, 'DELETE', '/api/me', { account: b.token });   // deleting an account takes its likes
+  likes = await (await call(e, 'GET', `/api/rolls/${id}/likes`)).json();
+  assert.deepEqual(likes.counts, { 2: 1 });
+  assert.deepEqual(likes.likers[2].map((p) => p.name), ['Ana']);
 });
 
 test('deleting an account deletes everything it put on the server', async () => {

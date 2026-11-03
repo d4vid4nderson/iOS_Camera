@@ -7,7 +7,7 @@
 // worker.js) whenever either changes.
 
 export const OWNER = 'Film Exposures';
-export const EFFECTIVE = 'November 2, 2026';
+export const EFFECTIVE = 'November 3, 2026';
 export const GOVERNING_LAW = 'the State of Texas, United States';
 export const SUPPORT_TOPICS = ['Help using the app', 'Account or sign-in', 'Report a problem', 'Report content', 'Privacy request', 'Something else'];
 
@@ -311,12 +311,13 @@ export function privacyBody() {
 </ul>
 
 <h2>Accounts</h2>
-<p>An account is optional. You need one only to put rolls on a public profile and to like frames. You can sign in with Apple, Google or Facebook. We receive:</p>
+<p>An account is optional. You need one only to put rolls on a public profile and to like frames and rolls. You can sign in with Apple, Google or Facebook. We receive:</p>
 <ul>
 <li>An identifier for your Apple, Google or Facebook account. We store it only in a scrambled (one-way hashed) form, used to recognise you when you sign in again.</li>
 <li>Your name, if the service provides it or you set one, and your profile photo from Google or Facebook, which you can replace or remove.</li>
 </ul>
-<p>We don't ask for your email address, contacts or friends list. We also store which frames you have liked, the time you agreed to our rules for public rolls, and sign-in sessions for your devices.</p>
+<p>We don't ask for your email address, contacts or friends list. We also store which frames and rolls you have liked, the time you agreed to our rules for public rolls, and sign-in sessions for your devices.</p>
+<p><b>Likes are public.</b> When you like a frame or a roll, anyone who opens that roll in the app can see that you liked it, with your name and profile photo. Unlike it, or delete your account, and it's gone.</p>
 
 <h2>Reports, blocks and support</h2>
 <ul>

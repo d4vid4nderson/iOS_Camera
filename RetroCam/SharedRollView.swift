@@ -24,6 +24,7 @@ struct SharedRollView: View {
     @State private var likes = RollShare.Likes(counts: [:], mine: [])
     @State private var askingToSignIn = false
     @State private var sharerProfile: IncomingUser?
+    @State private var likersOf: LikersOf?
 
     var body: some View {
         ZStack {
@@ -34,6 +35,7 @@ struct SharedRollView: View {
                     if RollShare.isBlocked(roll.sharer.id) {
                         centered("YOU BLOCKED THE PERSON WHO SHARED THIS ROLL")
                     } else {
+                        rollLikes
                         grid(roll)
                         footer(roll)
                     }
@@ -56,13 +58,34 @@ struct SharedRollView: View {
         .preferredColorScheme(.dark)
         .task { await load() }
         .fullScreenCover(item: $viewing) { start in
-            RemotePager(frames: roll?.frames ?? [], start: start.index, accent: accent, likes: $likes) { frame in
+            RemotePager(frames: roll?.frames ?? [], start: start.index, accent: accent, camera: camera, likes: $likes) { frame in
                 await toggleLike(frame)
             }
         }
         .fullScreenCover(item: $sharerProfile) { user in
             UserProfileView(userID: user.id, camera: camera, accent: accent)
         }
+        .sheet(item: $likersOf) { of in
+            LikersSheet(frame: of.frame, people: likes.people(of.frame), count: likes.count(of.frame), camera: camera, accent: accent)
+        }
+    }
+
+    /// Like the whole roll, and who did.
+    private var rollLikes: some View {
+        let roll = RollShare.Likes.roll
+        return HStack(spacing: 10) {
+            if likes.count(roll) > 0 {
+                LikedBy(people: likes.people(roll), count: likes.count(roll)) { likersOf = LikersOf(frame: roll) }
+            } else {
+                Text("LIKE THIS ROLL").font(.mono(10, .semibold)).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+            LikeButton(count: likes.count(roll), liked: likes.isMine(roll), accent: accent, size: 15, what: "roll") {
+                Task { await toggleLike(roll) }
+            }
+        }
+        .padding(.leading, 12).padding(.trailing, 8).padding(.vertical, 6)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color(white: 0.1)))
     }
 
     // MARK: Header
@@ -138,9 +161,16 @@ struct SharedRollView: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("Frame \(index + 1)")
-                        HStack(spacing: 0) {
+                        HStack(spacing: 6) {
                             Text(String(format: "%02d", index + 1))
                                 .font(.mono(9, .semibold)).foregroundStyle(.secondary)
+                            if likes.count(index + 1) > 0 {
+                                Button { likersOf = LikersOf(frame: index + 1) } label: {
+                                    AvatarStack(people: likes.people(index + 1), size: 15)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("Who liked frame \(index + 1)")
+                            }
                             Spacer(minLength: 0)
                             LikeButton(count: likes.count(index + 1), liked: likes.isMine(index + 1), accent: accent, size: 11) {
                                 Task { await toggleLike(index + 1) }
@@ -285,7 +315,7 @@ struct SharedRollView: View {
         }
         let before = likes
         let on = !likes.isMine(frame)
-        likes.set(frame, liked: on)
+        likes.set(frame, liked: on, me: .me)
         do {
             let count = try await RollShare.like(id: rollID, frame: frame, on)
             likes.set(frame, liked: on, count: count)
@@ -300,8 +330,8 @@ struct SharedRollView: View {
             Color.black.opacity(0.6).ignoresSafeArea()
                 .onTapGesture { withAnimation(.snappy(duration: 0.15)) { askingToSignIn = false } }
             VStack(alignment: .leading, spacing: 12) {
-                Text("SIGN IN TO LIKE FRAMES").font(.mono(15, .bold)).foregroundStyle(accent)
-                Text("One like per person, so likes mean something. Signing in also lets you put your own rolls on a public profile.")
+                Text("SIGN IN TO LIKE").font(.mono(15, .bold)).foregroundStyle(accent)
+                Text("One like per person, so likes mean something. People see your name and photo on what you like. Signing in also lets you put your own rolls on a public profile.")
                     .font(.mono(10)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 SignInButtons(onError: { message in
                     askingToSignIn = false
@@ -327,6 +357,8 @@ struct LikeButton: View {
     let liked: Bool
     let accent: Color
     var size: CGFloat = 11
+    /// What's being liked, for VoiceOver: "frame" or "roll".
+    var what = "frame"
     let action: () -> Void
 
     var body: some View {
@@ -347,7 +379,7 @@ struct LikeButton: View {
         }
         .buttonStyle(.plain)
         .sensoryFeedback(.impact(weight: .light), trigger: liked)
-        .accessibilityLabel(liked ? "Unlike" : "Like")
+        .accessibilityLabel(liked ? "Unlike \(what)" : "Like \(what)")
         .accessibilityValue(count == 1 ? "1 like" : "\(count) likes")
     }
 }
@@ -362,10 +394,12 @@ private struct RemotePager: View {
     let frames: [URL]
     @State var start: Int
     let accent: Color
+    let camera: CameraModel
     @Binding var likes: RollShare.Likes
     let toggle: (Int) async -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var burst = 0
+    @State private var likersOf: LikersOf?
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -398,17 +432,26 @@ private struct RemotePager: View {
                     .allowsHitTesting(false)
             }
             .overlay(alignment: .bottom) {
-                HStack {
-                    Text(String(format: "%02d / %02d", start + 1, frames.count))
-                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(Color(white: 0.6))
-                    Spacer()
-                    LikeButton(count: likes.count(start + 1), liked: likes.isMine(start + 1), accent: accent, size: 18) {
-                        Task { await toggle(start + 1) }
+                VStack(alignment: .leading, spacing: 10) {
+                    // Who liked this frame, under the photo.
+                    LikedBy(people: likes.people(start + 1), count: likes.count(start + 1), size: 22) {
+                        likersOf = LikersOf(frame: start + 1)
+                    }
+                    HStack {
+                        Text(String(format: "%02d / %02d", start + 1, frames.count))
+                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(Color(white: 0.6))
+                        Spacer()
+                        LikeButton(count: likes.count(start + 1), liked: likes.isMine(start + 1), accent: accent, size: 18) {
+                            Task { await toggle(start + 1) }
+                        }
                     }
                 }
                 .padding(.horizontal, 22)
                 .padding(.bottom, 18)
+            }
+            .sheet(item: $likersOf) { of in
+                LikersSheet(frame: of.frame, people: likes.people(of.frame), count: likes.count(of.frame), camera: camera, accent: accent)
             }
             Button { dismiss() } label: {
                 Image(systemName: "xmark")
@@ -420,5 +463,174 @@ private struct RemotePager: View {
             .padding(16)
             .accessibilityLabel("Close")
         }
+    }
+}
+
+private struct LikersOf: Identifiable {
+    let frame: Int
+    var id: Int { frame }
+}
+
+/// A liker's headshot, or their initial when they have none.
+struct Headshot: View {
+    let person: RollShare.Liker
+    let size: CGFloat
+
+    var body: some View {
+        Group {
+            if let url = person.avatar {
+                AsyncImage(url: url) { image in image.resizable().scaledToFill() } placeholder: { Color(white: 0.2) }
+            } else {
+                ZStack {
+                    Color(white: 0.24)
+                    Text(initial)
+                        .font(.system(size: size * 0.46, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.white)
+                }
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+        .accessibilityHidden(true)
+    }
+
+    private var initial: String {
+        guard let first = person.name?.trimmingCharacters(in: .whitespaces).first else { return "·" }
+        return String(first).uppercased()
+    }
+}
+
+/// The first few likers' headshots, overlapping.
+struct AvatarStack: View {
+    let people: [RollShare.Liker]
+    var size: CGFloat = 16
+    var limit = 3
+
+    var body: some View {
+        HStack(spacing: -size * 0.35) {
+            ForEach(people.prefix(limit)) { person in
+                Headshot(person: person, size: size)
+                    .overlay(Circle().stroke(Color(white: 0.06), lineWidth: max(1, size * 0.08)))
+            }
+        }
+    }
+}
+
+/// "LIKED BY YOU, ANA AND 3 OTHERS", with their headshots. Tap to see everyone.
+struct LikedBy: View {
+    let people: [RollShare.Liker]
+    let count: Int
+    var size: CGFloat = 18
+    let action: () -> Void
+    @ObservedObject private var account = Account.shared
+
+    var body: some View {
+        if count > 0 {
+            Button(action: action) {
+                HStack(spacing: 8) {
+                    AvatarStack(people: people, size: size)
+                    Text(Self.summary(people, count: count, me: account.me?.id))
+                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(Color(white: 0.78))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Shows everyone who liked it")
+        }
+    }
+
+    static func summary(_ people: [RollShare.Liker], count: Int, me: String?) -> String {
+        let names = people.prefix(2).map { person -> String in
+            if person.id == me { return "YOU" }
+            let name = person.name?.trimmingCharacters(in: .whitespaces) ?? ""
+            return name.isEmpty ? "SOMEONE" : name.uppercased()
+        }
+        guard !names.isEmpty else { return count == 1 ? "1 LIKE" : "\(count) LIKES" }
+        let others = max(0, count - names.count)
+        switch (names.count, others) {
+        case (1, 0): return "LIKED BY \(names[0])"
+        case (2, 0): return "LIKED BY \(names[0]) AND \(names[1])"
+        case (1, _): return "LIKED BY \(names[0]) AND \(others) \(others == 1 ? "OTHER" : "OTHERS")"
+        default: return "LIKED BY \(names[0]), \(names[1]) AND \(others) \(others == 1 ? "OTHER" : "OTHERS")"
+        }
+    }
+}
+
+/// Everyone who liked a frame (or the roll, frame 0). Tap someone to open their profile.
+struct LikersSheet: View {
+    let frame: Int
+    let people: [RollShare.Liker]
+    let count: Int
+    @ObservedObject var camera: CameraModel
+    let accent: Color
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var account = Account.shared
+    @State private var opening: IncomingUser?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("LIKED BY").font(.system(size: 15, weight: .bold, design: .monospaced)).foregroundStyle(accent)
+                    Text(frame == RollShare.Likes.roll ? "THIS ROLL" : String(format: "FRAME %02d", frame))
+                        .font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 13, weight: .bold))
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(Color(white: 0.16)))
+                }
+                .foregroundStyle(.white)
+                .accessibilityLabel("Close")
+            }
+            ScrollView {
+                VStack(spacing: 4) {
+                    ForEach(people) { person in
+                        Button { opening = IncomingUser(id: person.id) } label: {
+                            HStack(spacing: 12) {
+                                Headshot(person: person, size: 38)
+                                Text(label(person))
+                                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                                    .foregroundStyle(.white)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(Color(white: 0.4))
+                            }
+                            .padding(.vertical, 6)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityHint("Opens their profile")
+                    }
+                    if count > people.count {
+                        Text("AND \(count - people.count) MORE")
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.top, 6)
+                    }
+                }
+            }
+        }
+        .padding(20)
+        .background(Color(white: 0.08).ignoresSafeArea())
+        .preferredColorScheme(.dark)
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .fullScreenCover(item: $opening) { user in
+            UserProfileView(userID: user.id, camera: camera, accent: accent)
+        }
+    }
+
+    private func label(_ person: RollShare.Liker) -> String {
+        let name = person.name?.trimmingCharacters(in: .whitespaces) ?? ""
+        let shown = name.isEmpty ? "SOMEONE" : name.uppercased()
+        return person.id == account.me?.id ? "\(shown) (YOU)" : shown
     }
 }
