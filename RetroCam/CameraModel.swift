@@ -722,6 +722,13 @@ final class CameraModel: NSObject, ObservableObject {
         }
     }
 
+    /// If `roll` is shared (or waiting to go on your profile), add its newly developed frames.
+    func syncShare(_ roll: Roll) {
+        guard ShareLinks.isConfigured else { return }
+        let latest = RollStore.rolls().first(where: { $0.number == roll.number }) ?? roll
+        RollShare.syncSoon(roll: latest, film: film(ofRoll: roll.number), profile: Profile.load())
+    }
+
     /// Develop every finished roll whose time has come: file its waiting frames into its
     /// Photos album, in order, and reveal them in the roll viewer.
     func developReadyRolls() {
@@ -729,6 +736,7 @@ final class CameraModel: NSObject, ObservableObject {
         saveChain = Task {
             await previous?.value
             var developed: [String] = []
+            var developedRolls: [Roll] = []
             for stored in RollStore.rolls() where stored.isDeveloped() {
                 let waiting = RollStore.pendingFrames(of: stored.number)
                 guard !waiting.isEmpty else { continue }
@@ -743,8 +751,10 @@ final class CameraModel: NSObject, ObservableObject {
                     }
                 }
                 developed.append(stored.title.uppercased())
+                developedRolls.append(stored)
             }
             await MainActor.run {
+                developedRolls.forEach(self.syncShare)
                 self.rollsVersion += 1
                 guard !developed.isEmpty else { return }
                 self.lastPrint = RollStore.latestThumbnail()
@@ -854,6 +864,7 @@ final class CameraModel: NSObject, ObservableObject {
                 await MainActor.run {
                     self.developing -= 1
                     self.rollsVersion += 1
+                    self.syncShare(frameRoll)   // a shared roll still being shot gets the new frame
                 }
             }
         case .failure(let error):

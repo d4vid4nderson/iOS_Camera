@@ -265,6 +265,81 @@ enum RollShare {
         return record
     }
 
+    // MARK: Rolls still being shot
+
+    /// A roll's developed frames: the ones that can be shared (not ones still developing,
+    /// even if you've peeked at them).
+    static func developedFrames(of roll: Int) -> [Int] {
+        RollStore.frames(of: roll).filter { !RollStore.isPending(roll: roll, frame: $0) }
+    }
+
+    private static func waitURL(_ roll: Int) -> URL {
+        RollStore.folder(for: roll).appendingPathComponent("profile-when-developed")
+    }
+
+    /// A roll you put on your profile before any of it had developed: it goes on when its
+    /// first frames develop.
+    static func waitsForProfile(_ roll: Int) -> Bool {
+        FileManager.default.fileExists(atPath: waitURL(roll).path)
+    }
+
+    static func setWaitsForProfile(_ roll: Int, _ on: Bool) {
+        if on {
+            try? FileManager.default.createDirectory(at: RollStore.folder(for: roll), withIntermediateDirectories: true)
+            FileManager.default.createFile(atPath: waitURL(roll).path, contents: Data())
+        } else {
+            try? FileManager.default.removeItem(at: waitURL(roll))
+        }
+    }
+
+    private static let syncLock = NSLock()
+    private static var syncing: Task<Void, Never>?
+
+    /// Bring a roll's share up to date after frames develop, one at a time: frames
+    /// developed since it was shared are added to it (and its card redrawn), and a roll
+    /// waiting to go on your profile goes on it once it has developed frames.
+    static func syncSoon(roll: Roll, film: FilmStock?, profile: Profile) {
+        syncLock.lock()
+        defer { syncLock.unlock() }
+        let previous = syncing
+        syncing = Task {
+            await previous?.value
+            await sync(roll: roll, film: film, profile: profile)
+        }
+    }
+
+    private static func sync(roll: Roll, film: FilmStock?, profile: Profile) async {
+        let developed = developedFrames(of: roll.number)
+        guard !developed.isEmpty, let base = ShareLinks.base else { return }
+        guard var record = record(for: roll.number) else {
+            guard waitsForProfile(roll.number), Account.sessionToken != nil else { return }
+            if (try? await makePublic(roll: roll, film: film, profile: profile, progress: { _, _ in })) != nil {
+                setWaitsForProfile(roll.number, false)
+            }
+            return
+        }
+        // Rolls shared before the upload order was kept can't be added to.
+        guard var uploaded = record.frames else { return }
+        let new = developed.filter { !uploaded.contains($0) }
+        guard !new.isEmpty else { return }
+        let files = base.appendingPathComponent("api/rolls").appendingPathComponent(record.id)
+        for frame in new where uploaded.count < Roll.length {
+            guard let data = try? Data(contentsOf: RollStore.frameURL(roll: roll.number, frame: frame)) else { break }
+            do {
+                _ = try await send(files.appendingPathComponent(String(format: "frame-%02d.jpg", uploaded.count + 1)),
+                                   method: "PUT", token: record.token, body: data, type: "image/jpeg")
+            } catch {
+                break   // try again after the next frame develops
+            }
+            uploaded.append(frame)
+            record.frames = uploaded
+            save(record, roll: roll.number)
+        }
+        if let card = card(for: roll, record: record, film: film, profile: profile)?.jpegData(compressionQuality: 0.86) {
+            _ = try? await send(files.appendingPathComponent("card.jpg"), method: "PUT", token: record.token, body: card, type: "image/jpeg")
+        }
+    }
+
     // MARK: Profiles and likes
 
     static func fetchProfile(id: String) async throws -> RemoteProfile {

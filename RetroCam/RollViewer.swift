@@ -40,6 +40,10 @@ struct RollViewer: View {
     @State private var developingEarly: Int?
     /// Developing frames you're peeking at.
     @State private var peeking: Set<Int> = []
+    @ObservedObject private var account = Account.shared
+    /// Put on your profile before anything developed: goes on when its first frames do.
+    @State private var waitingForProfile = false
+    @State private var addingToProfile: (done: Int, total: Int)?
     @State private var nameDraft = ""
 
     private var roll: Roll? { rolls.first { $0.number == selected } }
@@ -309,6 +313,8 @@ struct RollViewer: View {
                 }
             }
 
+            profileRow
+
             // The roll in the camera: switch to another part-shot roll, load a new one, or
             // finish this one.
             VStack(alignment: .leading, spacing: 6) {
@@ -363,6 +369,60 @@ struct RollViewer: View {
                 }
                 .sensoryFeedback(.selection, trigger: camera.developMode)
             }
+        }
+    }
+
+    /// Your public profile and this roll: add it (even while you're still shooting it; frames
+    /// join it as they develop), or see that it's on there or waiting to develop.
+    @ViewBuilder private var profileRow: some View {
+        if ShareLinks.isConfigured, account.isSignedIn, let roll, !frames.isEmpty, shareRecord?.onProfile != true {
+            HStack(spacing: 8) {
+                if waitingForProfile {
+                    Text("GOES ON YOUR PROFILE WHEN IT DEVELOPS")
+                        .font(.mono(9, .semibold)).foregroundStyle(accent)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    chip("CANCEL", selected: false) {
+                        RollShare.setWaitsForProfile(roll.number, false)
+                        waitingForProfile = false
+                    }
+                } else if let addingToProfile {
+                    chip("ADDING \(addingToProfile.done)/\(addingToProfile.total)", selected: true) {}
+                        .disabled(true)
+                    Spacer(minLength: 0)
+                } else {
+                    chip("ADD TO PROFILE", selected: true) { addToProfile(roll) }
+                    Spacer(minLength: 0)
+                }
+            }
+        } else if let shareRecord, shareRecord.onProfile, let roll, !RollStore.pendingFrames(of: roll.number).isEmpty || roll.isOpen {
+            Text("NEW FRAMES JOIN IT ON YOUR PROFILE AS THEY DEVELOP")
+                .font(.mono(9)).foregroundStyle(.secondary)
+        }
+    }
+
+    private func addToProfile(_ roll: Roll) {
+        guard account.me?.termsAccepted == true else {
+            camera.message = "OPEN YOUR PROFILE AND AGREE TO THE RULES FOR PUBLIC ROLLS FIRST"
+            return
+        }
+        guard !developedFrames.isEmpty else {
+            // Nothing developed yet: it goes on when the first frames do.
+            RollShare.setWaitsForProfile(roll.number, true)
+            waitingForProfile = true
+            return
+        }
+        addingToProfile = (0, developedFrames.count + 1)
+        Task {
+            do {
+                let record = try await RollShare.makePublic(roll: roll, film: camera.film(ofRoll: roll.number), profile: Profile.load()) { done, total in
+                    addingToProfile = (done, total)
+                }
+                if roll.number == selected { shareRecord = record }
+            } catch {
+                camera.message = error.localizedDescription.uppercased()
+            }
+            addingToProfile = nil
         }
     }
 
@@ -669,6 +729,7 @@ struct RollViewer: View {
         frames = RollStore.frames(of: number)
         pending = Set(RollStore.pendingFrames(of: number))
         peeking = Set(pending.filter { RollStore.isPeeking(roll: number, frame: $0) })
+        waitingForProfile = RollShare.waitsForProfile(number)
         shareRecord = RollShare.record(for: number)
     }
 }

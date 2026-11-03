@@ -678,3 +678,22 @@ test('a cover can be chosen when the roll is shared', async () => {
   assert.equal(await publish(9), 1, 'out of range falls back to the first frame');
   assert.equal(await publish(undefined), 1);
 });
+
+// MARK: Rolls still being shot
+
+test('a live roll takes its next frame and a new card, nothing else', async () => {
+  const e = env();
+  const roll = await liveRoll(e, 2);
+  const put = (file) => call(e, 'PUT', `/api/rolls/${roll.id}/${file}`, { body: jpeg(), token: roll.token });
+  assert.equal((await put('frame-04.jpg')).status, 409, 'no gaps');
+  assert.equal((await put('frame-01.jpg')).status, 409, 'published frames stay as they are');
+  const added = await put('frame-03.jpg');
+  assert.equal(added.status, 200);
+  assert.equal((await added.json()).frames, 3);
+  const json = await (await call(e, 'GET', `/r/${roll.id}/roll.json`)).json();
+  assert.equal(json.frames.length, 3);
+  assert.match(json.frames[2], /frame-03\.jpg$/);
+  assert.equal((await call(e, 'GET', `/r/${roll.id}/frame-03.jpg`)).status, 200);
+  assert.equal((await put('card.jpg')).status, 200, 'the card can be redrawn');
+  assert.equal((await call(e, 'PUT', `/api/rolls/${roll.id}/frame-04.jpg`, { body: jpeg() })).status, 401, 'only with its token');
+});
