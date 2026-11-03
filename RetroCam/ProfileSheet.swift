@@ -38,6 +38,8 @@ struct ProfileSheet: View {
     @State private var pickingPeople: RollRef?
     @State private var follows: (followers: Int, following: Int)?
     @State private var listing: ProfileListRef?
+    /// Picking a handle and photo after signing in (stays up until you finish the photo step).
+    @State private var settingUp = false
     /// The audience a roll was going to get when the rules had to be agreed to first.
     @State private var pendingAudience: (Audience, [String]) = (.everyone, [])
 
@@ -52,6 +54,14 @@ struct ProfileSheet: View {
 
                 if needsSignIn {
                     signInFirst
+                } else if needsSetup || settingUp {
+                    AccountSetup(accent: accent, onStart: { settingUp = true }) {
+                        settingUp = false
+                        profile = Profile.load()
+                        nameDraft = profile.name
+                        onChange(profile)
+                        loadRolls()
+                    }
                 } else {
                 HStack(alignment: .top, spacing: 16) {
                     ProfileAvatar(photo: profile.photo, size: 96)
@@ -169,6 +179,7 @@ struct ProfileSheet: View {
             myRolls.forEach(camera.syncShare)
         }
         .task { await account.refresh() }
+        .onChange(of: account.me?.id) { _, id in if id == nil { settingUp = false } }
         .onReceive(account.$headshotVersion.dropFirst()) { _ in
             // A Google or Facebook photo became the headshot.
             profile = Profile.load()
@@ -340,6 +351,11 @@ struct ProfileSheet: View {
     private func refreshFollows() async {
         guard let id = account.me?.id, let mine = try? await RollShare.fetchProfile(id: id) else { return }
         follows = (mine.followers ?? 0, mine.following ?? 0)
+    }
+
+    /// Signed in without a handle yet: pick one (and a photo) before the rest of the profile.
+    private var needsSetup: Bool {
+        ShareLinks.isConfigured && account.isSignedIn && account.me != nil && account.me?.handle == nil
     }
 
     /// Your name and photo belong to an account, so signed out there's only signing in.
