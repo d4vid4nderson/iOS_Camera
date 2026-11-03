@@ -36,6 +36,8 @@ struct RollViewer: View {
     @State private var shareRecord: RollShare.Record?
     @State private var unsharing = false
     @State private var renaming: Roll?
+    /// A developing frame you tapped: asks before developing it early.
+    @State private var developingEarly: Int?
     @State private var nameDraft = ""
 
     private var roll: Roll? { rolls.first { $0.number == selected } }
@@ -68,6 +70,7 @@ struct RollViewer: View {
         }
         .overlay {
             if let target = deleting { deleteCard(target) }
+            if let frame = developingEarly { developEarlyCard(frame) }
             if let target = renaming { renameCard(target) }
             if let target = confirmingShare { shareCard(target) }
         }
@@ -182,7 +185,11 @@ struct RollViewer: View {
                 ForEach(frames, id: \.self) { frame in
                     let waiting = pending.contains(frame)
                     Button {
-                        if !waiting, let number = selected { viewing = FrameRef(roll: number, frame: frame) }
+                        if waiting {
+                            withAnimation(.snappy(duration: 0.15)) { developingEarly = frame }
+                        } else if let number = selected {
+                            viewing = FrameRef(roll: number, frame: frame)
+                        }
                     } label: {
                         VStack(spacing: 4) {
                             Group {
@@ -190,7 +197,10 @@ struct RollViewer: View {
                                     ZStack {
                                         Rectangle().fill(Color(white: 0.1))
                                         Rectangle().strokeBorder(Color(white: 0.22), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                                        Text("DEVELOPING").font(.mono(8, .bold)).foregroundStyle(Color(white: 0.4))
+                                        VStack(spacing: 3) {
+                                            Text("DEVELOPING").font(.mono(8, .bold)).foregroundStyle(Color(white: 0.4))
+                                            Text("TAP TO DEVELOP").font(.mono(7, .semibold)).foregroundStyle(Color(white: 0.3))
+                                        }
                                     }
                                 } else {
                                     LocalImage(url: RollStore.thumbURL(roll: selected ?? 0, frame: frame), fill: true)
@@ -213,7 +223,6 @@ struct RollViewer: View {
                         }
                     }
                     .buttonStyle(.plain)
-                    .disabled(waiting)
                     .contextMenu {
                         if !waiting, let number = selected {
                             if frame == coverFrame, roll?.cover != nil {
@@ -228,6 +237,7 @@ struct RollViewer: View {
                         }
                     }
                     .accessibilityLabel(waiting ? "Frame \(frame), developing" : "Frame \(frame)" + (frame == coverFrame ? ", cover" : ""))
+                    .accessibilityHint(waiting ? "Develop this frame now" : "")
                 }
             }
             .padding(.bottom, 12)
@@ -450,6 +460,39 @@ struct RollViewer: View {
             .padding(.horizontal, 22)
         }
         .transition(.opacity)
+    }
+
+    // MARK: Develop a frame early
+
+    private func developEarlyCard(_ frame: Int) -> some View {
+        let close = { withAnimation(.snappy(duration: 0.15)) { developingEarly = nil } }
+        return ZStack {
+            Color.black.opacity(0.6).ignoresSafeArea().onTapGesture(perform: close)
+            VStack(alignment: .leading, spacing: 12) {
+                Text(String(format: "DEVELOP FRAME %02d NOW?", frame)).font(.mono(15, .bold)).foregroundStyle(accent)
+                Text("Skips the wait for this frame only: it goes into Photos and you can see it now. The rest of the roll still develops \(roll.map(developWhen) ?? "on schedule").")
+                    .font(.mono(10)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                cardButton("DEVELOP NOW", destructive: false) {
+                    if let number = selected { camera.developFrameNow(roll: number, frame: frame) }
+                    close()
+                }
+                cardButton("KEEP WAITING", destructive: false, quiet: true, action: close)
+            }
+            .padding(18)
+            .background(RoundedRectangle(cornerRadius: 18).fill(Color(white: 0.11)))
+            .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color(white: 0.2), lineWidth: 1))
+            .padding(.horizontal, 22)
+        }
+        .transition(.opacity)
+    }
+
+    private func developWhen(_ roll: Roll) -> String {
+        switch roll.develop {
+        case .instant: return "now"
+        case .rollEnd: return "when it's finished"
+        case .nextMorning: return "the morning after it's finished"
+        }
     }
 
     private func deleteDetail(_ target: Roll) -> String {

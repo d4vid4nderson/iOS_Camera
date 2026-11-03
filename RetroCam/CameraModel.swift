@@ -754,6 +754,32 @@ final class CameraModel: NSObject, ObservableObject {
         }
     }
 
+    /// Develop one waiting frame now, without waiting for its roll: file it in the roll's
+    /// album in Photos and reveal it in the roll viewer. The roll's other frames keep to
+    /// their schedule.
+    func developFrameNow(roll number: Int, frame: Int) {
+        let inCamera = roll
+        let previous = saveChain
+        saveChain = Task {
+            await previous?.value
+            guard let stored = RollStore.rolls().first(where: { $0.number == number })
+                    ?? (inCamera.number == number ? inCamera : nil),
+                  RollStore.isPending(roll: number, frame: frame),
+                  let jpeg = try? Data(contentsOf: RollStore.pendingURL(roll: number, frame: frame)) else { return }
+            do {
+                _ = try await RollAlbums.save(jpeg, to: stored)
+                RollStore.clearPending(roll: number, frame: frame)
+                await MainActor.run {
+                    self.rollsVersion += 1
+                    self.lastPrint = RollStore.latestThumbnail()
+                    self.message = String(format: "FRAME %02d DEVELOPED", frame)
+                }
+            } catch {
+                await MainActor.run { self.message = error.localizedDescription }
+            }
+        }
+    }
+
     // MARK: - Capture
 
     func shoot() {
