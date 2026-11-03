@@ -48,6 +48,9 @@
 //   GET  /api/feed                           recent rolls from people you follow
 //   GET  /api/rolls/browse?after=            everyone's public rolls, newest first, a page at a time
 //   GET  /api/me/inbox                       rolls shared with you
+//   POST /api/sends { to, kind, id }         send a profile or a roll to one of your followers
+//   GET  /api/me/sends                       profiles and rolls people sent you, newest first
+//   DELETE /api/me/sends/<key>               dismiss one
 //   POST /api/rolls/<id>/visibility { audience, people }  who sees a roll: private, people,
 //        followers, public, or link (anyone with the link, for 30 days)
 //
@@ -209,6 +212,14 @@ export async function route(request, env, now = Date.now()) {
   if (path === '/api/feed' && method === 'GET') return feed(request, env, url, now);
   if (path === '/api/rolls/browse' && method === 'GET') return browseRolls(request, env, url, now);
   if (path === '/api/me/inbox' && method === 'GET') return inbox(request, env, url, now);
+  if (path === '/api/sends' && method === 'POST') return send(request, env, url, now);
+  if (path === '/api/me/sends' && method === 'GET') return listSends(request, env, url, now);
+  if ((m = path.match(/^\/api\/me\/sends\/((?:profile|roll)-[A-Za-z0-9]{10,12}-[A-Za-z0-9]{12})$/)) && method === 'DELETE') {
+    return withUser(request, env, async (user) => {
+      await env.ROLLS.delete(`sends/${user.id}/${m[1]}`);
+      return json(200, { ok: true });
+    });
+  }
 
   if ((m = path.match(new RegExp(`^/u/${USER}$`))) && method === 'GET') {
     const profile = await publicProfile(env, m[1], url, now);
@@ -1437,6 +1448,68 @@ async function browseRolls(request, env, url, now) {
   });
 }
 
+// MARK: Sending a profile or a roll to someone, in the app
+
+/// Send a profile or a roll to one of your followers (only people who follow you get them,
+/// so it can't be used to spam strangers). A roll goes only to someone allowed to see it.
+async function send(request, env, url, now) {
+  return withUser(request, env, async (user) => {
+    const body = (await readJSON(request)) || {};
+    const kind = body.kind === 'roll' ? 'roll' : body.kind === 'profile' ? 'profile' : null;
+    if (!kind || typeof body.id !== 'string' || typeof body.to !== 'string') return json(400, { error: 'to, kind and id' });
+    let to = body.to.replace(/^@/, '').toLowerCase();
+    if (validHandle(to)) to = (await (await env.ROLLS.get(`handles/${to}`))?.text()) || to;
+    const recipient = new RegExp(`^${USER}$`).test(body.to) ? await getUser(env, body.to) : await getUser(env, to);
+    if (!recipient || recipient.id === user.id) return json(404, { error: 'no such person', reason: "Couldn't find that person." });
+    if (await blockedEitherWay(env, user.id, recipient.id)) return json(404, { error: 'no such person', reason: "Couldn't find that person." });
+    if (!(await following(env, recipient.id, user.id))) {
+      return json(403, { error: 'not a follower', reason: `@${recipient.handle || 'they'} doesn't follow you, so you can't send them things.` });
+    }
+    if (kind === 'profile') {
+      const target = new RegExp(`^${USER}$`).test(body.id) ? await getUser(env, body.id) : null;
+      if (!target || (await blockedEitherWay(env, recipient.id, target.id))) return json(404, { error: 'no such profile' });
+    } else {
+      const meta = /^[A-Za-z0-9]{10}$/.test(body.id) ? await liveRoll(env, body.id, now) : null;
+      if (!meta || !(await canView(env, meta, user))) return json(404, { error: 'no such roll' });
+      if (!(await canView(env, meta, recipient))) {
+        return json(403, { error: 'cannot see', reason: `@${recipient.handle} can't see this roll. Share it with them or with your followers first.` });
+      }
+    }
+    const key = `${kind}-${body.id}-${user.id}`;
+    await env.ROLLS.put(`sends/${recipient.id}/${key}`, String(now));
+    return json(200, { sent: true, to: personPayload(recipient, url) });
+  });
+}
+
+/// What people sent you, newest first: who sent it, and the profile or roll.
+async function listSends(request, env, url, now) {
+  return withUser(request, env, async (user) => {
+    const sends = [];
+    for await (const keys of listKeys(env, `sends/${user.id}/`)) {
+      for (const key of keys) {
+        const name = key.split('/')[2];
+        const [kind, id, fromId] = name.split('-');
+        const from = await getUser(env, fromId);
+        if (!from || (await blockedEitherWay(env, user.id, fromId))) continue;
+        const at = Number(await (await env.ROLLS.get(key))?.text()) || 0;
+        const item = { key: name, kind, from: personPayload(from, url), sentAt: new Date(at).toISOString(), at };
+        if (kind === 'profile') {
+          const target = await getUser(env, id);
+          if (!target || (await blockedEitherWay(env, user.id, id))) continue;
+          item.profile = { ...personPayload(target, url), status: (await relation(env, user.id, id)).status };
+        } else {
+          const meta = await liveRoll(env, id, now);
+          if (!meta || !(await canView(env, meta, user))) continue;
+          item.roll = await rollTile(env, meta, url, now);
+        }
+        sends.push(item);
+      }
+    }
+    sends.sort((a, b) => b.at - a.at);
+    return json(200, { sends: sends.map(({ at, ...r }) => r) });
+  });
+}
+
 export const FEED_SIZE = 50;
 
 /// Recent rolls from the people you follow that you may see, newest first.
@@ -1499,6 +1572,7 @@ async function forgetSocial(env, user) {
   await deletePrefix(env, `requests/${id}/`);
   await deletePrefix(env, `blocks/${id}/`);
   await deletePrefix(env, `inbox/${id}/`);
+  await deletePrefix(env, `sends/${id}/`);
   // Requests and blocks this account made of others are left to expire with nothing to point at:
   // every read checks that the account still exists.
 }
