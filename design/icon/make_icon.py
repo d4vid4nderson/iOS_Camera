@@ -103,6 +103,33 @@ def icon_set(folder, light):
     (folder / 'Contents.json').write_text(CONTENTS)
 
 
+def rounded(img, size):
+    """The icon at `size` px with iOS's corner radius, transparent outside (for the web)."""
+    out = img.resize((size, size), Image.LANCZOS).convert('RGBA')
+    mask = Image.new('L', (size * K, size * K), 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, size * K - 1, size * K - 1), int(size * K * 0.2237), fill=255)
+    out.putalpha(mask.resize((size, size), Image.LANCZOS))
+    return out
+
+
+def og_image(main):
+    """The link preview (1200 x 630): the icon and the name on the website's near-black."""
+    from PIL import ImageFont
+    W, H = 1200, 630
+    img = Image.new('RGB', (W, H), (15, 13, 12))
+    ic = rounded(main, 300)
+    img.paste(ic, (120, (H - 300) // 2), ic)
+    d = ImageDraw.Draw(img)
+    try:
+        bold = ImageFont.truetype('DejaVuSans-Bold.ttf', 64)
+        mono = ImageFont.truetype('DejaVuSansMono-Bold.ttf', 26)
+    except OSError:
+        bold = mono = ImageFont.load_default()
+    d.text((480, 232), 'Film Exposures', font=bold, fill=(242, 237, 228))
+    d.text((482, 326), 'A FILM CAMERA FOR YOUR IPHONE', font=mono, fill=ORANGE)
+    return img
+
+
 CONTENTS = """{
   "images" : [
     { "filename" : "AppIcon.png", "idiom" : "universal", "platform" : "ios", "size" : "1024x1024" },
@@ -129,4 +156,7 @@ if __name__ == '__main__':
     public = ROOT / 'server/public'
     main.resize((180, 180), Image.LANCZOS).save(public / 'apple-touch-icon.png', optimize=True)
     main.resize((64, 64), Image.LANCZOS).save(public / 'favicon.png', optimize=True)
+    # The website's logo (header and home page) and its link preview use the same icon.
+    rounded(main, 256).save(public / 'app-icon.png', optimize=True)
+    og_image(main).save(public / 'og-image.png', optimize=True)
     print('wrote', len(FINISHES), 'icon sets and the website icons')
