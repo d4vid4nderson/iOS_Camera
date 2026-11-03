@@ -62,7 +62,7 @@ struct UserProfileView: View {
             SharedRollView(rollID: roll.id, camera: camera, accent: accent)
         }
         .sheet(item: $sharing) { item in
-            ActivityView(items: item.items).ignoresSafeArea()
+            ActivityView(items: item.items, activities: item.activities).ignoresSafeArea()
         }
         .sheet(item: $listing) { ref in
             PeopleListSheet(userID: userID, which: ref.which, camera: camera, accent: accent)
@@ -286,7 +286,7 @@ struct UserProfileView: View {
         Task {
             let card = await ProfileCard.make(for: profile)
             makingCard = false
-            sharing = ShareItems(items: [card as Any?, profile.url].compactMap { $0 })
+            sharing = ShareItems(items: [card as Any?, profile.url].compactMap { $0 }, activities: SendInAppActivity.forProfile(profile.id))
         }
     }
 

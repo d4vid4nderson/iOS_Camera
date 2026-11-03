@@ -135,7 +135,7 @@ struct ContentView: View {
             RollViewer(camera: camera, accent: accent, opensInCamera: rollsFromCounter)
         }
         .sheet(item: $filmShare) { item in
-            ActivityView(items: item.items).ignoresSafeArea()
+            ActivityView(items: item.items, activities: item.activities).ignoresSafeArea()
         }
         .sheet(isPresented: $showingProfile) {
             ProfileSheet(camera: camera, accent: accent) { profile = $0 }

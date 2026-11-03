@@ -90,7 +90,7 @@ struct RollViewer: View {
             FramePager(roll: ref.roll, frames: visibleFrames, start: ref.frame, accent: accent)
         }
         .sheet(item: $sharing) { item in
-            ActivityView(items: item.items).ignoresSafeArea()
+            ActivityView(items: item.items, activities: item.activities).ignoresSafeArea()
         }
     }
 
@@ -671,7 +671,8 @@ struct RollViewer: View {
                 }
                 uploading = nil
                 if roll.number == selected { shareRecord = record }
-                sharing = ShareItems(items: [card as Any?, record.url].compactMap { $0 })
+                sharing = ShareItems(items: [card as Any?, record.url].compactMap { $0 },
+                                     activities: SendInAppActivity.forRoll(record.id))
             } catch {
                 uploading = nil
                 camera.message = error.localizedDescription
@@ -682,7 +683,8 @@ struct RollViewer: View {
     private func shareLinkAgain(_ roll: Roll) {
         guard let record = shareRecord else { return }
         let card = RollShare.card(for: roll, record: record, film: camera.film(ofRoll: roll.number), profile: Profile.load())
-        sharing = ShareItems(items: [card as Any?, record.url].compactMap { $0 })
+        sharing = ShareItems(items: [card as Any?, record.url].compactMap { $0 },
+                             activities: SendInAppActivity.forRoll(record.id))
     }
 
     private func unshare() {
@@ -751,14 +753,17 @@ private struct FrameRef: Identifiable {
 struct ShareItems: Identifiable {
     let id = UUID()
     let items: [Any]
+    /// The app's own buttons in the share sheet (e.g. Send in Film Exposures).
+    var activities: [UIActivity] = []
 }
 
 /// The system share sheet.
 struct ActivityView: UIViewControllerRepresentable {
     let items: [Any]
+    var activities: [UIActivity] = []
 
     func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: items, applicationActivities: nil)
+        UIActivityViewController(activityItems: items, applicationActivities: activities.isEmpty ? nil : activities)
     }
 
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
@@ -812,7 +817,7 @@ private struct FramePager: View {
         .statusBarHidden()
         .sensoryFeedback(.selection, trigger: current)
         .sheet(item: $sharing) { item in
-            ActivityView(items: item.items).ignoresSafeArea()
+            ActivityView(items: item.items, activities: item.activities).ignoresSafeArea()
         }
     }
 
