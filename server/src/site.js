@@ -62,16 +62,37 @@ select,button,input,textarea{font:inherit;color:var(--fg)}
 .hero-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:40px;align-items:center}
 .phone{--w:min(300px,78vw);position:relative;justify-self:center;width:var(--w);aspect-ratio:9/19.5;margin:0;padding:calc(var(--w)*.035);border-radius:calc(var(--w)*.16);
   background:linear-gradient(145deg,#3a3633,#1b1917 45%,#2c2926);box-shadow:inset 0 0 0 1.5px #4a4540,inset 0 0 0 4px #0c0b0a,0 40px 80px -30px rgba(0,0,0,.9),0 0 0 1px #000}
-.phone .screen{position:relative;height:100%;border-radius:calc(var(--w)*.13);overflow:hidden;background:#050505}
-.phone .screen>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.phone .screen{--u:calc(var(--w) * .93 / 390);position:relative;height:100%;border-radius:calc(var(--w)*.13);overflow:hidden;background:#171717;
+  display:flex;flex-direction:column;justify-content:flex-end;gap:calc(12*var(--u));padding:calc(59*var(--u)) 0 calc(42*var(--u));color:#fff;font-family:var(--mono)}
 .phone .island{position:absolute;top:2.2%;left:50%;width:32%;height:3.6%;margin-left:-16%;border-radius:99px;background:#000;z-index:2}
-.phone .hud{position:absolute;left:0;right:0;display:flex;justify-content:space-between;align-items:center;padding:0 7%;font:700 calc(var(--w)*.038)/1 var(--mono);letter-spacing:.08em;color:#f6ecd6;text-shadow:0 1px 3px rgba(0,0,0,.8);z-index:1}
-.phone .hud.top{top:9%}.phone .hud.top b{color:var(--accent);font-size:1.35em;letter-spacing:0}
-.phone .hud.bottom{bottom:0;padding:9% 7% 10%;background:linear-gradient(transparent,rgba(0,0,0,.75) 45%);justify-content:space-between}
-.phone .shutter{width:calc(var(--w)*.2);height:calc(var(--w)*.2);border-radius:50%;background:radial-gradient(circle at 35% 30%,#f39a5c,var(--accent) 55%,#b9561c);box-shadow:0 0 0 4px rgba(246,236,214,.85),0 0 0 7px rgba(0,0,0,.5)}
-.phone .chip{padding:.55em .8em;border-radius:99px;background:rgba(20,17,15,.7);border:1px solid rgba(246,236,214,.25)}
-.phone .frameline{position:absolute;left:7%;right:7%;top:27%;bottom:30%;border:1.5px solid rgba(246,236,214,.55);border-radius:4px;z-index:1}
-.phone figcaption{position:absolute;left:0;right:0;bottom:-34px;text-align:center;font:600 11px/1 var(--mono);letter-spacing:.1em;color:var(--muted)}
+.phone svg{width:calc(18*var(--u));height:calc(18*var(--u));fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;display:block}
+/* The app's camera screen (RetroCam/ContentView.swift): top plate, 3:4 viewfinder, icon bar, controls */
+.phone .plate{display:flex;align-items:center;justify-content:space-between;height:calc(44*var(--u));padding:0 calc(16*var(--u))}
+.phone .count{width:calc(90*var(--u));display:grid;gap:calc(1*var(--u))}
+.phone .count span{font-size:calc(8*var(--u));font-weight:600;color:#8e8e93}
+.phone .count b{font-size:calc(15*var(--u));color:var(--accent)}
+.phone .stock{display:flex;align-items:center;gap:calc(6*var(--u));font-size:calc(12*var(--u));font-weight:600}
+.phone .stock em{font-style:normal;font-size:calc(10*var(--u));font-weight:400;color:#8e8e93}
+.phone .stock svg{width:calc(9*var(--u));height:calc(9*var(--u));color:#8e8e93;stroke-width:3}
+.phone .me{width:calc(90*var(--u));display:flex;justify-content:flex-end}
+.phone .me i{width:calc(40*var(--u));height:calc(40*var(--u));border-radius:50%;background:#2e2e2e;box-shadow:0 0 0 calc(1.5*var(--u)) #4d4d4d;display:grid;place-items:center;color:#808080}
+.phone .me svg{width:calc(18*var(--u));height:calc(18*var(--u));fill:currentColor;stroke:none}
+.phone .finder{position:relative;width:100%;aspect-ratio:3/4;background:#000;display:grid;place-items:center;overflow:hidden}
+.phone .finder>img{width:100%;height:auto;aspect-ratio:3/2;object-fit:cover;display:block}
+.phone .rotate{position:absolute;top:calc(10*var(--u));right:calc(10*var(--u));width:calc(38*var(--u));height:calc(38*var(--u));border-radius:50%;background:rgba(0,0,0,.55);display:grid;place-items:center}
+.phone .rotate svg{width:calc(17*var(--u));height:calc(17*var(--u))}
+.phone .bar{margin:0 calc(12*var(--u));padding:calc(4*var(--u));display:flex;gap:calc(2*var(--u));border-radius:calc(12*var(--u));background:#1f1f1f;box-shadow:inset 0 0 0 .5px #333}
+.phone .bar span{flex:1;min-width:0;height:calc(46*var(--u));display:grid;justify-items:center;align-content:center;gap:calc(4*var(--u));color:#ccc;font-size:calc(9*var(--u));font-weight:600;white-space:nowrap}
+.phone .bar span.on{color:var(--accent)}
+.phone .bar svg{width:calc(19*var(--u));height:calc(19*var(--u));stroke-width:1.6}
+.phone .controls{display:flex;align-items:center;justify-content:space-between;padding:0 calc(24*var(--u));margin-top:calc(4*var(--u))}
+.phone .last{width:calc(56*var(--u));height:calc(56*var(--u));aspect-ratio:1;border-radius:calc(4*var(--u));object-fit:cover;display:block;background:#262626}
+.phone .shutter{position:relative;width:calc(67*var(--u));height:calc(67*var(--u));border-radius:50%;background:linear-gradient(#080808,#171717);box-shadow:inset 0 calc(1.5*var(--u)) calc(3*var(--u)) rgba(0,0,0,.85),inset 0 calc(-.6*var(--u)) 0 rgba(255,255,255,.12)}
+.phone .shutter::after{content:"";position:absolute;inset:calc(3.5*var(--u));border-radius:50%;
+  background:linear-gradient(rgba(0,0,0,.45),transparent 45%),linear-gradient(rgb(235,110,33),rgb(204,94,28));
+  box-shadow:inset 0 calc(1.2*var(--u)) 0 rgba(255,184,122,.45),inset 0 calc(-1.2*var(--u)) 0 rgba(107,43,10,.8)}
+.phone .flip{width:calc(56*var(--u));height:calc(56*var(--u));border-radius:50%;background:#262626;display:grid;place-items:center}
+.phone .flip svg{width:calc(22*var(--u));height:calc(22*var(--u))}
 /* Home: sections */
 .section{margin:72px 0 0}
 .section>h2{font-size:clamp(28px,4.2vw,40px);line-height:1.08;letter-spacing:-.02em;margin:0 0 10px}
@@ -340,13 +361,24 @@ export function homeBody(store) {
   <p class="lede">Load a roll of 36, shoot it on a film you choose, and let it develop: right away, when the roll is done, or the next morning, like dropping it at a lab.</p>
   ${get}
 </div>
-<figure class="phone" aria-label="Film Exposures on an iPhone: the viewfinder with the roll's frame counter, the film and the shutter">
+<figure class="phone" aria-label="Film Exposures on an iPhone: the roll counter at 12 of 36, Golden 100 loaded, a 35mm frame in the viewfinder, the settings bar and the copper shutter">
   <div class="screen">
     <span class="island"></span>
-    <img src="/films/golden100.jpg" alt="" width="1200" height="800">
-    <div class="hud top"><span>ROLL 03</span><b>12/36</b></div>
-    <span class="frameline"></span>
-    <div class="hud bottom"><span class="chip">GOLDEN 100</span><i class="shutter"></i><span class="chip">35MM</span></div>
+    <div class="plate">
+      <div class="count"><span>ROLL 03</span><b>12/36</b></div>
+      <div class="stock">GOLDEN 100<em>100</em><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9l7 7 7-7"/></svg></div>
+      <div class="me"><i><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4.2"/><path d="M3.5 21c.8-4.6 4.2-7 8.5-7s7.7 2.4 8.5 7z"/></svg></i></div>
+    </div>
+    <div class="finder">
+      <img src="/films/golden100.jpg" alt="" width="1200" height="800">
+      <span class="rotate"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="9" width="17" height="10" rx="1.5"/><path d="M7.5 6.5A7 7 0 0 1 16 5"/><path d="M14.5 3l1.8 2-2.2 1"/></svg></span>
+    </div>
+    <div class="bar"><span><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M7 12h10"/><path d="M4.6 7.3h.8M4.6 10.4h.8M4.6 13.6h.8M4.6 16.7h.8M18.6 7.3h.8M18.6 10.4h.8M18.6 13.6h.8M18.6 16.7h.8" stroke-width="2.2"/></svg>GOLDEN</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6h9.5M17 6h3.5M3.5 12h3.5M11 12h9.5M3.5 18h7.5M15 18h5.5"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="13" cy="18" r="2"/></svg>EDIT</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8.6L20.84 13.7M14.94 10.3L14.94 20.5M14.94 13.7L6.11 18.8M12 15.4L3.16 10.3M9.06 13.7L9.06 3.5M9.06 10.3L17.89 5.2"/></svg>35</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5.5M9.25 9.75h5.5M9.25 15.75h5.5"/></svg>±0</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="currentColor" stroke="none"><circle cx="12" cy="12" r="1.35"/><circle cx="15.38" cy="13.95" r="1.15"/><circle cx="12" cy="15.9" r="1.15"/><circle cx="8.62" cy="13.95" r="1.15"/><circle cx="8.62" cy="10.05" r="1.15"/><circle cx="12" cy="8.1" r="1.15"/><circle cx="15.38" cy="10.05" r="1.15"/><circle cx="18.58" cy="15.8" r="0.85"/><circle cx="15.8" cy="18.58" r="0.85"/><circle cx="12" cy="19.6" r="0.85"/><circle cx="8.2" cy="18.58" r="0.85"/><circle cx="5.42" cy="15.8" r="0.85"/><circle cx="4.4" cy="12" r="0.85"/><circle cx="5.42" cy="8.2" r="0.85"/><circle cx="8.2" cy="5.42" r="0.85"/><circle cx="12" cy="4.4" r="0.85"/><circle cx="15.8" cy="5.42" r="0.85"/><circle cx="18.58" cy="8.2" r="0.85"/><circle cx="19.6" cy="12" r="0.85"/></g></svg>20%</span><span class="on"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.8" y="4" width="18.4" height="16" rx="1.2" stroke-width="2"/><rect x="5.8" y="7" width="12.4" height="10" rx=".4"/><path d="M6.2 16.6l3.8-4.6 2.8 3 1.8-1.9 3.4 3.5z" fill="currentColor" stroke="none"/><circle cx="14.6" cy="9.9" r="1.2" fill="currentColor" stroke="none"/></svg>3:2</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.5 19.5L11 12" stroke-width="2.4"/><path d="M7.38 11.62L5.75 13.25M6.5 9.5L4.2 9.5M7.38 7.38L5.75 5.75M9.5 6.5L9.5 4.2M11.62 7.38L13.25 5.75"/></svg>OFF</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.2 2.8L6.6 13.2h4.8l-1 8 6.8-10.6h-4.8z"/><path d="M5 3.5l14 17" stroke-width="2"/></svg>OFF</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15.5" rx="2.6"/><path d="M3.5 7.1a2.6 2.6 0 0 1 2.6-2.6h11.8a2.6 2.6 0 0 1 2.6 2.6v2.4h-17z" fill="currentColor" stroke="none"/><g fill="currentColor" stroke="none"><circle cx="10.5" cy="12.5" r=".85"/><circle cx="13.5" cy="12.5" r=".85"/><circle cx="16.5" cy="12.5" r=".85"/><circle cx="7.5" cy="15.2" r=".85"/><circle cx="10.5" cy="15.2" r=".85"/><circle cx="13.5" cy="15.2" r=".85"/><circle cx="16.5" cy="15.2" r=".85"/><circle cx="7.5" cy="17.9" r=".85"/><circle cx="10.5" cy="17.9" r=".85"/><circle cx="13.5" cy="17.9" r=".85"/><circle cx="16.5" cy="17.9" r=".85"/></g></svg>OFF</span></div>
+    <div class="controls">
+      <img class="last" src="/films/thumbs/warm400.jpg" alt="" width="420" height="280">
+      <i class="shutter"></i>
+      <span class="flip"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 8.5h3.2L8.3 6h7.4l1.6 2.5h3.2V19h-17z"/><path d="M9 13.5a3 3 0 0 1 5.3-1.9M15 12.5a3 3 0 0 1-5.3 1.9"/><path d="M14.6 10.2v1.6H13M9.4 15.8v-1.6H11"/></svg></span>
+    </div>
   </div>
 </figure>
 </div>
