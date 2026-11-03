@@ -13,8 +13,11 @@
 //   POST /api/rolls/<id>/report     report a roll; 3 reports hide it until reviewed
 //   POST /api/rolls/<id>/visibility { public }   put a roll on your profile, or take it off (account)
 //   POST /api/rolls/<id>/cover { cover }  which frame (1-based) is the roll's cover (Bearer token, or owner)
-//   GET  /api/rolls/<id>/likes      { counts: { "<frame>": n }, mine: [frame] }  (account optional)
+//   GET  /api/rolls/<id>/likes      { counts: { "<frame>": n }, mine: [frame],   (account optional)
+//                                     likers: { "<frame>": [{ id, name, avatar }] } }
+//                                   frame "0" is the whole roll
 //   PUT|DELETE /api/rolls/<id>/frames/<n>/like   like or unlike a frame          (account)
+//   PUT|DELETE /api/rolls/<id>/like              like or unlike the whole roll   (account)
 //
 //   POST /api/auth/apple { identityToken }  Sign in with Apple -> { token, me }
 //   POST /api/auth/google { idToken }       Sign in with Google -> { token, me }
@@ -132,7 +135,12 @@ export async function route(request, env, now = Date.now()) {
     return listLikes(request, env, m[1], now);
   }
   if ((m = path.match(new RegExp(`^/api/rolls/${ROLL}/frames/(\\d{1,2})/like$`))) && (method === 'PUT' || method === 'DELETE')) {
-    return likeFrame(request, env, m[1], Number(m[2]), method === 'PUT', now);
+    const frame = Number(m[2]);
+    if (frame < 1) return json(400, { error: 'frame out of range' });
+    return likeFrame(request, env, m[1], frame, method === 'PUT', now);
+  }
+  if ((m = path.match(new RegExp(`^/api/rolls/${ROLL}/like$`))) && (method === 'PUT' || method === 'DELETE')) {
+    return likeFrame(request, env, m[1], 0, method === 'PUT', now);
   }
 
   if (path === '/api/auth/apple' && method === 'POST') return signInWithApple(request, env, url, now);
@@ -439,21 +447,43 @@ async function setCover(request, env, id, now) {
   return json(200, { cover: n });
 }
 
+/// Who liked each frame, and the roll itself (frame 0), by name and headshot.
+export const MAX_LIKERS_SHOWN = 50;
+
 async function listLikes(request, env, id, now) {
   const meta = await liveRoll(env, id, now);
   if (!meta) return json(404, { error: 'gone' });
   const user = await currentUser(request, env);
+  const origin = new URL(request.url).origin;
   const counts = {};
   const mine = [];
+  const ids = {};
   for await (const keys of listKeys(env, `likes/${id}/`)) {
     for (const key of keys) {
       const [, , frame, liker] = key.split('/');
       const n = Number(frame);
       counts[n] = (counts[n] || 0) + 1;
       if (user && liker === user.id) mine.push(n);
+      (ids[n] ||= []).push(liker);
     }
   }
-  return json(200, { counts, mine: mine.sort((a, b) => a - b) });
+  // Each person is looked up once, however many frames they liked. Accounts that have
+  // since been deleted are left out.
+  const people = new Map();
+  const person = async (uid) => {
+    if (!people.has(uid)) {
+      const u = await getUser(env, uid);
+      people.set(uid, u && { id: u.id, name: u.name || null, avatar: u.avatar ? `${origin}/u/${u.id}/avatar.jpg?v=${u.avatar}` : null });
+    }
+    return people.get(uid);
+  };
+  const likers = {};
+  for (const [n, list] of Object.entries(ids)) {
+    // You first, then everyone else.
+    const ordered = [...list].sort((a, b) => (b === user?.id) - (a === user?.id));
+    likers[n] = (await Promise.all(ordered.slice(0, MAX_LIKERS_SHOWN).map(person))).filter(Boolean);
+  }
+  return json(200, { counts, mine: mine.sort((a, b) => a - b), likers });
 }
 
 async function likeFrame(request, env, id, frame, on, now) {
@@ -461,7 +491,7 @@ async function likeFrame(request, env, id, frame, on, now) {
   if (!user) return json(401, { error: 'sign in first' });
   const meta = await liveRoll(env, id, now);
   if (!meta) return json(404, { error: 'gone' });
-  if (frame < 1 || frame > meta.frames) return json(400, { error: 'frame out of range' });
+  if (frame < 0 || frame > meta.frames) return json(400, { error: 'frame out of range' });   // 0: the roll
   const nn = String(frame).padStart(2, '0');
   // One object per like, so two people liking at once can't overwrite each other.
   const keys = [`likes/${id}/${nn}/${user.id}`, `users/${user.id}/likes/${id}/${nn}`];

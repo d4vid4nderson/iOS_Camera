@@ -70,19 +70,42 @@ enum RollShare {
         var rolls: [RollTile]
     }
 
-    /// Likes on a roll's frames (numbered from 1), and which of them are yours.
+    /// Someone who liked a frame or a roll: their name and headshot, to open their profile.
+    struct Liker: Decodable, Equatable, Identifiable {
+        var id: String
+        var name: String?
+        var avatar: URL?
+
+        @MainActor static var me: Liker? {
+            Account.shared.me.map { Liker(id: $0.id, name: $0.name, avatar: $0.avatar) }
+        }
+    }
+
+    /// Likes on a roll's frames (numbered from 1) and on the roll itself (frame 0, `Likes.roll`),
+    /// which of them are yours, and who liked each one (you first).
     struct Likes: Decodable, Equatable {
+        static let roll = 0
+
         var counts: [String: Int]
         var mine: [Int]
+        var likers: [String: [Liker]]?
 
         func count(_ frame: Int) -> Int { counts[String(frame)] ?? 0 }
         func isMine(_ frame: Int) -> Bool { mine.contains(frame) }
+        func people(_ frame: Int) -> [Liker] { likers?[String(frame)] ?? [] }
 
-        mutating func set(_ frame: Int, liked: Bool, count: Int? = nil) {
+        mutating func set(_ frame: Int, liked: Bool, count: Int? = nil, me: Liker? = nil) {
             let was = isMine(frame)
             if liked, !was { mine.append(frame) }
             if !liked { mine.removeAll { $0 == frame } }
             counts[String(frame)] = count ?? max(0, self.count(frame) + (liked == was ? 0 : liked ? 1 : -1))
+            if let me {
+                var list = people(frame).filter { $0.id != me.id }
+                if liked { list.insert(me, at: 0) }
+                var all = likers ?? [:]
+                all[String(frame)] = list
+                likers = all
+            }
         }
     }
 
@@ -360,12 +383,15 @@ enum RollShare {
         return (try? JSONDecoder().decode(Likes.self, from: data)) ?? Likes(counts: [:], mine: [])
     }
 
-    /// Like or unlike a frame (numbered from 1); returns its like count.
+    /// Like or unlike a frame (numbered from 1), or the whole roll (`Likes.roll`); returns
+    /// its like count.
     static func like(id: String, frame: Int, _ on: Bool) async throws -> Int {
         guard let base = ShareLinks.base else { throw ShareError.notConfigured }
         guard let account = Account.sessionToken else { throw ProfileError.signIn }
-        let url = base.appendingPathComponent("api/rolls").appendingPathComponent(id)
-            .appendingPathComponent("frames").appendingPathComponent(String(frame)).appendingPathComponent("like")
+        let roll = base.appendingPathComponent("api/rolls").appendingPathComponent(id)
+        let url = frame == Likes.roll
+            ? roll.appendingPathComponent("like")
+            : roll.appendingPathComponent("frames").appendingPathComponent(String(frame)).appendingPathComponent("like")
         let data = try await send(url, method: on ? "PUT" : "DELETE", account: account)
         return (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["count"] as? Int ?? 0
     }
