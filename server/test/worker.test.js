@@ -697,3 +697,10 @@ test('a live roll takes its next frame and a new card, nothing else', async () =
   assert.equal((await put('card.jpg')).status, 200, 'the card can be redrawn');
   assert.equal((await call(e, 'PUT', `/api/rolls/${roll.id}/frame-04.jpg`, { body: jpeg() })).status, 401, 'only with its token');
 });
+
+test('the home page shows the app icon as its logo and link preview', async () => {
+  const page = await (await call(env(), 'GET', '/')).text();
+  assert.match(page, /class="brand" href="\/"><img src="\/app-icon.png"/);
+  assert.match(page, /class="app-icon" src="\/app-icon.png"/);
+  assert.match(page, /og:image" content="https:\/\/filmexposures.com\/og-image.png"/);
+});

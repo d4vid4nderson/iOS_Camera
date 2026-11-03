@@ -1186,6 +1186,7 @@ function homePage(env) {
   return layout({
     title: 'Film Exposures · A film camera for your iPhone',
     description: 'Shoot rolls of 36 on black & white and color films, develop them later, and share your films.',
+    image: 'https://filmexposures.com/og-image.png', url: 'https://filmexposures.com/',
     env, wide: true, body: homeBody(esc(storeURL(env))),
   });
 }

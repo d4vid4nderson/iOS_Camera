@@ -22,7 +22,7 @@ body{margin:0;background:radial-gradient(120% 80% at 50% 0%,#1b1714 0%,var(--bg)
 a{color:var(--fg)}
 .site-head,.site-foot{max-width:960px;margin:0 auto;padding:18px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px}
 .brand{font:700 13px/1 var(--mono);letter-spacing:.14em;text-decoration:none;display:flex;align-items:center;gap:10px}
-.brand i{width:12px;height:12px;border-radius:50%;background:var(--accent);display:inline-block;box-shadow:0 0 0 3px rgba(232,118,46,.18)}
+.brand img{width:28px;height:28px;display:block}
 .nav{display:flex;gap:18px;font:600 12px/1 var(--mono);letter-spacing:.08em}
 .nav a{text-decoration:none;color:var(--muted)}.nav a:hover{color:var(--fg)}
 main{max-width:640px;margin:0 auto;padding:24px 20px 56px}
@@ -55,6 +55,7 @@ select,button,input,textarea{font:inherit;color:var(--fg)}
 /* Home */
 .hero{padding:40px 0 8px}
 .hero h1{font-size:clamp(40px,7vw,68px)}
+.hero .app-icon{width:104px;height:104px;display:block;margin:0 0 22px;filter:drop-shadow(0 10px 24px rgba(0,0,0,.45))}
 .counter{display:inline-flex;align-items:baseline;gap:10px;font:700 15px/1 var(--mono);color:var(--muted);letter-spacing:.08em;margin-bottom:22px}
 .counter b{font-size:30px;color:var(--accent);letter-spacing:0}
 /* The films, as 35mm slides in their mounts */
@@ -135,7 +136,7 @@ select,button,input,textarea{font:inherit;color:var(--fg)}
 `;
 
 export function siteHeader() {
-  return `<header class="site-head"><a class="brand" href="/"><i></i>FILM EXPOSURES</a>
+  return `<header class="site-head"><a class="brand" href="/"><img src="/app-icon.png" alt="" width="28" height="28">FILM EXPOSURES</a>
 <nav class="nav"><a class="optional" href="/#films">FILMS</a><a href="/support">SUPPORT</a></nav></header>`;
 }
 
@@ -268,6 +269,7 @@ export function homeBody(store) {
     : '<div class="inline-buttons"><span class="button disabled">Coming soon to the App Store</span></div>';
   return `
 <section class="hero">
+  <img class="app-icon" src="/app-icon.png" alt="The Film Exposures app icon" width="104" height="104">
   <div class="counter">ROLL 01 <b>01/36</b></div>
   <h1>A film camera<br>for your iPhone.</h1>
   <p class="lede">Load a roll of 36, shoot it on a film you choose, and let it develop: right away, when the roll is done, or the next morning, like dropping it at a lab.</p>
