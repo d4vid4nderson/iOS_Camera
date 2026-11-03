@@ -242,12 +242,14 @@ struct ProfileSheet: View {
                 }
             }
 
-            HStack(spacing: 6) {
-                Spacer(minLength: 0)
+            // Last, on its own: deleting the account (App Review wants it easy to find, not prominent).
+            VStack(alignment: .leading, spacing: 8) {
+                Divider().overlay(Color(white: 0.2)).padding(.bottom, 4)
+                Text("ACCOUNT").font(.mono(9, .semibold)).foregroundStyle(.secondary)
                 Button {
                     if confirmDeleteAccount { deleteAccount() } else { confirmDeleteAccount = true }
                 } label: {
-                    Text(confirmDeleteAccount ? "TAP AGAIN TO DELETE ACCOUNT" : "DELETE ACCOUNT")
+                    Text(confirmDeleteAccount ? "TAP AGAIN TO DELETE YOUR ACCOUNT" : "DELETE ACCOUNT")
                         .font(.mono(10, .bold))
                         .padding(.horizontal, 10).padding(.vertical, 7)
                         .background(Capsule().fill(Color.red.opacity(confirmDeleteAccount ? 0.2 : 0.1)))
@@ -255,11 +257,13 @@ struct ProfileSheet: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(account.working)
-            }
-            if confirmDeleteAccount {
                 Text("Deletes your profile, your likes and every roll you shared while signed in from the server. Your rolls stay on this phone.")
                     .font(.mono(9)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                if confirmDeleteAccount {
+                    Button("CANCEL") { confirmDeleteAccount = false }
+                        .font(.mono(10, .bold)).foregroundStyle(.white)
+                }
             }
         }
     }
