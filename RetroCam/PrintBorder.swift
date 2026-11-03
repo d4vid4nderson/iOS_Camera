@@ -93,8 +93,8 @@ enum PrintBorder {
     /// follow the window, so a wide format gets a wide mount.
     private static func slide(_ input: CIImage, seed: UInt32, label: SlideLabel?) -> CIImage {
         var image = input
-        // Keep the mounted print near the photo's size (long side at most 5000 px).
-        let maxLong: CGFloat = 5000
+        // Keep the mounted print a sensible size (long side at most 6000 px, ~36 MP).
+        let maxLong: CGFloat = 6000
         let grow: CGFloat = 1.5
         let wanted = max(image.extent.width, image.extent.height) * grow
         if wanted > maxLong {

@@ -441,6 +441,26 @@ struct ContentView: View {
 
                 statusOverlay
 
+                // One tap turns the frame between landscape and portrait (35MM, 4×5, 16:9, XPAN).
+                if camera.format.hasOrientation, openPanel == nil {
+                    Button {
+                        camera.selectOrientation(camera.orientation == .landscape ? .portrait : .landscape)
+                    } label: {
+                        Image(systemName: camera.orientation == .landscape ? "rectangle.landscape.rotate" : "rectangle.portrait.rotate")
+                            .font(.system(size: 15, weight: .semibold))
+                            .frame(width: 38, height: 38)
+                            .background(Circle().fill(Color.black.opacity(0.55)))
+                            .foregroundStyle(.white)
+                            .rotationEffect(.degrees(camera.uiRotation))
+                            .animation(.snappy(duration: 0.3), value: camera.uiRotation)
+                    }
+                    .buttonStyle(.plain)
+                    .sensoryFeedback(.selection, trigger: camera.orientation)
+                    .accessibilityLabel(camera.orientation == .landscape ? "Landscape frame. Turn to portrait" : "Portrait frame. Turn to landscape")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    .padding(10)
+                }
+
                 // FX open: drag on the picture to move the effect's centre.
                 if openPanel == .fx, camera.stock.effect.usesCenter {
                     Circle()
