@@ -1,4 +1,5 @@
 import SwiftUI
+import VisionKit
 
 private extension Font {
     static func mono(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
@@ -106,6 +107,15 @@ enum Social {
             url = parts.url ?? url
         }
         return try await ShareAPI.send(url, method: method, account: account, json: json)
+    }
+
+    private struct Browse: Decodable { var people: [Person]; var after: String? }
+
+    /// Everyone findable, by handle, a page at a time: pass the previous page's `after`.
+    static func browse(after: String? = nil) async throws -> (people: [Person], after: String?) {
+        let data = try await call("api/users/browse", query: after.map { [URLQueryItem(name: "after", value: $0)] } ?? [])
+        let page = try JSONDecoder().decode(Browse.self, from: data)
+        return (page.people, page.after)
     }
 
     static func search(_ text: String) async throws -> [Person] {
@@ -293,6 +303,11 @@ struct SocialView: View {
     @State private var note: String?
     @State private var opening: OpenSocialRoll?
     @State private var person: IncomingUser?
+    @State private var everyone: [Social.Person] = []
+    @State private var everyoneAfter: String?
+    @State private var browsing = false
+    @State private var scanning = false
+    @State private var showingMyCode = false
 
     var body: some View {
         ZStack {
@@ -338,6 +353,16 @@ struct SocialView: View {
         }
         .fullScreenCover(item: $person) { user in
             UserProfileView(userID: user.id, camera: camera, accent: accent)
+        }
+        .fullScreenCover(isPresented: $scanning, onDismiss: { camera.start() }) {
+            ProfileScanner(accent: accent) { id in
+                scanning = false
+                // Open it once the scanner has gone.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { person = IncomingUser(id: id) }
+            }
+        }
+        .sheet(isPresented: $showingMyCode) {
+            MyCodeSheet(accent: accent)
         }
     }
 
@@ -437,18 +462,38 @@ struct SocialView: View {
     }
 
     @ViewBuilder private var findList: some View {
+        HStack(spacing: 6) {
+            SocialChip(text: "SCAN A CODE", selected: true, accent: accent) {
+                camera.stop()   // the scanner needs the camera
+                scanning = true
+            }
+            SocialChip(text: "MY CODE", accent: accent) { showingMyCode = true }
+        }
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-            TextField("", text: $query, prompt: Text("@HANDLE OR NAME").foregroundStyle(Color(white: 0.4)))
+            TextField("", text: $query, prompt: Text("@HANDLE, NAME OR PROFILE LINK").foregroundStyle(Color(white: 0.4)))
                 .font(.mono(14, .semibold))
                 .foregroundStyle(.white)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
+                .keyboardType(.webSearch)
                 .submitLabel(.search)
+            if !query.isEmpty {
+                Button { query = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(Color(white: 0.45))
+                }
+                .accessibilityLabel("Clear")
+            }
         }
         .padding(.horizontal, 14).padding(.vertical, 11)
         .background(Capsule().fill(Color(white: 0.16)))
         .task(id: query) {
+            // A pasted profile link opens the profile.
+            if let id = ProfileScanner.profileID(in: query) {
+                query = ""
+                person = IncomingUser(id: id)
+                return
+            }
             // Search as you type, once you pause.
             let text = query.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "@", with: "")
             guard text.count >= 2 else { results = []; return }
@@ -461,19 +506,61 @@ struct SocialView: View {
                 note = error.localizedDescription.uppercased()
             }
         }
-        if results.isEmpty {
-            centered(query.count >= 2 ? "NOBODY FOUND" : "SEARCH BY @HANDLE OR NAME")
+        if query.count >= 2 {
+            if results.isEmpty {
+                centered("NOBODY FOUND")
+            } else {
+                peopleList(results)
+            }
         } else {
+            // Nothing typed: browse everyone who can be found, by handle.
             ScrollView {
-                VStack(spacing: 2) {
-                    ForEach(results) { p in
-                        PersonRow(person: p, onOpen: { person = IncomingUser(id: p.id) }) {
-                            FollowButton(id: p.id, status: Binding(get: { statuses[p.id] ?? "none" }, set: { statuses[p.id] = $0 }),
-                                         accent: accent, onError: { note = $0 })
-                        }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("EVERYONE").font(.mono(9, .semibold)).foregroundStyle(.secondary).padding(.top, 4)
+                    ForEach(everyone) { p in personRow(p) }
+                    if browsing {
+                        ProgressView().frame(maxWidth: .infinity).padding(.vertical, 12)
+                    } else if everyoneAfter != nil {
+                        SocialChip(text: "MORE", accent: accent) { Task { await browse(more: true) } }
+                            .frame(maxWidth: .infinity).padding(.vertical, 8)
+                    } else if everyone.isEmpty {
+                        Text("NOBODY TO SHOW YET").font(.mono(10)).foregroundStyle(.secondary).padding(.top, 8)
                     }
+                    Text("Only people who chose a @handle and left FIND ME IN SEARCH on are listed.")
+                        .font(.mono(9)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 8).padding(.bottom, 16)
                 }
             }
+            .task { if everyone.isEmpty { await browse(more: false) } }
+        }
+    }
+
+    private func peopleList(_ list: [Social.Person]) -> some View {
+        ScrollView {
+            VStack(spacing: 2) {
+                ForEach(list) { p in personRow(p) }
+            }
+        }
+    }
+
+    private func personRow(_ p: Social.Person) -> some View {
+        PersonRow(person: p, onOpen: { person = IncomingUser(id: p.id) }) {
+            FollowButton(id: p.id, status: Binding(get: { statuses[p.id] ?? p.status ?? "none" }, set: { statuses[p.id] = $0 }),
+                         accent: accent, onError: { note = $0 })
+        }
+    }
+
+    private func browse(more: Bool) async {
+        guard !browsing, account.isSignedIn else { return }
+        browsing = true
+        defer { browsing = false }
+        do {
+            let page = try await Social.browse(after: more ? everyoneAfter : nil)
+            everyone = more ? everyone + page.people : page.people
+            everyoneAfter = page.after
+        } catch {
+            note = error.localizedDescription.uppercased()
         }
     }
 
@@ -744,5 +831,159 @@ struct HandleEditor: View {
         Task {
             do { try await account.updateSocial(discoverable: on) } catch { note = error.localizedDescription.uppercased() }
         }
+    }
+}
+
+// MARK: Codes
+
+/// Scan someone's profile code (or any Film Exposures profile link) with the camera.
+struct ProfileScanner: View {
+    let accent: Color
+    let onFound: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    /// A profile id from a scanned or pasted link: https://filmexposures.com/u/<id> or exposures://u/<id>.
+    static func profileID(in text: String) -> String? {
+        var value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard value.contains("/u/") else { return nil }
+        if !value.contains("://") { value = "https://" + value }
+        return URL(string: value).flatMap { ShareLinks.userID(from: $0) }
+    }
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            Color.black.ignoresSafeArea()
+            if DataScannerViewController.isSupported && DataScannerViewController.isAvailable {
+                CodeScanner { payload in
+                    if let id = Self.profileID(in: payload) { onFound(id) }
+                }
+                .ignoresSafeArea()
+                RoundedRectangle(cornerRadius: 22)
+                    .stroke(accent, lineWidth: 2)
+                    .frame(width: 240, height: 240)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .allowsHitTesting(false)
+            } else {
+                Text("THIS IPHONE CAN'T SCAN CODES HERE.\nPOINT THE CAMERA APP AT THE CODE INSTEAD: IT OPENS THE PROFILE IN FILM EXPOSURES.")
+                    .font(.mono(11, .bold)).foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(30)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            HStack {
+                Text("SCAN A PROFILE CODE").font(.mono(13, .bold)).foregroundStyle(.white)
+                Spacer()
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark").font(.system(size: 14, weight: .bold))
+                        .frame(width: 34, height: 34).background(Circle().fill(Color.black.opacity(0.6)))
+                }
+                .foregroundStyle(.white)
+                .accessibilityLabel("Close")
+            }
+            .padding(16)
+        }
+        .preferredColorScheme(.dark)
+    }
+}
+
+/// VisionKit's live scanner, for QR codes only.
+private struct CodeScanner: UIViewControllerRepresentable {
+    let onCode: (String) -> Void
+
+    func makeUIViewController(context: Context) -> DataScannerViewController {
+        let scanner = DataScannerViewController(recognizedDataTypes: [.barcode(symbologies: [.qr])],
+                                                qualityLevel: .balanced, isHighlightingEnabled: true)
+        scanner.delegate = context.coordinator
+        try? scanner.startScanning()
+        return scanner
+    }
+
+    func updateUIViewController(_ controller: DataScannerViewController, context: Context) {}
+
+    static func dismantleUIViewController(_ controller: DataScannerViewController, coordinator: Coordinator) {
+        controller.stopScanning()
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(onCode: onCode) }
+
+    final class Coordinator: NSObject, DataScannerViewControllerDelegate {
+        let onCode: (String) -> Void
+        private var done = false
+        init(onCode: @escaping (String) -> Void) { self.onCode = onCode }
+
+        func dataScanner(_ scanner: DataScannerViewController, didAdd items: [RecognizedItem], allItems: [RecognizedItem]) {
+            guard !done else { return }
+            for item in items {
+                if case .barcode(let code) = item, let payload = code.payloadStringValue,
+                   ProfileScanner.profileID(in: payload) != nil {
+                    done = true
+                    onCode(payload)
+                    return
+                }
+            }
+        }
+    }
+}
+
+/// Your profile as a QR code, for someone to scan in person.
+struct MyCodeSheet: View {
+    let accent: Color
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var account = Account.shared
+
+    var body: some View {
+        VStack(spacing: 18) {
+            HStack {
+                Text("MY CODE").font(.mono(15, .bold)).foregroundStyle(accent)
+                Spacer()
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark").font(.system(size: 13, weight: .bold))
+                        .frame(width: 30, height: 30).background(Circle().fill(Color(white: 0.16)))
+                }
+                .foregroundStyle(.white)
+                .accessibilityLabel("Close")
+            }
+            if let me = account.me, let image = Self.code(for: me.url) {
+                Image(uiImage: image)
+                    .interpolation(.none)
+                    .resizable()
+                    .scaledToFit()
+                    .padding(16)
+                    .background(RoundedRectangle(cornerRadius: 18).fill(Color.white))
+                    .frame(maxWidth: 260)
+                    .accessibilityLabel("Your profile code")
+                if let handle = me.handle {
+                    Text("@\(handle)").font(.mono(16, .bold)).foregroundStyle(.white)
+                }
+                Text("Someone scans this in FIND PEOPLE, or with the Camera app, to open your profile and ask to follow.")
+                    .font(.mono(10)).foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                ShareLink(item: me.url) {
+                    Text("SHARE PROFILE LINK").font(.mono(10, .bold))
+                        .padding(.horizontal, 12).padding(.vertical, 8)
+                        .background(Capsule().fill(accent.opacity(0.18)))
+                        .overlay(Capsule().stroke(accent, lineWidth: 1))
+                        .foregroundStyle(accent)
+                }
+            } else {
+                Text("SIGN IN FROM YOUR PROFILE FIRST").font(.mono(11, .bold)).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(20)
+        .background(Color(white: 0.08).ignoresSafeArea())
+        .preferredColorScheme(.dark)
+        .presentationDetents([.medium, .large])
+    }
+
+    /// A crisp QR code for a link (Core Image, scaled up without smoothing).
+    static func code(for url: URL) -> UIImage? {
+        guard let filter = CIFilter(name: "CIQRCodeGenerator") else { return nil }
+        filter.setValue(Data(url.absoluteString.utf8), forKey: "inputMessage")
+        filter.setValue("M", forKey: "inputCorrectionLevel")
+        guard let output = filter.outputImage?.transformed(by: CGAffineTransform(scaleX: 10, y: 10)),
+              let cg = CIContext().createCGImage(output, from: output.extent) else { return nil }
+        return UIImage(cgImage: cg)
     }
 }
