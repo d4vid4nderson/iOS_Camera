@@ -135,6 +135,22 @@ select,button,input,textarea{font:inherit;color:var(--fg)}
 .phone .covers em{position:absolute;top:calc(6*var(--u));right:calc(6*var(--u));width:calc(22*var(--u));height:calc(22*var(--u));border-radius:50%;background:rgba(0,0,0,.6);display:grid;place-items:center}
 .phone .covers em svg{width:calc(11*var(--u));height:calc(11*var(--u));stroke-width:2.2}
 @media (max-width:860px){.phones{grid-template-columns:1fr;gap:44px}}
+.shot{position:relative;margin:-6px -6px 16px;border-radius:12px;overflow:hidden;background:#000;font-family:var(--mono)}
+.shot>img{width:100%;height:auto;aspect-ratio:3/2;object-fit:cover;display:block}
+.shot .panel{position:absolute;left:8px;right:8px;bottom:8px;padding:9px 10px;border-radius:12px;background:rgba(28,28,28,.94);box-shadow:inset 0 0 0 .5px #404040;display:grid;gap:8px}
+.shot .ph{display:flex;justify-content:space-between;font-size:9px;font-weight:600;color:#8e8e93}.shot .ph b{color:var(--accent)}
+.shot .tabs{display:flex;gap:12px;font-size:9px;font-weight:700;color:#8c8c8c;border-bottom:.5px solid #383838;overflow:hidden;white-space:nowrap}
+.shot .tabs span{padding-bottom:5px}.shot .tabs .on{color:var(--accent);box-shadow:inset 0 -2px 0 var(--accent)}
+.shot .row{display:flex;gap:6px;overflow:hidden}
+.shot .row span{flex:none;padding:5px 8px;border-radius:99px;background:#262626;font-size:9px;font-weight:700;color:#fff;white-space:nowrap}
+.shot .row .on{background:rgba(232,118,46,.18);box-shadow:inset 0 0 0 1px var(--accent);color:var(--accent)}
+.tonestrip{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin:0 0 14px}
+.tonestrip figure{margin:0;display:grid;gap:4px;text-align:center;font:700 8px/1 var(--mono);letter-spacing:.06em;color:var(--muted);min-width:0}
+.tonestrip img{width:100%;height:auto;aspect-ratio:1;border-radius:4px;display:block}
+.finishes{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;margin:0 0 14px;justify-items:center}
+.finishes i{width:100%;max-width:34px;aspect-ratio:1;border-radius:50%;background:linear-gradient(#080808,#171717);position:relative;box-shadow:inset 0 1px 2px rgba(0,0,0,.8)}
+.finishes i::after{content:"";position:absolute;inset:7%;border-radius:50%;background:linear-gradient(rgba(0,0,0,.4),transparent 45%),linear-gradient(var(--t),var(--b));box-shadow:inset 0 1px 0 rgba(255,255,255,.25)}
+.finishes img{width:100%;max-width:34px;height:auto;border-radius:22%;display:block}
 /* Home: sections */
 .section{margin:72px 0 0}
 .section>h2{font-size:clamp(28px,4.2vw,40px);line-height:1.08;letter-spacing:-.02em;margin:0 0 10px}
@@ -512,11 +528,22 @@ export function homeBody(store) {
 <p class="eyebrow">Make it yours</p>
 <h2>Edit a film, or make your own.</h2>
 <div class="tools">
-  <div class="feature"><h3>The film</h3><p>Change any film: exposure, contrast, black and white points, grain and its size, vignette, bloom, fog and soft edges. Tone black &amp; white prints, or grade colour with RGB curves, saturation and split toning.</p>
+  <div class="feature"><div class="shot"><img src="/mock/make-film.jpg" alt="A street on Classic 400, toned selenium, with the app's Adjust panel open" loading="lazy" width="900" height="600">
+    <div class="panel"><div class="ph"><span>ADJUST</span><b>CLASSIC 400 · EDITED</b></div>
+    <div class="tabs"><span>FILTER</span><span>CONTRAST</span><span>KEY</span><span>FADE</span><span class="on">TONE</span><span>TONE %</span><span>GLOW</span></div>
+    <div class="row"><span>NEUTRAL</span><span>SEPIA</span><span>COOL</span><span class="on">SELENIUM</span><span>SPLIT</span><span>GOLD</span></div></div></div>
+  <div class="tonestrip"><figure><img src="/mock/tone-neutral.jpg" alt="" loading="lazy" width="220" height="220">NEUTRAL</figure><figure><img src="/mock/tone-warm.jpg" alt="" loading="lazy" width="220" height="220">SEPIA</figure><figure><img src="/mock/tone-selenium.jpg" alt="" loading="lazy" width="220" height="220">SELENIUM</figure><figure><img src="/mock/tone-gold.jpg" alt="" loading="lazy" width="220" height="220">GOLD</figure><figure><img src="/mock/tone-cyanotype.jpg" alt="" loading="lazy" width="220" height="220">CYANO</figure></div>
+  <h3>The film</h3><p>Change any film: exposure, contrast, black and white points, grain and its size, vignette, bloom, fog and soft edges. Tone black &amp; white prints, or grade colour with RGB curves, saturation and split toning.</p>
   ${tags(['SEPIA', 'SELENIUM', 'SPLIT', 'GOLD', 'PLATINUM', 'CYANO', 'TINTYPE'])}</div>
-  <div class="feature"><h3>Lenses &amp; effects</h3><p>Classic lenses from 21 to 135mm, wherever your iPhone's cameras can crop to them cleanly. Lens and print effects for when a roll calls for something strange.</p>
+  <div class="feature"><div class="shot"><img src="/mock/make-lens.jpg" alt="A pier on Golden 100, with the app's Lens panel open" loading="lazy" width="900" height="600">
+    <div class="panel"><div class="ph"><span>LENS</span><b>50mm CROP</b></div>
+    <div class="row"><span>21mm</span><span>24mm</span><span>28mm</span><span>35mm</span><span class="on">50mm</span><span>85mm</span><span>135mm</span></div></div></div>
+  <h3>Lenses &amp; effects</h3><p>Classic lenses from 21 to 135mm, wherever your iPhone's cameras can crop to them cleanly. Lens and print effects for when a roll calls for something strange.</p>
   ${tags(['FISHEYE', 'SWIRL', 'TILT-SHIFT', 'ZOOM', 'DRAG', 'DOUBLE', 'PRISM', 'RIPPLE', 'KALEIDO', 'HALFTONE', 'ETCH'])}</div>
-  <div class="feature"><h3>The camera</h3><p>A date back that burns the date, or date and time, into the corner. Seven shutter finishes, and the app icon changes to match. Send a film to a friend as a link, and they load your exact look.</p>
+  <div class="feature"><div class="shot"><img src="/mock/make-date.jpg" alt="A red boat on Golden 100 with the date burned into the corner" loading="lazy" width="900" height="600"></div>
+  <div class="finishes"><i style="--t:#eb6e21;--b:#cc5e1c"></i><i style="--t:#cccccb;--b:#9e9e9c"></i><i style="--t:#3d3d3d;--b:#212121"></i><i style="--t:#c7291f;--b:#9e1c17"></i><i style="--t:#3866b8;--b:#264a8f"></i><i style="--t:#708045;--b:#576333"></i><i style="--t:#d1a84f;--b:#ab8538"></i></div>
+  <div class="finishes"><img src="/mock/icon-copper.png" alt="" loading="lazy" width="96" height="96"><img src="/mock/icon-silver.png" alt="" loading="lazy" width="96" height="96"><img src="/mock/icon-black.png" alt="" loading="lazy" width="96" height="96"><img src="/mock/icon-red.png" alt="" loading="lazy" width="96" height="96"><img src="/mock/icon-cobalt.png" alt="" loading="lazy" width="96" height="96"><img src="/mock/icon-olive.png" alt="" loading="lazy" width="96" height="96"><img src="/mock/icon-brass.png" alt="" loading="lazy" width="96" height="96"></div>
+  <h3>The camera</h3><p>A date back that burns the date, or date and time, into the corner. Seven shutter finishes, and the app icon changes to match. Send a film to a friend as a link, and they load your exact look.</p>
   ${tags(['COPPER', 'SILVER', 'BLACK', 'RED', 'COBALT', 'OLIVE', 'BRASS'])}</div>
 </div>
 </section>
