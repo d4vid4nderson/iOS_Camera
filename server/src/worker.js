@@ -6,6 +6,8 @@
 //   GET  /r/<id>/<file>.jpg         a frame, the card or the sharer's headshot
 //   POST /api/rolls                 start sharing a roll -> { id, token, url, expiresAt }
 //   PUT  /api/rolls/<id>/<file>     upload a frame / card / avatar      (Bearer token)
+//                                   once it's live: add the next frame (a roll still being shot
+//                                   grows as its frames develop), or replace the card
 //   POST /api/rolls/<id>/publish    make it visible                     (Bearer token)
 //   DELETE /api/rolls/<id>          unshare: delete everything          (Bearer token, or admin)
 //   POST /api/rolls/<id>/report     report a roll; 3 reports hide it until reviewed
@@ -242,14 +244,23 @@ async function uploadFile(request, env, id, file, now) {
   const meta = await getMeta(env, id);
   if (!meta || expired(meta, now)) return json(404, { error: 'gone' });
   if (!(await authorised(request, meta, env))) return json(401, { error: 'unauthorised' });
-  if (meta.status !== 'uploading') return json(409, { error: 'already published' });
   const frame = file.match(/^frame-(\d{2})\.jpg$/);
-  if (frame && (Number(frame[1]) < 1 || Number(frame[1]) > meta.frames)) return json(400, { error: 'frame out of range' });
+  // A live roll can take its next frame (the roll is still being shot) or a new card.
+  const appending = meta.status === 'live' && frame && Number(frame[1]) === meta.frames + 1 && meta.frames < MAX_FRAMES;
+  if (meta.status !== 'uploading' && !appending && !(meta.status === 'live' && file === 'card.jpg')) {
+    return json(409, { error: 'already published' });
+  }
+  if (frame && !appending && (Number(frame[1]) < 1 || Number(frame[1]) > meta.frames)) return json(400, { error: 'frame out of range' });
   const bytes = await request.arrayBuffer();
   if (bytes.byteLength === 0 || bytes.byteLength > MAX_IMAGE_BYTES) return json(413, { error: 'image too large' });
   const head = new Uint8Array(bytes, 0, 3);
   if (head[0] !== 0xff || head[1] !== 0xd8 || head[2] !== 0xff) return json(415, { error: 'JPEG only' });
   await env.ROLLS.put(`rolls/${id}/${file}`, bytes, { httpMetadata: { contentType: 'image/jpeg' } });
+  if (appending) {
+    meta.frames += 1;
+    await putMeta(env, meta);
+    return json(200, { ok: true, frames: meta.frames });
+  }
   if (file === 'avatar.jpg' && !meta.sharer.avatar) {
     meta.sharer.avatar = true;
     await putMeta(env, meta);

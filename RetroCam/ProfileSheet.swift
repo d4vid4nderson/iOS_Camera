@@ -143,7 +143,11 @@ struct ProfileSheet: View {
         .sheet(item: $sharing) { item in
             ActivityView(items: item.items).ignoresSafeArea()
         }
-        .onAppear(perform: loadRolls)
+        .onAppear {
+            loadRolls()
+            // Catch up shared rolls on frames that developed while the app was closed.
+            myRolls.forEach(camera.syncShare)
+        }
         .task { await account.refresh() }
         .onReceive(account.$headshotVersion.dropFirst()) { _ in
             // A Google or Facebook photo became the headshot.
@@ -201,7 +205,7 @@ struct ProfileSheet: View {
             VStack(alignment: .leading, spacing: 10) {
                 Text("YOUR ROLLS").font(.mono(9, .semibold)).foregroundStyle(.secondary)
                 if myRolls.isEmpty {
-                    Text("Rolls show up here once they have developed frames.")
+                    Text("Rolls show up here once you've shot a frame.")
                         .font(.mono(10)).foregroundStyle(.secondary)
                 } else {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 14) {
@@ -322,7 +326,8 @@ struct ProfileSheet: View {
     /// closed is private, open is public. Tap the lock to switch.
     private func rollTile(_ roll: Roll) -> some View {
         let record = records[roll.number]
-        let isPublic = record?.onProfile == true
+        let waiting = record == nil && RollShare.waitsForProfile(roll.number)
+        let isPublic = record?.onProfile == true || waiting
         let working = busy[roll.number]
         return VStack(alignment: .leading, spacing: 5) {
             Button { openRoll = RollRef(number: roll.number) } label: {
@@ -353,7 +358,7 @@ struct ProfileSheet: View {
                 .accessibilityLabel(isPublic ? "Public. Make \(roll.title) private" : "Private. Make \(roll.title) public")
             }
             Text(roll.title.uppercased()).font(.mono(10, .bold)).foregroundStyle(.white).lineLimit(1)
-            Text(working ?? (isPublic ? "PUBLIC" : record != nil ? "SHARED BY LINK" : "PRIVATE"))
+            Text(working ?? (waiting ? "PUBLIC WHEN DEVELOPED" : isPublic ? "PUBLIC" : record != nil ? "SHARED BY LINK" : "PRIVATE"))
                 .font(.mono(8)).foregroundStyle(isPublic ? accent : .secondary).lineLimit(1)
         }
     }
@@ -372,9 +377,8 @@ struct ProfileSheet: View {
     }
 
     private func loadRolls() {
-        myRolls = RollStore.rolls().filter { roll in
-            RollStore.frames(of: roll.number).contains { !RollStore.isPending(roll: roll.number, frame: $0) }
-        }
+        // Every roll with frames, including ones still being shot or developing.
+        myRolls = RollStore.rolls()
         records = Dictionary(uniqueKeysWithValues: myRolls.compactMap { roll in
             RollShare.record(for: roll.number).map { (roll.number, $0) }
         })
@@ -384,6 +388,12 @@ struct ProfileSheet: View {
         guard records[roll.number]?.onProfile != true else { return }
         guard account.me?.termsAccepted == true else {
             withAnimation(.snappy(duration: 0.15)) { askingTerms = roll }
+            return
+        }
+        guard !RollShare.developedFrames(of: roll.number).isEmpty else {
+            // Nothing developed yet: it goes on your profile when its first frames do.
+            RollShare.setWaitsForProfile(roll.number, true)
+            loadRolls()
             return
         }
         busy[roll.number] = "PUTTING ON PROFILE…"
@@ -405,6 +415,11 @@ struct ProfileSheet: View {
     }
 
     private func makePrivate(_ roll: Roll) {
+        if RollShare.waitsForProfile(roll.number) {
+            RollShare.setWaitsForProfile(roll.number, false)
+            loadRolls()
+            return
+        }
         guard records[roll.number] != nil else { return }
         busy[roll.number] = "MAKING PRIVATE…"
         note = nil
