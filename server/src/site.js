@@ -93,6 +93,48 @@ select,button,input,textarea{font:inherit;color:var(--fg)}
   box-shadow:inset 0 calc(1.2*var(--u)) 0 rgba(255,184,122,.45),inset 0 calc(-1.2*var(--u)) 0 rgba(107,43,10,.8)}
 .phone .flip{width:calc(56*var(--u));height:calc(56*var(--u));border-radius:50%;background:#262626;display:grid;place-items:center}
 .phone .flip svg{width:calc(22*var(--u));height:calc(22*var(--u))}
+/* More phones: the app's other screens (RollViewer, UserProfileView, SocialView) */
+.phones{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px;justify-items:center}
+.phones figure{margin:0;display:grid;gap:14px;justify-items:center;text-align:center}
+.phones figcaption{max-width:260px}
+.phones figcaption b{display:block;font:700 12px/1.3 var(--mono);letter-spacing:.08em;margin-bottom:4px}
+.phones figcaption span{font-size:14px;color:#c9c6c0}
+.phone.small{--w:min(260px,78vw)}
+.phone .screen.app{background:#0f0f0f;justify-content:flex-start;gap:calc(12*var(--u));padding:calc(62*var(--u)) calc(16*var(--u)) calc(30*var(--u))}
+.phone .screen.app>*{flex:none}
+.phone .ahead{display:flex;justify-content:space-between;align-items:flex-start}
+.phone .ahead b{display:block;font-size:calc(15*var(--u));color:var(--accent)}
+.phone .ahead small{display:block;margin-top:calc(3*var(--u));font-size:calc(9.5*var(--u));color:#8e8e93}
+.phone .x{flex:none;width:calc(34*var(--u));height:calc(34*var(--u));border-radius:50%;background:#292929;display:grid;place-items:center}
+.phone .x svg{width:calc(13*var(--u));height:calc(13*var(--u));stroke-width:2.6}
+.phone .chips{display:flex;gap:calc(6*var(--u));overflow:hidden}
+.phone .chips span{flex:none;padding:calc(6*var(--u)) calc(10*var(--u));border-radius:99px;background:#262626;font-size:calc(10*var(--u));font-weight:700;white-space:nowrap}
+.phone .chips span.on{background:rgba(232,118,46,.18);box-shadow:inset 0 0 0 1px var(--accent);color:var(--accent)}
+.phone .chips span.red{background:rgba(255,59,48,.1);color:#ff7366}
+.phone .sheet{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:calc(10*var(--u)) calc(6*var(--u))}
+.phone .sheet i{display:grid;gap:calc(4*var(--u));font-style:normal;font-size:calc(9*var(--u));font-weight:600;color:#8e8e93;text-align:center}
+.phone .sheet i>span{position:relative;display:block;aspect-ratio:3/4;overflow:hidden;background:#1a1a1a}
+.phone .sheet img{width:100%;height:100%;object-fit:cover;display:block}
+.phone .sheet em{position:absolute;top:calc(4*var(--u));left:calc(4*var(--u));padding:calc(3*var(--u)) calc(5*var(--u));border-radius:3px;background:var(--accent);color:#000;font-style:normal;font-size:calc(8*var(--u));font-weight:700}
+.phone .sheet .dev{display:grid;place-content:center;gap:calc(3*var(--u));background:#1a1a1a;box-shadow:inset 0 0 0 1px #383838;outline:1px dashed #383838;outline-offset:-1px}
+.phone .sheet .dev b{font-size:calc(8*var(--u));color:#666}.phone .sheet .dev small{font-size:calc(7*var(--u));color:#4d4d4d}
+.phone .who{display:flex;align-items:center;gap:calc(14*var(--u));margin:0}
+.phone .face{flex:none;width:calc(72*var(--u));height:calc(72*var(--u));border-radius:50%;display:grid;place-items:center;font-size:calc(28*var(--u));font-weight:700;color:#fff;background:linear-gradient(145deg,#6c5a4a,#3a3029)}
+.phone .face.s{width:calc(16*var(--u));height:calc(16*var(--u));font-size:calc(7*var(--u))}
+.phone .who b{display:block;font-size:calc(16*var(--u));color:var(--accent)}
+.phone .who small{display:block;margin-top:calc(4*var(--u));font-size:calc(11*var(--u));font-weight:600}
+.phone .tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:calc(8*var(--u))}
+.phone .tiles span{display:grid;gap:calc(3*var(--u));padding:calc(10*var(--u)) 0;border-radius:calc(12*var(--u));background:#1c1c1c;text-align:center}
+.phone .tiles b{font-size:calc(20*var(--u))}.phone .tiles small{font-size:calc(8*var(--u));font-weight:600;color:#8e8e93}
+.phone .covers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:calc(16*var(--u)) calc(10*var(--u))}
+.phone .covers i{display:grid;gap:calc(6*var(--u));font-style:normal;text-align:left;min-width:0}
+.phone .covers i>span{position:relative;display:block;aspect-ratio:3/4;border-radius:calc(9*var(--u));overflow:hidden;background:#1a1a1a}
+.phone .covers img{width:100%;height:100%;object-fit:cover;display:block}
+.phone .covers b{font-size:calc(11*var(--u));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.phone .covers small{font-size:calc(9*var(--u));color:#8e8e93;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:calc(6*var(--u))}
+.phone .covers em{position:absolute;top:calc(6*var(--u));right:calc(6*var(--u));width:calc(22*var(--u));height:calc(22*var(--u));border-radius:50%;background:rgba(0,0,0,.6);display:grid;place-items:center}
+.phone .covers em svg{width:calc(11*var(--u));height:calc(11*var(--u));stroke-width:2.2}
+@media (max-width:860px){.phones{grid-template-columns:1fr;gap:44px}}
 /* Home: sections */
 .section{margin:72px 0 0}
 .section>h2{font-size:clamp(28px,4.2vw,40px);line-height:1.08;letter-spacing:-.02em;margin:0 0 10px}
@@ -394,6 +436,51 @@ export function homeBody(store) {
   <li><b>03</b><h3>Develop</h3><p>Instantly, when the roll is done, or the next morning at 9. Can't wait? Tap one frame to develop it early, and hide it again if you'd rather be surprised.</p></li>
   <li><b>04</b><h3>Keep or share</h3><p>Developed frames go into the roll's own album in Photos. Keep the roll to yourself, or share it with a few people, your followers or everyone.</p></li>
 </ol>
+</section>
+
+<section class="section" id="inside">
+<p class="eyebrow">Inside the app</p>
+<h2>Rolls, people, and nothing else.</h2>
+<p class="lede">Look back through a roll like a contact sheet, open a friend's profile, and see what the people you follow have shot.</p>
+<div class="phones">
+<figure>
+  <div class="phone small" aria-label="The roll viewer: a roll as a contact sheet, with its cover and two frames still developing">
+    <div class="screen app">
+      <span class="island"></span>
+      <div class="ahead"><div><b>ROLL 03<svg viewBox="0 0 24 24" aria-hidden="true" style="display:inline-block;width:.75em;height:.75em;margin-left:.4em;color:#8e8e93;vertical-align:baseline"><path d="M4 20l1-4L16 5l3 3L8 19z"/></svg></b><small>09/36 FRAMES · OCT 12, 2026 · DEVELOPS TUE 9:00 AM</small></div><span class="x"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></div>
+      <div class="chips"><span class="on">ROLL 03</span><span>ROLL 02</span><span>ROLL 01</span></div>
+      <div class="sheet"><i><span><img src="/films/thumbs/golden100.jpg" alt="" loading="lazy" width="420" height="280" style="object-position:100% 40%;transform:scale(1.6)"><em>COVER</em></span>01</i><i><span><img src="/films/thumbs/golden100.jpg" alt="" loading="lazy" width="420" height="280" style="object-position:50% 100%;transform:scale(2.1)"></span>02</i><i><span><img src="/films/thumbs/golden100.jpg" alt="" loading="lazy" width="420" height="280" style="object-position:20% 80%;transform:scale(1.9)"></span>03</i><i><span><img src="/films/thumbs/golden100.jpg" alt="" loading="lazy" width="420" height="280" style="object-position:85% 15%;transform:scale(2.4)"></span>04</i><i><span><img src="/films/thumbs/golden100.jpg" alt="" loading="lazy" width="420" height="280" style="object-position:60% 60%;transform:scale(1.4)"></span>05</i><i><span><img src="/films/thumbs/golden100.jpg" alt="" loading="lazy" width="420" height="280" style="object-position:35% 25%;transform:scale(2.6)"></span>06</i><i><span><img src="/films/thumbs/golden100.jpg" alt="" loading="lazy" width="420" height="280" style="object-position:75% 90%;transform:scale(1.8)"></span>07</i><i><span class="dev"><b>DEVELOPING</b><small>TAP TO DEVELOP</small></span>08</i><i><span class="dev"><b>DEVELOPING</b><small>TAP TO DEVELOP</small></span>09</i></div>
+      <div class="chips"><span class="on">SHARE ROLL</span><span>SHEET</span><span>RENAME</span></div>
+    </div>
+  </div>
+  <figcaption><b>THE ROLL</b><span>Every frame, in order, like a contact sheet. Tap one that's still developing to see it early.</span></figcaption>
+</figure>
+<figure>
+  <div class="phone small" aria-label="A profile: name and handle, rolls, frames, followers and following, and their rolls">
+    <div class="screen app">
+      <span class="island"></span>
+      <div class="ahead"><div><small style="margin:0">PROFILE</small></div><span class="x"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></div>
+      <div class="who"><span class="face">M</span><div><b>MARA LIND</b><small>@mara.lind</small></div></div>
+      <div class="tiles"><span><b>4</b><small>ROLLS</small></span><span><b>114</b><small>FRAMES</small></span><span><b>23</b><small>FOLLOWERS</small></span><span><b>31</b><small>FOLLOWING</small></span></div>
+      <div class="chips"><span class="on">FOLLOW</span><span>SHARE PROFILE</span><span>BLOCK</span></div>
+      <div class="covers"><i><span><img src="/films/thumbs/golden100.jpg" alt="" loading="lazy" width="420" height="280" style="object-position:50% 100%;transform:scale(2.1)"></span><b>COAST WEEKEND</b><small>36 FRAMES · GOLDEN 100</small></i><i><span><img src="/films/thumbs/classic400.jpg" alt="" loading="lazy" width="420" height="280" style="object-position:20% 80%;transform:scale(1.9)"></span><b>ROME</b><small>36 FRAMES · CLASSIC 400</small></i><i><span><img src="/films/thumbs/dusk800.jpg" alt="" loading="lazy" width="420" height="280" style="object-position:85% 15%;transform:scale(2.4)"><em><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="3"/><circle cx="16" cy="9" r="3"/><path d="M3 19c.5-3 2.5-5 5-5s4.5 2 5 5M11 19c.5-3 2.5-5 5-5s4.5 2 5 5"/></svg></em></span><b>SUMMER NIGHTS</b><small>24 FRAMES · DUSK 800</small></i><i><span><img src="/films/thumbs/pan50.jpg" alt="" loading="lazy" width="420" height="280" style="object-position:60% 60%;transform:scale(1.4)"></span><b>OLD TOWN</b><small>18 FRAMES · PAN 50</small></i></div>
+    </div>
+  </div>
+  <figcaption><b>A PROFILE</b><span>Someone's rolls, the public ones and those for their followers. Follow, and they approve.</span></figcaption>
+</figure>
+<figure>
+  <div class="phone small" aria-label="People: rolls from the people you follow">
+    <div class="screen app">
+      <span class="island"></span>
+      <div class="ahead"><div><b>PEOPLE</b></div><span class="x"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></div>
+      <div class="chips"><span class="on">FOLLOWING</span><span>SHARED WITH YOU</span><span>REQUESTS</span></div>
+      <div class="covers"><i><span><img src="/films/thumbs/north400.jpg" alt="" loading="lazy" width="420" height="280" style="object-position:60% 60%;transform:scale(1.4)"></span><b>BLUE HOUR</b><small><span class="face s">J</span>JONAS ERIKSEN</small></i><i><span><img src="/films/thumbs/noir.jpg" alt="" loading="lazy" width="420" height="280" style="object-position:35% 25%;transform:scale(2.6)"><em><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3.2"/><path d="M3.5 19.5c.6-3.3 2.8-5.3 5.5-5.3s4.9 2 5.5 5.3"/><circle cx="17" cy="10" r="2.4"/><path d="M15.5 14.6c2.6.1 4.3 1.9 4.9 4.9"/></svg></em></span><b>MARKET DAY</b><small><span class="face s">A</span>ANA LIMA</small></i><i><span><img src="/films/thumbs/tide200.jpg" alt="" loading="lazy" width="420" height="280" style="object-position:75% 90%;transform:scale(1.8)"></span><b>LOW TIDE</b><small><span class="face s">M</span>MARA LIND</small></i><i><span><img src="/films/thumbs/silver100.jpg" alt="" loading="lazy" width="420" height="280" style="object-position:0% 50%;transform:scale(1.25)"></span><b>SUNDAY WALK</b><small><span class="face s">S</span>SAM OKAFOR</small></i></div>
+    </div>
+  </div>
+  <figcaption><b>PEOPLE</b><span>Rolls from the people you follow, and the ones shared with just you. No comments, no ads.</span></figcaption>
+</figure>
+</div>
+<p class="muted small">Illustrations of the app's screens. Names and photos are examples.</p>
 </section>
 
 <section class="section">
