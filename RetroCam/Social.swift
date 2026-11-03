@@ -1165,7 +1165,9 @@ final class SendInAppActivity: UIActivity {
     override class var activityCategory: UIActivity.Category { .share }
     override var activityType: UIActivity.ActivityType? { UIActivity.ActivityType("com.davidanderson.retrocam.send") }
     override var activityTitle: String? { "Send in Film Exposures" }
-    override var activityImage: UIImage? { UIImage(systemName: "paperplane") }
+    /// The app's icon (a copy at share-sheet size, drawn as is), so the button in the share
+    /// sheet's row of apps looks like Film Exposures. It sits at the end of that row.
+    override var activityImage: UIImage? { UIImage(named: "ShareIcon")?.withRenderingMode(.alwaysOriginal) ?? UIImage(systemName: "paperplane") }
     override func canPerform(withActivityItems activityItems: [Any]) -> Bool { true }
 
     override var activityViewController: UIViewController? {
