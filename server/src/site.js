@@ -41,6 +41,13 @@ h3{font:700 12px/1.3 var(--mono);letter-spacing:.1em;text-transform:uppercase;co
 .button.primary{background:var(--accent);color:var(--accent-ink)}
 .button.disabled{color:var(--muted);background:transparent;border:1px solid var(--line);cursor:default}
 .inline-buttons{display:flex;gap:10px;flex-wrap:wrap}.inline-buttons .button{width:auto;display:inline-block}
+.store-badge{margin:22px 0 10px}
+.store-badge img{display:block;height:54px;width:auto}
+.store-badge a{display:inline-block;border-radius:9px}
+.store-badge a:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.store-badge p{margin:0 0 10px}
+.store-badge.soon{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.store-badge.soon span{font:600 12px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
 .who{display:flex;align-items:center;gap:10px;margin-bottom:16px;font-weight:600;color:var(--fg);text-decoration:none}
 .profile-head{display:flex;align-items:center;gap:16px;margin-bottom:20px}.profile-head .avatar{width:72px;height:72px}
 .profile-head h1{font-size:32px;margin:0}
@@ -431,13 +438,20 @@ function filmViewer() {
 </script>`;
 }
 
+/// Apple's "Download on the App Store" badge (the official artwork, unaltered, from Apple's
+/// marketing resources). Linked to the app once APP_STORE_ID / APP_STORE_URL is set; until
+/// then it's shown without a link, with "Coming soon" under it. `store` must be escaped.
+export function storeBadge(store, caption = '') {
+  const img = '<img src="/app-store-badge.svg" alt="Download on the App Store" width="162" height="54">';
+  if (store) return `<div class="store-badge">${caption ? `<p class="muted">${caption}</p>` : ''}<a href="${store}">${img}</a></div>`;
+  return `<div class="store-badge soon">${img}<span>Coming soon</span></div>`;
+}
+
 export function homeBody(store) {
   const card = (f) => filmCard(f, SHOWN.indexOf(f));
   const bw = FILM_PREVIEWS.filter((f) => !f.color).map(card).join('');
   const color = FILM_PREVIEWS.filter((f) => f.color).map(card).join('');
-  const get = store
-    ? `<div class="inline-buttons"><a class="button primary" href="${store}">Get Film Exposures</a></div>`
-    : '<div class="inline-buttons"><span class="button disabled">Coming soon to the App Store</span></div>';
+  const get = storeBadge(store);
   // A frame in each format, cut from the same sample photo.
   const formats = [
     ['35MM', '3:2', 24, 3 / 2], ['6×4.5', '4:3', 36, 4 / 3], ['6×6', '1:1', 36, 1],
