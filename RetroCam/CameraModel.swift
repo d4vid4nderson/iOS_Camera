@@ -49,6 +49,7 @@ final class CameraModel: NSObject, ObservableObject {
     private static let stampKey = "stamp"
     private static let borderKey = "border"
     private static let borderWidthKey = "borderWidth"
+    private static let formatKey = "frameFormat"
     private static let filmKey = "film.selected"
     private static let tiltKey = "fx.tilt"
     private static let developKey = "develop.mode"
@@ -106,6 +107,14 @@ final class CameraModel: NSObject, ObservableObject {
         didSet {
             UserDefaults.standard.set(border.rawValue, forKey: Self.borderKey)
             renderer.border = border
+        }
+    }
+    /// The shape of the picture: 35mm, 6×6, XPAN… (a centred crop of the sensor's 4:3).
+    @Published private(set) var format: FrameFormat =
+        FrameFormat(rawValue: UserDefaults.standard.string(forKey: CameraModel.formatKey) ?? "") ?? .medium645 {
+        didSet {
+            UserDefaults.standard.set(format.rawValue, forKey: Self.formatKey)
+            renderer.format = format
         }
     }
     /// Border width as a fraction of the print's short side (whole percent steps).
@@ -223,6 +232,7 @@ final class CameraModel: NSObject, ObservableObject {
         renderer.stampMode = stampMode
         renderer.border = border
         renderer.borderWidth = borderWidth
+        renderer.format = format
         updateTiltSteering()
         lastPrint = RollStore.latestThumbnail()
     }
@@ -422,6 +432,7 @@ final class CameraModel: NSObject, ObservableObject {
     func cycleStamp() { stampMode = stampMode.next }
     func cycleBorder() { border = border.next }
     func selectBorder(_ style: BorderStyle) { border = style }
+    func selectFormat(_ new: FrameFormat) { format = new }
 
     /// Set the border width (fraction of the short side), snapped to whole percents.
     func setBorderWidth(_ width: Double) {
@@ -778,7 +789,7 @@ final class CameraModel: NSObject, ObservableObject {
         let stock = self.developedStock
         let flashMode = flashAvailable ? flash.mode : .off
         let stampText = stampMode.text(for: Date())
-        let finish = PrintFinish(border: border, seed: UInt32.random(in: 0...UInt32.max), width: borderWidth)
+        let finish = PrintFinish(border: border, seed: UInt32.random(in: 0...UInt32.max), width: borderWidth, format: format)
 
         roll.expose(film: self.stock.name, develop: developMode)
         let filmID = self.stock.id
