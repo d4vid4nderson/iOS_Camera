@@ -65,10 +65,12 @@ enum Darkroom {
         let film = FilmLook.apply(stock, to: source, stamp: stampText)
         let developed = PrintBorder.apply(finish.border, to: film, seed: finish.seed, width: finish.width).settingProperties(metadata)
 
-        guard let sRGB = CGColorSpace(name: CGColorSpace.sRGB),
+        // Display P3, the colour range the camera captures in: saturated colours (sunsets,
+        // teal water, foliage) aren't clipped to sRGB. Every Apple screen shows P3.
+        guard let p3 = CGColorSpace(name: CGColorSpace.displayP3),
               let jpeg = context.jpegRepresentation(
                 of: developed,
-                colorSpace: sRGB,
+                colorSpace: p3,
                 options: [kCGImageDestinationLossyCompressionQuality as CIImageRepresentationOption: 0.92])
         else { throw CameraError.processingFailed }
 
