@@ -165,6 +165,30 @@ enum Social {
         return (page.rolls, page.after)
     }
 
+    /// Something a person you follow sent you: a profile or a roll.
+    struct Sent: Decodable, Identifiable {
+        var key: String
+        var kind: String
+        var from: Person
+        var profile: Person?
+        var roll: RollTile?
+        var id: String { key }
+    }
+    private struct Sends: Decodable { var sends: [Sent] }
+
+    /// Send a profile ("profile") or a roll ("roll") to one of your followers, by id or @handle.
+    static func send(to: String, kind: String, id: String) async throws {
+        _ = try await call("api/sends", method: "POST", json: ["to": to, "kind": kind, "id": id])
+    }
+
+    static func sends() async throws -> [Sent] {
+        try JSONDecoder().decode(Sends.self, from: try await call("api/me/sends")).sends
+    }
+
+    static func dismiss(_ sent: Sent) async throws {
+        _ = try await call("api/me/sends/\(sent.key)", method: "DELETE")
+    }
+
     static func feed() async throws -> [RollTile] {
         try JSONDecoder().decode(Rolls.self, from: try await call("api/feed")).rolls
     }
@@ -318,6 +342,7 @@ struct SocialView: View {
     @State private var note: String?
     @State private var opening: OpenSocialRoll?
     @State private var person: IncomingUser?
+    @State private var sent: [Social.Sent] = []
     @State private var publicRolls: [Social.RollTile]?
     @State private var publicAfter: String?
     @State private var loadingPublic = false
@@ -346,7 +371,8 @@ struct SocialView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
                         ForEach(Tab.allCases) { t in
-                            SocialChip(text: t == .requests && (requests?.count ?? 0) > 0 ? "REQUESTS · \(requests!.count)" : t.label,
+                            SocialChip(text: t == .requests && (requests?.count ?? 0) > 0 ? "REQUESTS · \(requests!.count)"
+                                       : t == .shared && !sent.isEmpty ? "SHARED WITH YOU · \(sent.count)" : t.label,
                                        selected: tab == t, accent: accent) { tab = t }
                         }
                     }
@@ -391,7 +417,12 @@ struct SocialView: View {
         case .browse:
             browseList
         case .shared:
-            rolls(shared, empty: "NO ROLLS SHARED WITH YOU YET")
+            if !sent.isEmpty {
+                VStack(spacing: 8) {
+                    ForEach(sent) { item in sentBanner(item) }
+                }
+            }
+            rolls(shared, empty: sent.isEmpty ? "NO ROLLS SHARED WITH YOU YET" : "")
         case .requests:
             requestList
         case .find:
@@ -450,6 +481,60 @@ struct SocialView: View {
             }
         }
         .buttonStyle(.plain)
+    }
+
+    /// A profile or roll someone sent you, at the top of SHARED WITH YOU: follow or look,
+    /// or dismiss it.
+    private func sentBanner(_ item: Social.Sent) -> some View {
+        HStack(spacing: 10) {
+            if let profile = item.profile {
+                PersonAvatar(person: profile, size: 38)
+            } else if let roll = item.roll {
+                AsyncImage(url: roll.cover) { image in image.resizable().scaledToFill() } placeholder: { Color(white: 0.15) }
+                    .frame(width: 38, height: 38).clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(item.from.title.uppercased()) SENT YOU").font(.mono(9, .semibold)).foregroundStyle(.secondary).lineLimit(1)
+                Text(item.profile.map { $0.handle.map { "@\($0)" } ?? $0.title.uppercased() } ?? (item.roll?.title.uppercased() ?? ""))
+                    .font(.mono(12, .bold)).foregroundStyle(.white).lineLimit(1)
+            }
+            Spacer(minLength: 0)
+            if let profile = item.profile {
+                if (profile.status ?? "none") == "none" {
+                    SocialChip(text: "FOLLOW", selected: true, accent: accent) { acceptFollow(item, profile) }
+                }
+                SocialChip(text: "VIEW", accent: accent) { person = IncomingUser(id: profile.id) }
+            } else if let roll = item.roll {
+                SocialChip(text: "VIEW", selected: true, accent: accent) { opening = OpenSocialRoll(id: roll.id) }
+            }
+            Button { dismissSent(item) } label: {
+                Image(systemName: "xmark").font(.system(size: 11, weight: .bold)).foregroundStyle(Color(white: 0.6))
+                    .frame(width: 26, height: 26)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Dismiss")
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color(white: 0.11)))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(accent.opacity(0.5), lineWidth: 1))
+    }
+
+    /// Accepting a sent profile asks to follow (they still approve), and clears the banner.
+    private func acceptFollow(_ item: Social.Sent, _ profile: Social.Person) {
+        Task {
+            do {
+                _ = try await Social.follow(profile.id, true)
+                note = "ASKED TO FOLLOW \(profile.title.uppercased())"
+                dismissSent(item)
+            } catch {
+                note = error.localizedDescription.uppercased()
+            }
+        }
+    }
+
+    private func dismissSent(_ item: Social.Sent) {
+        sent.removeAll { $0.key == item.key }
+        Task { try? await Social.dismiss(item) }
     }
 
     /// Everyone's public rolls, newest first. Tap one to look through its frames.
@@ -654,10 +739,12 @@ struct SocialView: View {
         async let f = try? Social.feed()
         async let s = try? Social.inbox()
         async let r = try? Social.requests()
-        let (fv, sv, rv) = await (f, s, r)
+        async let n = try? Social.sends()
+        let (fv, sv, rv, nv) = await (f, s, r, n)
         feed = fv ?? []
         shared = sv ?? []
         requests = rv ?? []
+        sent = nv ?? []
     }
 }
 
@@ -1049,5 +1136,140 @@ struct MyCodeSheet: View {
         guard let output = filter.outputImage?.transformed(by: CGAffineTransform(scaleX: 10, y: 10)),
               let cg = CIContext().createCGImage(output, from: output.extent) else { return nil }
         return UIImage(cgImage: cg)
+    }
+}
+
+// MARK: Send in Film Exposures
+
+/// The app's own button in the share sheet: send a profile or a roll to one of your
+/// followers, who finds it at the top of SHARED WITH YOU.
+final class SendInAppActivity: UIActivity {
+    private let kind: String
+    private let itemID: String
+
+    init(kind: String, id: String) {
+        self.kind = kind
+        self.itemID = id
+        super.init()
+    }
+
+    /// The button for a profile or a roll, when you're signed in (else none).
+    @MainActor static func forProfile(_ id: String) -> [UIActivity] {
+        Account.shared.isSignedIn ? [SendInAppActivity(kind: "profile", id: id)] : []
+    }
+
+    @MainActor static func forRoll(_ id: String) -> [UIActivity] {
+        Account.shared.isSignedIn ? [SendInAppActivity(kind: "roll", id: id)] : []
+    }
+
+    override class var activityCategory: UIActivity.Category { .share }
+    override var activityType: UIActivity.ActivityType? { UIActivity.ActivityType("com.davidanderson.retrocam.send") }
+    override var activityTitle: String? { "Send in Film Exposures" }
+    override var activityImage: UIImage? { UIImage(systemName: "paperplane") }
+    override func canPerform(withActivityItems activityItems: [Any]) -> Bool { true }
+
+    override var activityViewController: UIViewController? {
+        let finish = ShutterFinish(rawValue: UserDefaults.standard.string(forKey: ShutterFinish.storageKey) ?? "") ?? .copper
+        let sheet = SendSheet(kind: kind, id: itemID, accent: finish.palette.accent) { [weak self] sent in
+            self?.activityDidFinish(sent)
+        }
+        let host = UIHostingController(rootView: sheet)
+        host.overrideUserInterfaceStyle = .dark
+        return host
+    }
+}
+
+/// Pick one of your followers to send a profile or roll to.
+struct SendSheet: View {
+    let kind: String
+    let id: String
+    let accent: Color
+    let onDone: (Bool) -> Void
+    @ObservedObject private var account = Account.shared
+    @State private var followers: [Social.Person]?
+    @State private var query = ""
+    @State private var sending: String?
+    @State private var note: String?
+
+    private var shown: [Social.Person] {
+        let q = query.lowercased().replacingOccurrences(of: "@", with: "")
+        guard !q.isEmpty else { return followers ?? [] }
+        return (followers ?? []).filter { ($0.handle ?? "").contains(q) || ($0.name ?? "").lowercased().contains(q) }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(kind == "roll" ? "SEND THIS ROLL" : "SEND THIS PROFILE").font(.mono(15, .bold)).foregroundStyle(accent)
+                    Text("TO ONE OF YOUR FOLLOWERS").font(.mono(10)).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button { onDone(false) } label: {
+                    Image(systemName: "xmark").font(.system(size: 13, weight: .bold))
+                        .frame(width: 30, height: 30).background(Circle().fill(Color(white: 0.16)))
+                }
+                .foregroundStyle(.white)
+                .accessibilityLabel("Close")
+            }
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                TextField("", text: $query, prompt: Text("@HANDLE OR NAME").foregroundStyle(Color(white: 0.4)))
+                    .font(.mono(13, .semibold)).foregroundStyle(.white)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+            }
+            .padding(.horizontal, 14).padding(.vertical, 10)
+            .background(Capsule().fill(Color(white: 0.16)))
+            if let note {
+                Text(note).font(.mono(10, .semibold)).foregroundStyle(accent).fixedSize(horizontal: false, vertical: true)
+            }
+            if let followers {
+                if followers.isEmpty {
+                    Spacer()
+                    Text("NOBODY FOLLOWS YOU YET.\nYOU CAN SEND THINGS TO YOUR FOLLOWERS.")
+                        .font(.mono(11, .bold)).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                    Spacer()
+                } else {
+                    ScrollView {
+                        VStack(spacing: 2) {
+                            ForEach(shown) { p in
+                                PersonRow(person: p, onOpen: { send(to: p) }) {
+                                    SocialChip(text: sending == p.id ? "…" : "SEND", selected: true, accent: accent) { send(to: p) }
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                Spacer()
+                ProgressView().frame(maxWidth: .infinity)
+                Spacer()
+            }
+        }
+        .padding(20)
+        .background(Color(white: 0.08).ignoresSafeArea())
+        .preferredColorScheme(.dark)
+        .task {
+            guard let me = account.me?.id else { followers = []; return }
+            followers = (try? await Social.list(me, "followers")) ?? []
+        }
+    }
+
+    private func send(to person: Social.Person) {
+        guard sending == nil else { return }
+        sending = person.id
+        note = nil
+        Task {
+            do {
+                try await Social.send(to: person.id, kind: kind, id: id)
+                note = "SENT TO \(person.title.uppercased())"
+                try? await Task.sleep(nanoseconds: 700_000_000)
+                onDone(true)
+            } catch {
+                note = error.localizedDescription.uppercased()
+            }
+            sending = nil
+        }
     }
 }

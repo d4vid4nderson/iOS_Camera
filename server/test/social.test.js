@@ -213,6 +213,38 @@ test('a profile link shows the preview the app made, or the site image', async (
   assert.equal((await getJSON(e, `/u/${ana.id}/profile.json`)).preview, preview);
 });
 
+test('send a profile or a roll to a follower; it shows up for them to follow or view', async () => {
+  const { e, ana, ben, cy } = await cast();
+  const sendIt = (who, body) => call(e, 'POST', '/api/sends', { account: who.token, type: 'application/json', body: JSON.stringify(body) });
+  // Ben follows Ana, so Ana can send to Ben; Cy doesn't follow Ana.
+  await followReq(e, ben, ana);
+  await answer(e, ana, ben, true);
+  assert.equal((await call(e, 'POST', '/api/sends', { type: 'application/json', body: '{}' })).status, 401);
+  assert.equal((await sendIt(ana, { to: 'cy_', kind: 'profile', id: ben.id })).status, 403, 'only to people who follow you');
+  assert.equal((await sendIt(ana, { to: 'nobody', kind: 'profile', id: ben.id })).status, 404);
+  assert.equal((await sendIt(ana, { to: '@Ben.Ito', kind: 'profile', id: cy.id })).status, 200, 'by handle, any case, with @');
+
+  const followersRoll = await rollFor(e, ana, { audience: 'followers' });
+  const cysOnly = await rollFor(e, ana, { audience: 'people', people: [cy.id] });
+  assert.equal((await sendIt(ana, { to: ben.id, kind: 'roll', id: followersRoll })).status, 200);
+  assert.equal((await sendIt(ana, { to: ben.id, kind: 'roll', id: cysOnly })).status, 403, "not a roll they can't see");
+
+  let sends = (await getJSON(e, '/api/me/sends', ben)).sends;
+  assert.deepEqual(sends.map((x) => x.kind).sort(), ['profile', 'roll']);
+  const profile = sends.find((x) => x.kind === 'profile');
+  assert.equal(profile.from.handle, 'ana');
+  assert.equal(profile.profile.handle, 'cy_');
+  assert.equal(profile.profile.status, 'none');
+  assert.equal(sends.find((x) => x.kind === 'roll').roll.id, followersRoll);
+  assert.deepEqual((await getJSON(e, '/api/me/sends', cy)).sends, [], 'only for the person it was sent to');
+
+  // Dismissing takes it away; removing the follower takes away the roll they could see.
+  assert.equal((await call(e, 'DELETE', `/api/me/sends/${profile.key}`, { account: ben.token })).status, 200);
+  await call(e, 'DELETE', `/api/me/followers/${ben.id}`, { account: ana.token });
+  sends = (await getJSON(e, '/api/me/sends', ben)).sends;
+  assert.deepEqual(sends, []);
+});
+
 test('following is a request the other person approves', async () => {
   const { e, apple, ana, ben } = await cast();
   const noHandle = await person(e, apple, 'd', 'Dee');
