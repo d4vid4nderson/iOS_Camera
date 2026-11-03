@@ -277,6 +277,8 @@ final class Account: ObservableObject {
                 data = try await ShareAPI.send(avatarURL, method: "DELETE", account: token)
             }
             if let me = try? JSONDecoder().decode(Me.self, from: data) { remember(me) }
+            // Your name or photo changed: links to your profile should show it.
+            Task.detached { await RollShare.uploadProfilePreview() }
         } catch let error as ShareAPI.HTTPError where error.status == 401 {
             forget()
         } catch {}
