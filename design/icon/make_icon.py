@@ -1,22 +1,21 @@
 """The Film Exposures app icon: a 35mm slide mount filling the icon, a light leak in its
-window, and the brand mark (orange dot + FILM EXPOSURES) across the top, as on the
-website's header. Original artwork, drawn entirely in code.
+window drawn as flat diagonal bands in the brand's colours (black, copper, cream), and the
+mount's orange
+orientation dot. Original artwork, drawn entirely in code. No text: the app's name is
+under the icon, and words are unreadable at Settings and Spotlight sizes.
 
     python3 design/icon/make_icon.py
 
-writes RetroCam/Assets.xcassets/AppIcon.appiconset/AppIcon.png (1024 px, no alpha, as
-the App Store wants) and the website's icons in server/public/. Needs Pillow and the
-DejaVu Sans Mono Bold font (free; its licence allows use in artwork like this).
+writes the app icon (light, dark and tinted, 1024 px, no alpha, as the App Store wants)
+and the website's icons in server/public/. Needs Pillow.
 """
 from pathlib import Path
-from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 ROOT = Path(__file__).resolve().parents[2]
 S, K = 1024, 4                 # drawn at 4x, then scaled down for smooth edges
 N = S * K
 ORANGE = (232, 118, 46)
-INK = (58, 45, 31)
-FONT = '/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf'
 
 
 def vgrad(size, top, bottom):
@@ -34,57 +33,65 @@ def grain(img, amount=7):
     return ImageChops.overlay(img.convert('RGB'), Image.merge('RGB', (noise,) * 3))
 
 
-def light_leak(w, h):
-    img = Image.new('RGB', (w, h), (20, 14, 14))
-    glow = Image.new('L', (w, h), 0)
-    ImageDraw.Draw(glow).ellipse((int(w * 0.45), int(-h * 0.4), int(w * 1.5), int(h * 1.1)), fill=255)
-    img.paste((235, 92, 40), (0, 0), glow.filter(ImageFilter.GaussianBlur(w * 0.12)))
-    core = Image.new('L', (w, h), 0)
-    ImageDraw.Draw(core).ellipse((int(w * 0.72), int(-h * 0.1), int(w * 1.25), int(h * 0.6)), fill=230)
-    img.paste((255, 200, 120), (0, 0), core.filter(ImageFilter.GaussianBlur(w * 0.07)))
+# The brand's three colours, as flat hard-edged shapes (no gradients: they turn to mush
+# at small sizes and in iOS's tinted icons): near-black film, a copper band of light, and
+# a cream edge where the light is brightest.
+BLACK, COPPER, CREAM = (18, 15, 14), (232, 118, 46), (246, 236, 214)
+BANDS = [BLACK, COPPER, CREAM]
+
+
+def stripes(w, h, bands=BANDS):
+    """Light catching the film: dark, then a copper band, then a cream edge, on the diagonal."""
+    dark, light, edge = bands
+    img = Image.new('RGB', (w, h), dark)
+    d = ImageDraw.Draw(img)
+    slant = int(h * 0.55)
+    d.polygon([(int(w * 0.45), 0), (w * 2, 0), (w * 2, h), (int(w * 0.45) - slant, h)], fill=light)
+    d.polygon([(int(w * 0.80), 0), (w * 2, 0), (w * 2, h), (int(w * 0.80) - slant, h)], fill=edge)
     return img
 
 
-def icon():
-    big = vgrad((N, N), (240, 231, 212), (217, 203, 174))           # the card, edge to edge
+def icon(mount=((240, 231, 212), (222, 209, 182)), edge_tone=(180, 160, 125), lip_tone=(105, 86, 62),
+         bands=BANDS, dot_tone=ORANGE, texture=7):
+    """A 35mm slide mount filling the icon (iOS's rounded corners are the mount's), the
+    window centred, and the mount's orientation dot in the corner of the top margin."""
+    big = vgrad((N, N), *mount)
     edge = Image.new('L', (N, N), 0)
-    ImageDraw.Draw(edge).rectangle((0, 0, N, N), outline=255, width=int(N * 0.035))
-    big.paste((180, 160, 125), (0, 0), edge.filter(ImageFilter.GaussianBlur(N * 0.03)).point(lambda v: int(v * 0.35)))
+    ImageDraw.Draw(edge).rectangle((0, 0, N, N), outline=255, width=int(N * 0.03))
+    big.paste(edge_tone, (0, 0), edge.filter(ImageFilter.GaussianBlur(N * 0.025)).point(lambda v: int(v * 0.15)))
     d = ImageDraw.Draw(big)
-
-    # The window, 3:2, dead centre, with a dark lip and softly rounded corners.
-    ww = int(N * 0.70)
+    ww = int(N * 0.74)
     wh = int(ww * 2 / 3)
     wx, wy = (N - ww) // 2, (N - wh) // 2
-    wr, lip = int(N * 0.025), int(N * 0.008)
-    d.rounded_rectangle((wx - lip, wy - lip, wx + ww + lip, wy + wh + lip), wr + lip, fill=(105, 86, 62))
+    wr, lip = int(N * 0.025), int(N * 0.009)
+    d.rounded_rectangle((wx - lip, wy - lip, wx + ww + lip, wy + wh + lip), wr + lip, fill=lip_tone)
     mask = Image.new('L', (ww, wh), 0)
     ImageDraw.Draw(mask).rounded_rectangle((0, 0, ww - 1, wh - 1), wr, fill=255)
-    big.paste(light_leak(ww, wh), (wx, wy), mask)
+    big.paste(stripes(ww, wh, bands), (wx, wy), mask)
+    r = int(N * 0.045)
+    cx, cy = wx + r, wy // 2
+    d.ellipse((cx - r, cy - r, cx + r, cy + r), fill=dot_tone)
+    img = big.resize((S, S), Image.LANCZOS)
+    return grain(img, texture) if texture else img
 
-    # The brand mark across the top, as in the website's header: the orange dot with its
-    # faint halo, then FILM EXPOSURES in bold monospace, widely spaced (0.14 em), the dot
-    # about as tall as the letters.
-    row = int(wy * 0.52)
-    size = int(N * 0.056)
-    font = ImageFont.truetype(FONT, size)
-    dot = int(size * 0.46)
-    dx = wx + int(dot * 1.6)
-    halo = Image.new('L', (N, N), 0)
-    ImageDraw.Draw(halo).ellipse((dx - dot * 1.5, row - dot * 1.5, dx + dot * 1.5, row + dot * 1.5), fill=int(255 * 0.22))
-    big.paste(ORANGE, (0, 0), halo)
-    d.ellipse((dx - dot, row - dot, dx + dot, row + dot), fill=ORANGE)
-    kern = size * 0.14
-    x, top = dx + dot * 1.5 + size * 0.62, row - size * 0.58
-    for ch in 'FILM EXPOSURES':
-        d.text((x, top), ch, font=font, fill=INK)
-        x += d.textlength(ch, font=font) + kern
-    return grain(big.resize((S, S), Image.LANCZOS))
+
+def dark_icon():
+    """For iOS dark mode: a near-black mount, as on the website, same window and dot."""
+    return icon(mount=((32, 28, 26), (16, 14, 13)), edge_tone=(0, 0, 0), lip_tone=(8, 7, 6), texture=5)
+
+
+def tinted_icon():
+    """For iOS tinted icons: greyscale, which the system tints; dark mount, light bands."""
+    return icon(mount=((24, 24, 24), (12, 12, 12)), edge_tone=(0, 0, 0), lip_tone=(4, 4, 4),
+                bands=[(18, 18, 18), (150, 150, 150), (245, 245, 245)], dot_tone=(245, 245, 245), texture=0)
 
 
 if __name__ == '__main__':
     img = icon()
-    img.save(ROOT / 'RetroCam/Assets.xcassets/AppIcon.appiconset/AppIcon.png', optimize=True)
+    icons = ROOT / 'RetroCam/Assets.xcassets/AppIcon.appiconset'
+    img.save(icons / 'AppIcon.png', optimize=True)
+    dark_icon().save(icons / 'AppIcon-Dark.png', optimize=True)
+    tinted_icon().save(icons / 'AppIcon-Tinted.png', optimize=True)
     public = ROOT / 'server/public'
     img.resize((180, 180), Image.LANCZOS).save(public / 'apple-touch-icon.png', optimize=True)
     img.resize((64, 64), Image.LANCZOS).save(public / 'favicon.png', optimize=True)
