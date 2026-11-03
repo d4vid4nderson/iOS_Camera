@@ -37,6 +37,7 @@
 //   Social (all "(account)"):
 //   PUT  /api/me { name, handle, discoverable }   your @handle (unique) and whether search finds you
 //   GET  /api/users/search?q=                search people by @handle or name
+//   GET  /api/users/browse?after=            everyone findable, by handle, a page at a time
 //   POST|DELETE /api/users/<id>/follow       ask to follow (they approve) / unfollow or cancel
 //   GET  /api/users/<id>/followers|following  who follows them / whom they follow
 //   POST|DELETE /api/users/<id>/block        block: no following, finding or sharing either way
@@ -189,6 +190,7 @@ export async function route(request, env, now = Date.now()) {
   }
 
   if (path === '/api/users/search' && method === 'GET') return searchUsers(request, env, url);
+  if (path === '/api/users/browse' && method === 'GET') return browseUsers(request, env, url);
   if ((m = path.match(new RegExp(`^/api/users/${USER}/follow$`))) && (method === 'POST' || method === 'DELETE')) {
     return follow(request, env, url, m[1], method === 'POST', now);
   }
@@ -1236,6 +1238,36 @@ async function searchUsers(request, env, url) {
     // Handles that start with the search first, then names.
     found.sort((a, b) => (b.handle?.startsWith(q) || 0) - (a.handle?.startsWith(q) || 0));
     return json(200, { people: found });
+  });
+}
+
+export const BROWSE_PAGE = 30;
+
+/// Everyone who can be found (a handle, search left on, not blocked either way), in handle
+/// order, a page at a time: `after` is the last handle of the previous page.
+async function browseUsers(request, env, url) {
+  return withUser(request, env, async (user) => {
+    const after = searchWord(url.searchParams.get('after')).slice(0, 30);
+    const found = [];
+    let cursor;
+    let more = false;
+    outer: do {
+      const page = await env.ROLLS.list({ prefix: 'handles/', cursor, startAfter: after ? `handles/${after}` : undefined, limit: 100 });
+      for (const object of page.objects) {
+        const handle = object.key.slice('handles/'.length);
+        if (after && handle <= after) continue;
+        if (found.length >= BROWSE_PAGE) { more = true; break outer; }
+        const pid = await (await env.ROLLS.get(object.key))?.text();
+        if (!pid || pid === user.id || (await blockedEitherWay(env, user.id, pid))) continue;
+        const u = await getUser(env, pid);
+        if (!u || u.discoverable === false || u.handle !== handle) continue;
+        found.push({ ...personPayload(u, url), status: (await relation(env, user.id, pid)).status });
+      }
+      cursor = page.truncated ? page.cursor : undefined;
+      if (cursor) more = true;
+    } while (cursor && found.length < BROWSE_PAGE);
+    if (!cursor && found.length < BROWSE_PAGE) more = false;
+    return json(200, { people: found, after: more && found.length ? found[found.length - 1].handle : null });
   });
 }
 

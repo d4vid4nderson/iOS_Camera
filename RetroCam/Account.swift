@@ -159,12 +159,26 @@ final class Account: ObservableObject {
               let token = (info["token"] as? String) ?? existing else {
             throw ShareAPI.Failure.server("The share server sent back something unexpected.")
         }
+        let wasSignedIn = existing != nil
         Self.storeToken(token)
         remember(me)
 
+        // The account is the source of your name and headshot: they come down to this
+        // phone. Only an account with neither (a first sign-in) takes what this phone has.
         var profile = Profile.load()
-        if profile.photo == nil, me.avatarSource == "google" || me.avatarSource == "facebook",
-           let photo = await downloadHeadshot(me.avatar) {
+        let accountName = me.name.map(Profile.cleanName) ?? ""
+        if !wasSignedIn, !accountName.isEmpty || me.avatar != nil {
+            profile.name = accountName
+            profile.saveSettings()
+            if me.avatar != nil, await downloadHeadshot(me.avatar) != nil {
+                profile.photo = Profile.load().photo
+            } else {
+                Profile.removeHeadshot()
+                profile.photo = nil
+            }
+            headshotVersion += 1
+        } else if profile.photo == nil, me.avatarSource == "google" || me.avatarSource == "facebook",
+                  let photo = await downloadHeadshot(me.avatar) {
             profile.photo = photo
             if profile.name.isEmpty, let name = me.name {
                 profile.name = Profile.cleanName(name)
@@ -280,6 +294,13 @@ final class Account: ObservableObject {
         UserDefaults.standard.removeObject(forKey: AccountKeys.me)
         UserDefaults.standard.removeObject(forKey: AccountKeys.appleUser)
         me = nil
+        // Your name and headshot belong to the account: signed out, they're off this phone
+        // (they come back when you sign in again).
+        var profile = Profile.load()
+        profile.name = ""
+        profile.saveSettings()
+        Profile.removeHeadshot()
+        headshotVersion += 1
     }
 
     /// If you've stopped using Sign in with Apple for Film Exposures (in Settings), sign out.

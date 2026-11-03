@@ -36,6 +36,8 @@ struct ProfileSheet: View {
     @State private var sharing: ShareItems?
     @State private var socialTab: SocialTabRef?
     @State private var pickingPeople: RollRef?
+    @State private var follows: (followers: Int, following: Int)?
+    @State private var listing: ProfileListRef?
     /// The audience a roll was going to get when the rules had to be agreed to first.
     @State private var pendingAudience: (Audience, [String]) = (.everyone, [])
 
@@ -48,6 +50,9 @@ struct ProfileSheet: View {
                     Button("DONE") { save(); dismiss() }.font(.mono(11, .bold)).foregroundStyle(accent)
                 }
 
+                if needsSignIn {
+                    signInFirst
+                } else {
                 HStack(alignment: .top, spacing: 16) {
                     ProfileAvatar(photo: profile.photo, size: 96)
                         .overlay { if working { ProgressView() } }
@@ -95,7 +100,6 @@ struct ProfileSheet: View {
 
                 if ShareLinks.isConfigured {
                     accountSection
-                    signedOutSection
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
@@ -104,6 +108,7 @@ struct ProfileSheet: View {
                         chip("SHOW", selected: profile.showOnCards) { setShow(true) }
                         chip("HIDE", selected: !profile.showOnCards) { setShow(false) }
                     }
+                }
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
@@ -149,6 +154,9 @@ struct ProfileSheet: View {
         }
         .fullScreenCover(item: $socialTab) { ref in
             SocialView(camera: camera, accent: accent, tab: ref.tab)
+        }
+        .sheet(item: $listing, onDismiss: { follows = nil; Task { await refreshFollows() } }) { ref in
+            PeopleListSheet(userID: ref.user, which: ref.which, camera: camera, accent: accent)
         }
         .sheet(item: $pickingPeople) { ref in
             PeoplePicker(accent: accent, initial: records[ref.number]?.people ?? []) { people in
@@ -202,6 +210,23 @@ struct ProfileSheet: View {
         if let me = account.me, account.isSignedIn {
             VStack(alignment: .leading, spacing: 8) {
                 Text("PUBLIC PROFILE").font(.mono(9, .semibold)).foregroundStyle(.secondary)
+                // Your numbers, for you: rolls you could share, and who you follow and who follows you.
+                HStack(spacing: 14) {
+                    stat(shareableRolls, shareableRolls == 1 ? "ROLL TO SHARE" : "ROLLS TO SHARE")
+                    Button { listing = ProfileListRef(which: "following", user: me.id) } label: {
+                        stat(follows?.following, "FOLLOWING")
+                    }
+                    .buttonStyle(.plain)
+                    Button { listing = ProfileListRef(which: "followers", user: me.id) } label: {
+                        stat(follows?.followers, "FOLLOWERS")
+                    }
+                    .buttonStyle(.plain)
+                }
+                .task(id: me.id) {
+                    if let mine = try? await RollShare.fetchProfile(id: me.id) {
+                        follows = (mine.followers ?? 0, mine.following ?? 0)
+                    }
+                }
                 HStack(spacing: 6) {
                     chip("VIEW MY PROFILE", selected: true) { viewingMine = IncomingUser(id: me.id) }
                     chip(makingCard ? "MAKING CARD…" : "SHARE PROFILE", selected: false) { shareProfile(me) }
@@ -299,16 +324,51 @@ struct ProfileSheet: View {
         }
     }
 
-    /// Signed out: what an account is for, and the sign-in buttons.
-    @ViewBuilder private var signedOutSection: some View {
-        if !(account.me != nil && account.isSignedIn) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("PUBLIC PROFILE").font(.mono(9, .semibold)).foregroundStyle(.secondary)
-                Text("Sign in to put rolls on a public profile people can open from your shares, and to like frames in other people's rolls. Not needed for the camera or for sharing links.")
-                    .font(.mono(10)).foregroundStyle(.secondary)
+    /// Rolls with developed frames: the ones you could share now.
+    private var shareableRolls: Int {
+        myRolls.filter { !RollShare.developedFrames(of: $0.number).isEmpty }.count
+    }
+
+    private func stat(_ value: Int?, _ label: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value.map(String.init) ?? "–").font(.mono(15, .bold)).foregroundStyle(.white)
+            Text(label).font(.mono(8, .semibold)).foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private func refreshFollows() async {
+        guard let id = account.me?.id, let mine = try? await RollShare.fetchProfile(id: id) else { return }
+        follows = (mine.followers ?? 0, mine.following ?? 0)
+    }
+
+    /// Your name and photo belong to an account, so signed out there's only signing in.
+    private var needsSignIn: Bool {
+        ShareLinks.isConfigured && !(account.me != nil && account.isSignedIn)
+    }
+
+    /// Signed out: what an account is for, and the sign-in buttons. Name and photo come after.
+    private var signInFirst: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ProfileAvatar(photo: nil, size: 72)
+            Text("SIGN IN TO MAKE YOUR PROFILE").font(.mono(15, .bold)).foregroundStyle(accent)
+            Text("Your name and photo go with your account. Sign in to set them, share rolls with friends or followers, follow photographers and like their frames.")
+                .font(.mono(10)).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let note {
+                Text(note).font(.mono(10, .semibold)).foregroundStyle(accent)
                     .fixedSize(horizontal: false, vertical: true)
-                SignInButtons(onError: { note = $0.uppercased() }, onSignedIn: { note = nil; loadRolls() })
             }
+            SignInButtons(onError: { note = $0.uppercased() }, onSignedIn: {
+                note = nil
+                profile = Profile.load()
+                nameDraft = profile.name
+                onChange(profile)
+                loadRolls()
+            })
+            Text("The camera, your rolls and sharing a roll as a link all work without an account.")
+                .font(.mono(9)).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -633,6 +693,12 @@ struct ProfileAvatar: View {
 }
 
 /// A roll to open from your profile.
+private struct ProfileListRef: Identifiable {
+    let which: String
+    let user: String
+    var id: String { which }
+}
+
 private struct SocialTabRef: Identifiable {
     let tab: SocialView.Tab
     var id: String { tab.rawValue }

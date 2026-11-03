@@ -141,6 +141,31 @@ test('search finds people by handle or name, but not hidden or blocked ones', as
   assert.deepEqual(await find('ana', cy), ['ana']);
 });
 
+test('browsing lists findable people by handle, a page at a time', async () => {
+  const { e, apple, ana, ben, cy } = await cast();
+  assert.equal((await call(e, 'GET', '/api/users/browse')).status, 401, 'signed in only');
+  const names = async (who, after = '') => {
+    const page = await getJSON(e, `/api/users/browse${after ? `?after=${after}` : ''}`, who);
+    return [page.people.map((p) => p.handle), page.after];
+  };
+  assert.deepEqual(await names(cy), [['ana', 'ben.ito'], null], 'everyone but you, by handle');
+  await call(e, 'PUT', '/api/me', { account: ben.token, type: 'application/json', body: JSON.stringify({ discoverable: false }) });
+  assert.deepEqual((await names(cy))[0], ['ana'], 'not people who turned search off');
+  await call(e, 'POST', `/api/users/${cy.id}/block`, { account: ana.token });
+  assert.deepEqual((await names(cy))[0], [], 'not people who blocked you');
+  await person(e, apple, 'd', 'Dee', 'dee');
+  assert.deepEqual(await names(ben, 'ana'), [['cy_', 'dee'], null], 'after a handle');
+
+  // Pages of 30.
+  for (let n = 0; n < 31; n++) await person(e, apple, `p${n}`, `P ${n}`, `p${String(n).padStart(2, '0')}`);
+  const [first, next] = await names(ben);
+  assert.equal(first.length, 30);
+  assert.equal(next, first[29]);
+  const [rest, end] = await names(ben, next);
+  assert.ok(rest.length >= 1 && end === null, 'the last page ends');
+  assert.ok(!rest.some((h) => first.includes(h)), 'no repeats');
+});
+
 test('following is a request the other person approves', async () => {
   const { e, apple, ana, ben } = await cast();
   const noHandle = await person(e, apple, 'd', 'Dee');
