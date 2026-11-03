@@ -121,6 +121,7 @@ struct ProfileSheet: View {
                 }
                 }
 
+                if !needsSignIn {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("FILM CARDS SHOW").font(.mono(9, .semibold)).foregroundStyle(.secondary)
                     HStack(spacing: 6) {
@@ -130,6 +131,7 @@ struct ProfileSheet: View {
                     Text("A frame you shot on the film, when there is one; otherwise its tone scale.")
                         .font(.mono(9)).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
+                }
                 }
 
                 if ShareLinks.isConfigured {
