@@ -49,19 +49,21 @@ enum Darkroom {
             metadata[kCGImagePropertyExifDictionary as String] = exif
         }
 
-        // Full-resolution captures (up to 48 MP) are developed at no more than 24 MP:
-        // plenty for film-like detail, and half the memory and time.
-        let maxPixels: CGFloat = 24_000_000
+        // The frame format (35mm, 6×6, XPAN…) is cut first, from the full capture, so a
+        // crop keeps all the detail the sensor has; and before the film, so grain, glow and
+        // vignette sit on the frame you chose.
+        source = finish.format.crop(source, wide: finish.orientation == .landscape)
+
+        // Then each format keeps about the detail its film would: 24 MP for 35mm-sized
+        // frames, 36 MP for medium format, everything for 4×5.
+        let maxPixels = finish.format.maxPixels
         let pixels = source.extent.width * source.extent.height
         if pixels > maxPixels {
             let scale = (maxPixels / pixels).squareRoot()
             source = source.applyingFilter("CILanczosScaleTransform",
                                            parameters: [kCIInputScaleKey: scale, kCIInputAspectRatioKey: 1])
+            source = source.transformed(by: CGAffineTransform(translationX: -source.extent.minX, y: -source.extent.minY))
         }
-
-        // The frame format (35mm, 6×6, XPAN…) is cut before the film, so grain, glow and
-        // vignette sit on the frame you chose.
-        source = finish.format.crop(source, wide: finish.orientation == .landscape)
         let film = FilmLook.apply(stock, to: source, stamp: stampText)
         let developed = PrintBorder.apply(finish.border, to: film, seed: finish.seed, width: finish.width,
                                           label: finish.label).settingProperties(metadata)

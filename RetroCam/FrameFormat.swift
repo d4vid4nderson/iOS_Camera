@@ -53,6 +53,17 @@ enum FrameFormat: String, CaseIterable {
         }
     }
 
+    /// The most pixels a developed frame keeps, like the detail each film format holds:
+    /// 35mm-sized frames 24 MP, medium format 36 MP, 4×5 everything the sensor gives (about
+    /// 46 MP from a 48 MP camera). Smaller captures (other lenses, flash) stay as they are.
+    var maxPixels: CGFloat {
+        switch self {
+        case .thirtyFive, .xpan, .wide: return 24_000_000
+        case .medium645, .square: return 36_000_000
+        case .large: return 50_000_000
+        }
+    }
+
     /// Whether the orientation can be chosen (6×4.5 is the sensor as held; 6×6 is square).
     var hasOrientation: Bool { self != .medium645 && self != .square }
 
