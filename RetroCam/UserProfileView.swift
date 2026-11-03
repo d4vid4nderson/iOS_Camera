@@ -24,6 +24,7 @@ struct UserProfileView: View {
     @State private var followStatus = "none"
     @State private var listing: PeopleListRef?
     @State private var note: String?
+    @State private var scrollToRolls = 0
 
     private var isMe: Bool { account.me?.id == userID }
 
@@ -93,19 +94,6 @@ struct UserProfileView: View {
                         Text("@\(handle)").font(.mono(11, .semibold)).foregroundStyle(.white).lineLimit(1)
                     }
                     if let profile {
-                        Text("\(profile.rolls.count) \(profile.rolls.count == 1 ? "ROLL" : "ROLLS") · \(frameCount(profile)) FRAMES")
-                            .font(.mono(10)).foregroundStyle(.secondary)
-                        if let followers = profile.followers, let following = profile.following {
-                            HStack(spacing: 12) {
-                                Button { if account.isSignedIn { listing = PeopleListRef(which: "followers") } } label: {
-                                    Text("\(followers) FOLLOWERS").font(.mono(10, .semibold)).foregroundStyle(.white)
-                                }
-                                Button { if account.isSignedIn { listing = PeopleListRef(which: "following") } } label: {
-                                    Text("\(following) FOLLOWING").font(.mono(10, .semibold)).foregroundStyle(.white)
-                                }
-                            }
-                            .buttonStyle(.plain)
-                        }
                         if profile.relation?.followsYou == true && !isMe {
                             Text("FOLLOWS YOU").font(.mono(9, .bold)).foregroundStyle(accent)
                         }
@@ -114,6 +102,7 @@ struct UserProfileView: View {
                 Spacer(minLength: 0)
             }
             if let profile {
+                stats(profile)
                 HStack(spacing: 8) {
                     if !isMe && account.isSignedIn && profile.relation != nil {
                         FollowButton(id: userID, status: $followStatus, accent: accent, onError: { note = $0 })
@@ -157,6 +146,39 @@ struct UserProfileView: View {
         }
     }
 
+    /// Rolls, frames, followers, following: big numbers you can tap. Rolls and frames go to
+    /// the rolls (your own: back to your profile, where you choose who sees them); followers
+    /// and following open the lists.
+    private func stats(_ profile: RollShare.RemoteProfile) -> some View {
+        HStack(spacing: 8) {
+            stat(profile.rolls.count, profile.rolls.count == 1 ? "ROLL" : "ROLLS") { showRolls() }
+            stat(frameCount(profile), frameCount(profile) == 1 ? "FRAME" : "FRAMES") { showRolls() }
+            stat(profile.followers, "FOLLOWERS") { if account.isSignedIn { listing = PeopleListRef(which: "followers") } }
+            stat(profile.following, "FOLLOWING") { if account.isSignedIn { listing = PeopleListRef(which: "following") } }
+        }
+    }
+
+    private func stat(_ value: Int?, _ label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 3) {
+                Text(value.map(String.init) ?? "–")
+                    .font(.mono(20, .bold)).foregroundStyle(.white)
+                    .contentTransition(.numericText())
+                Text(label).font(.mono(9, .semibold)).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color(white: 0.11)))
+            .contentShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(value ?? 0) \(label.lowercased())")
+    }
+
+    private func showRolls() {
+        if isMe { dismiss() } else { withAnimation { scrollToRolls += 1 } }
+    }
+
     private func frameCount(_ profile: RollShare.RemoteProfile) -> Int {
         profile.rolls.reduce(0) { $0 + $1.frames }
     }
@@ -173,7 +195,9 @@ struct UserProfileView: View {
     // MARK: Rolls
 
     private func grid(_ profile: RollShare.RemoteProfile) -> some View {
+        ScrollViewReader { reader in
         ScrollView {
+            Color.clear.frame(height: 0).id("rolls-top")
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 16) {
                 ForEach(profile.rolls) { roll in
                     Button { opening = OpenRoll(id: roll.id) } label: {
@@ -212,6 +236,8 @@ struct UserProfileView: View {
             .padding(.bottom, 12)
         }
         .refreshable { await load() }
+        .onChange(of: scrollToRolls) { _, _ in reader.scrollTo("rolls-top", anchor: .top) }
+        }
     }
 
     // MARK: Block
