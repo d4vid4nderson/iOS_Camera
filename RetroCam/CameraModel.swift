@@ -308,6 +308,9 @@ final class CameraModel: NSObject, ObservableObject {
         guard session.canAddOutput(photoOutput) else { throw CameraError.setupFailed("photo output") }
         session.addOutput(photoOutput)
         photoOutput.maxPhotoQualityPrioritization = .quality
+        // Keep the shutter quick while each shot gets the phone's full processing.
+        if photoOutput.isZeroShutterLagSupported { photoOutput.isZeroShutterLagEnabled = true }
+        if photoOutput.isResponsiveCaptureSupported { photoOutput.isResponsiveCaptureEnabled = true }
 
         refreshLenses()
     }
@@ -821,8 +824,13 @@ final class CameraModel: NSObject, ObservableObject {
                 connection.videoRotationAngle = angle
             }
 
-            let settings = AVCapturePhotoSettings()
-            settings.photoQualityPrioritization = .balanced
+            // HEIF where the phone has it: less compression loss going into the film look.
+            let settings = self.photoOutput.availablePhotoCodecTypes.contains(.hevc)
+                ? AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.hevc])
+                : AVCapturePhotoSettings()
+            // The phone's best processing (Deep Fusion / Photonic Engine where it has them):
+            // sharper detail and cleaner shadows before the film adds its own grain.
+            settings.photoQualityPrioritization = .quality
             settings.maxPhotoDimensions = self.photoOutput.maxPhotoDimensions
             if flashMode != .off, self.photoOutput.supportedFlashModes.contains(flashMode) {
                 settings.flashMode = flashMode
