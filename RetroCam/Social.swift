@@ -151,6 +151,15 @@ enum Social {
         _ = try await call("api/users/\(id)/block", method: on ? "POST" : "DELETE")
     }
 
+    private struct RollPage: Decodable { var rolls: [RollTile]; var after: String? }
+
+    /// Everyone's public rolls, newest first, a page at a time: pass the previous page's `after`.
+    static func browseRolls(after: String? = nil) async throws -> (rolls: [RollTile], after: String?) {
+        let data = try await call("api/rolls/browse", query: after.map { [URLQueryItem(name: "after", value: $0)] } ?? [])
+        let page = try JSONDecoder().decode(RollPage.self, from: data)
+        return (page.rolls, page.after)
+    }
+
     static func feed() async throws -> [RollTile] {
         try JSONDecoder().decode(Rolls.self, from: try await call("api/feed")).rolls
     }
@@ -276,11 +285,12 @@ struct FollowButton: View {
 /// requests and search. Opened from your profile.
 struct SocialView: View {
     enum Tab: String, CaseIterable, Identifiable {
-        case feed, shared, requests, find
+        case feed, browse, shared, requests, find
         var id: String { rawValue }
         var label: String {
             switch self {
             case .feed: return "FOLLOWING"
+            case .browse: return "BROWSE"
             case .shared: return "SHARED WITH YOU"
             case .requests: return "REQUESTS"
             case .find: return "FIND PEOPLE"
@@ -303,6 +313,9 @@ struct SocialView: View {
     @State private var note: String?
     @State private var opening: OpenSocialRoll?
     @State private var person: IncomingUser?
+    @State private var publicRolls: [Social.RollTile]?
+    @State private var publicAfter: String?
+    @State private var loadingPublic = false
     @State private var everyone: [Social.Person] = []
     @State private var everyoneAfter: String?
     @State private var browsing = false
@@ -370,6 +383,8 @@ struct SocialView: View {
         switch tab {
         case .feed:
             rolls(feed, empty: "NOTHING YET\nFOLLOW PEOPLE TO SEE THEIR ROLLS HERE")
+        case .browse:
+            browseList
         case .shared:
             rolls(shared, empty: "NO ROLLS SHARED WITH YOU YET")
         case .requests:
@@ -430,6 +445,50 @@ struct SocialView: View {
             }
         }
         .buttonStyle(.plain)
+    }
+
+    /// Everyone's public rolls, newest first. Tap one to look through its frames.
+    @ViewBuilder private var browseList: some View {
+        if let publicRolls {
+            if publicRolls.isEmpty {
+                centered("NO PUBLIC ROLLS YET")
+            } else {
+                ScrollView {
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 16) {
+                        ForEach(publicRolls) { roll in tile(roll) }
+                    }
+                    if loadingPublic {
+                        ProgressView().frame(maxWidth: .infinity).padding(.vertical, 12)
+                    } else if publicAfter != nil {
+                        SocialChip(text: "MORE", accent: accent) { Task { await loadPublic(more: true) } }
+                            .frame(maxWidth: .infinity).padding(.vertical, 8)
+                    } else {
+                        Text("THAT'S EVERYTHING").font(.mono(9, .semibold)).foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity).padding(.vertical, 12)
+                    }
+                }
+                .refreshable { await loadPublic(more: false) }
+            }
+        } else {
+            Spacer()
+            ProgressView().frame(maxWidth: .infinity)
+            Spacer()
+                .task { await loadPublic(more: false) }
+        }
+    }
+
+    private func loadPublic(more: Bool) async {
+        guard !loadingPublic, account.isSignedIn else { if !account.isSignedIn { publicRolls = [] }; return }
+        loadingPublic = true
+        defer { loadingPublic = false }
+        do {
+            let page = try await Social.browseRolls(after: more ? publicAfter : nil)
+            publicRolls = more ? (publicRolls ?? []) + page.rolls : page.rolls
+            publicAfter = page.after
+        } catch {
+            note = error.localizedDescription.uppercased()
+            if publicRolls == nil { publicRolls = [] }
+        }
     }
 
     @ViewBuilder private var requestList: some View {
