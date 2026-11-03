@@ -53,27 +53,32 @@ enum FrameFormat: String, CaseIterable {
         }
     }
 
-    /// The largest centred rectangle of this format inside `rect`, its long side along
-    /// `rect`'s long side.
-    func rect(in rect: CGRect) -> CGRect {
-        let landscape = rect.width >= rect.height
-        var long = max(rect.width, rect.height)
-        var short = min(rect.width, rect.height)
-        guard short > 0 else { return rect }
-        if long / short > ratio {
-            long = short * ratio        // narrower than the sensor: trim the long side
-        } else {
-            short = long / ratio        // wider: trim the short side
-        }
-        let w = (landscape ? long : short).rounded()
-        let h = (landscape ? short : long).rounded()
+    /// Whether the orientation can be chosen (6×4.5 is the sensor as held; 6×6 is square).
+    var hasOrientation: Bool { self != .medium645 && self != .square }
+
+    /// The largest centred rectangle of this format inside `rect`: wider than tall when
+    /// `wide`, taller than wide otherwise. 6×4.5 is the whole of `rect`, as held.
+    func rect(in rect: CGRect, wide: Bool) -> CGRect {
+        guard self != .medium645, rect.width > 0, rect.height > 0 else { return rect }
+        // Target width over height.
+        let aspect = wide ? ratio : 1 / ratio
+        var w = rect.width, h = rect.height
+        if w / h > aspect { w = h * aspect } else { h = w / aspect }
+        w = w.rounded(); h = h.rounded()
         return CGRect(x: (rect.midX - w / 2).rounded(), y: (rect.midY - h / 2).rounded(), width: w, height: h)
     }
 
     /// `image` cropped to this format, moved so the crop starts at the origin.
-    func crop(_ image: CIImage) -> CIImage {
+    func crop(_ image: CIImage, wide: Bool) -> CIImage {
         guard self != .medium645 else { return image }
-        let r = rect(in: image.extent)
+        let r = rect(in: image.extent, wide: wide)
         return image.cropped(to: r).transformed(by: CGAffineTransform(translationX: -r.minX, y: -r.minY))
     }
+}
+
+/// Which way a format is framed in the world, whichever way the phone is held.
+enum FrameOrientation: String, CaseIterable {
+    case landscape, portrait
+
+    var label: String { self == .landscape ? "LANDSCAPE" : "PORTRAIT" }
 }

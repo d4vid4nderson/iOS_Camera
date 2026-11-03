@@ -50,6 +50,7 @@ final class CameraModel: NSObject, ObservableObject {
     private static let borderKey = "border"
     private static let borderWidthKey = "borderWidth"
     private static let formatKey = "frameFormat"
+    private static let orientationKey = "frameOrientation"
     private static let filmKey = "film.selected"
     private static let tiltKey = "fx.tilt"
     private static let developKey = "develop.mode"
@@ -117,6 +118,14 @@ final class CameraModel: NSObject, ObservableObject {
             renderer.format = format
         }
     }
+    /// Which way a format is framed (landscape by default, whichever way the phone is held).
+    @Published private(set) var orientation: FrameOrientation =
+        FrameOrientation(rawValue: UserDefaults.standard.string(forKey: CameraModel.orientationKey) ?? "") ?? .landscape {
+        didSet {
+            UserDefaults.standard.set(orientation.rawValue, forKey: Self.orientationKey)
+            renderer.orientation = orientation
+        }
+    }
     /// Border width as a fraction of the print's short side (whole percent steps).
     @Published private(set) var borderWidth: Double = {
         let saved = UserDefaults.standard.object(forKey: CameraModel.borderWidthKey) as? Double
@@ -149,7 +158,9 @@ final class CameraModel: NSObject, ObservableObject {
     @Published var message: String?
     /// How far to turn on-screen icons (degrees, clockwise) so they stay level when the
     /// phone is turned. The screen itself stays portrait.
-    @Published private(set) var uiRotation: Double = 0
+    @Published private(set) var uiRotation: Double = 0 {
+        didSet { renderer.sideways = abs(uiRotation) == 90 }
+    }
     /// Camera orientation readout for troubleshooting (long-press the frame counter).
     @Published private(set) var diagnostics: String?
     var showDiagnostics = false {
@@ -233,6 +244,7 @@ final class CameraModel: NSObject, ObservableObject {
         renderer.border = border
         renderer.borderWidth = borderWidth
         renderer.format = format
+        renderer.orientation = orientation
         updateTiltSteering()
         lastPrint = RollStore.latestThumbnail()
     }
@@ -433,6 +445,7 @@ final class CameraModel: NSObject, ObservableObject {
     func cycleBorder() { border = border.next }
     func selectBorder(_ style: BorderStyle) { border = style }
     func selectFormat(_ new: FrameFormat) { format = new }
+    func selectOrientation(_ new: FrameOrientation) { orientation = new }
 
     /// Set the border width (fraction of the short side), snapped to whole percents.
     func setBorderWidth(_ width: Double) {
@@ -789,12 +802,14 @@ final class CameraModel: NSObject, ObservableObject {
         let stock = self.developedStock
         let flashMode = flashAvailable ? flash.mode : .off
         let stampText = stampMode.text(for: Date())
-        let finish = PrintFinish(border: border, seed: UInt32.random(in: 0...UInt32.max), width: borderWidth, format: format)
+        var finish = PrintFinish(border: border, seed: UInt32.random(in: 0...UInt32.max), width: borderWidth,
+                                 format: format, orientation: orientation)
 
         roll.expose(film: self.stock.name, develop: developMode)
         let filmID = self.stock.id
         let frameRoll = roll
         let frameNumber = roll.frames
+        finish.label = SlideLabel(title: self.stock.name, number: String(format: "%02d", frameNumber), color: self.stock.color)
         developing += 1
         shutterBlink = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { self.shutterBlink = false }
