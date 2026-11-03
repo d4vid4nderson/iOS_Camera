@@ -149,6 +149,23 @@ select,button,input,textarea{font:inherit;color:var(--fg)}
 .solo .row{display:flex;gap:6px;overflow:hidden;-webkit-mask-image:linear-gradient(90deg,#000 86%,transparent);mask-image:linear-gradient(90deg,#000 86%,transparent)}
 .solo .row span{flex:none;padding:5px 8px;border-radius:99px;background:#262626;font-size:9px;font-weight:700;color:#fff;white-space:nowrap}
 .solo .row .on{background:rgba(232,118,46,.18);box-shadow:inset 0 0 0 1px var(--accent);color:var(--accent)}
+.fp .seg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.fp .seg span{text-align:center;padding:6px 0;border-radius:99px;background:#262626;font-size:10px;font-weight:700;color:#fff}
+.fp .seg .on{background:rgba(232,118,46,.18);box-shadow:inset 0 0 0 1px var(--accent);color:var(--accent)}
+.fp .cans{display:flex;gap:8px;overflow:hidden;-webkit-mask-image:linear-gradient(90deg,#000 88%,transparent);mask-image:linear-gradient(90deg,#000 88%,transparent)}
+.fp .can{flex:none;width:132px;padding:8px 9px 7px;border-radius:10px;background:#0e0e0f;box-shadow:inset 0 0 0 .5px #383838;display:grid;gap:5px;font-family:-apple-system,BlinkMacSystemFont,"Inter",sans-serif}
+.fp .can.on{box-shadow:inset 0 0 0 1.5px var(--accent)}
+.fp .can i{display:flex;gap:2px;height:9px}.fp .can i b{flex:1;border-radius:2px}
+.fp .can strong{font-size:12px;font-weight:700;color:#fff}.fp .can.on strong{color:var(--accent)}
+.fp .can small{font-size:8.5px;color:#8e8e93;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dial{position:relative;height:40px;-webkit-mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent);mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent);overflow:hidden}
+.dial .ticks{position:absolute;left:50%;top:4px;display:flex;align-items:flex-start;gap:9px;transform:translateX(calc(var(--at) * -1px))}
+.dial .ticks span{width:1px;height:8px;background:#5a5a5a;position:relative;flex:none}
+.dial .ticks span.major{height:14px;width:1.5px;background:#8e8e93}
+.dial .ticks span.major em{position:absolute;top:19px;left:50%;transform:translateX(-50%);font:600 8px/1 var(--mono);font-style:normal;color:#8e8e93}
+.dial .mark{position:absolute;left:50%;top:0;width:2px;height:20px;margin-left:-1px;background:var(--accent);border-radius:1px}
+.solo .foot{display:flex;justify-content:space-between;align-items:center;font:700 9px/1 var(--mono);color:var(--accent)}
+.solo .foot span{padding:5px 8px;border-radius:99px;background:rgba(232,118,46,.18);box-shadow:inset 0 0 0 1px var(--accent)}
 .tonestrip{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px}
 .tonestrip figure{margin:0;display:grid;gap:4px;text-align:center;font:700 8px/1 var(--mono);letter-spacing:.06em;color:var(--muted);min-width:0}
 .tonestrip img{width:100%;height:auto;aspect-ratio:1;border-radius:4px;display:block}
@@ -537,11 +554,9 @@ export function homeBody(store) {
 <p class="eyebrow">Make it yours</p>
 <h2>Edit a film, or make your own.</h2>
 <div class="tools">
-  <div class="feature"><div class="visual"><div class="shot"><img src="/mock/make-film.jpg" alt="A street on Classic 400, toned selenium, with the app's Adjust panel open" loading="lazy" width="900" height="600">
-    <div class="panel"><div class="ph"><span>ADJUST</span><b>CLASSIC 400 · EDITED</b></div>
-    <div class="tabs"><span>FILTER</span><span>CONTRAST</span><span>KEY</span><span>FADE</span><span class="on">TONE</span><span>TONE %</span><span>GLOW</span></div>
-    <div class="row"><span>NEUTRAL</span><span>SEPIA</span><span>COOL</span><span class="on">SELENIUM</span><span>SPLIT</span><span>GOLD</span></div></div></div>
-  <div class="tonestrip"><figure><img src="/mock/tone-neutral.jpg" alt="" loading="lazy" width="220" height="220">NEUTRAL</figure><figure><img src="/mock/tone-warm.jpg" alt="" loading="lazy" width="220" height="220">SEPIA</figure><figure><img src="/mock/tone-selenium.jpg" alt="" loading="lazy" width="220" height="220">SELENIUM</figure><figure><img src="/mock/tone-gold.jpg" alt="" loading="lazy" width="220" height="220">GOLD</figure><figure><img src="/mock/tone-cyanotype.jpg" alt="" loading="lazy" width="220" height="220">CYANO</figure></div></div>
+  <div class="feature"><div class="visual"><div class="shot"><img src="/mock/make-film.jpg" alt="A street on Classic 400, with the app's Film panel open" loading="lazy" width="900" height="600">
+    <div class="panel fp"><div class="ph"><span>FILM</span><b>ISO 400</b></div><div class="seg"><span class="on">B&amp;W</span><span>COLOR</span></div><div class="cans"><div class="can on"><i><b style="background:#060606"></b><b style="background:#262626"></b><b style="background:#4a4a4a"></b><b style="background:#727272"></b><b style="background:#9c9c9c"></b><b style="background:#c8c8c8"></b><b style="background:#f1f0ec"></b></i><strong>CLASSIC 400</strong><small>The everyday street film</small></div><div class="can"><i><b style="background:#020202"></b><b style="background:#1a1a1a"></b><b style="background:#3d3d3d"></b><b style="background:#686868"></b><b style="background:#979797"></b><b style="background:#cbcbcb"></b><b style="background:#f7f7f5"></b></i><strong>PAN 50</strong><small>Fine grain, smooth tones</small></div><div class="can"><i><b style="background:#000"></b><b style="background:#0d0d0d"></b><b style="background:#262626"></b><b style="background:#4f4f4f"></b><b style="background:#8a8a8a"></b><b style="background:#cfcfcf"></b><b style="background:#fff"></b></i><strong>NOIR 400</strong><small>Low key: deep shadows</small></div></div></div></div>
+  <div class="solo"><div class="ph"><span>ADJUST</span><b>CLASSIC 400 · EDITED</b></div><div class="tabs" style="display:flex;gap:12px;font:700 9px/1 var(--mono);color:#8c8c8c;border-bottom:.5px solid #383838;white-space:nowrap;overflow:hidden;-webkit-mask-image:linear-gradient(90deg,#000 86%,transparent);mask-image:linear-gradient(90deg,#000 86%,transparent)"><span style="padding-bottom:5px;color:var(--accent);box-shadow:inset 0 -2px 0 var(--accent)">CONTRAST</span><span>KEY</span><span>FADE</span><span>WHITES</span><span>TONE</span><span>GLOW</span></div><div class="dial" style="--at:110"><div class="ticks"><span class="major"><em>0</em></span><span></span><span></span><span></span><span class="major"><em>20</em></span><span></span><span></span><span></span><span class="major"><em>40</em></span><span></span><span></span><span></span><span class="major"><em>60</em></span><span></span><span></span><span></span><span class="major"><em>80</em></span><span></span><span></span><span></span><span class="major"><em>100</em></span></div><span class="mark"></span></div><div class="foot">CONTRAST 55<span>SAVE AS MY FILM</span></div></div></div>
   <h3>The film</h3><p>Change any film: exposure, contrast, black and white points, grain and its size, vignette, bloom, fog and soft edges. Tone black &amp; white prints, or grade colour with RGB curves, saturation and split toning.</p>
   ${tags(['SEPIA', 'SELENIUM', 'SPLIT', 'GOLD', 'PLATINUM', 'CYANO', 'TINTYPE'])}</div>
   <div class="feature"><div class="visual"><div class="shot"><img src="/mock/make-lens.jpg" alt="A pier on Golden 100, with the app's Lens panel open" loading="lazy" width="900" height="600">
