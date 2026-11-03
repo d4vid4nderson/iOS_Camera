@@ -1113,6 +1113,8 @@ struct ContentView: View {
                         .pickerStyle(.inline)
                     }
                     .sensoryFeedback(.selection, trigger: finishRaw)
+                    // The app icon follows the shutter (iOS says so in a small alert).
+                    .onChange(of: finishRaw) { _, _ in finish.applyAppIcon() }
                     .accessibilityLabel("Shutter")
                     .accessibilityHint("Long press to change the shutter finish")
             }
