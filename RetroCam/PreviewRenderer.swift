@@ -17,6 +17,10 @@ final class PreviewRenderer: NSObject, MTKViewDelegate {
     var border: BorderStyle = .none
     var borderWidth: Double = PrintBorder.defaultWidth
     var format: FrameFormat = .medium645
+    var orientation: FrameOrientation = .landscape
+    /// The phone is held on its side: the screen's long side is level, so a landscape
+    /// frame runs along it.
+    var sideways = false
     /// Fixed per-session seed for textured borders, so the live view does not flicker.
     private let borderSeed = UInt32.random(in: 0...UInt32.max)
 
@@ -66,12 +70,13 @@ final class PreviewRenderer: NSObject, MTKViewDelegate {
             y: (target.height - image.extent.height) / 2 - image.extent.minY))
         let bounds = CGRect(origin: .zero, size: target)
         // The frame format, as the photo will be cut: the picture inside the viewfinder.
-        let frameRect = format.rect(in: bounds)
+        let frameRect = format.rect(in: bounds, wide: (orientation == .landscape) != sideways)
         var picture = image.cropped(to: frameRect)
             .transformed(by: CGAffineTransform(translationX: -frameRect.minX, y: -frameRect.minY))
         let pictureBounds = CGRect(origin: .zero, size: frameRect.size)
         picture = FilmLook.apply(stock, to: picture, stamp: stampMode.text(for: Date())).cropped(to: pictureBounds)
-        picture = PrintBorder.apply(border, to: picture, seed: borderSeed, width: borderWidth)
+        picture = PrintBorder.apply(border, to: picture, seed: borderSeed, width: borderWidth,
+                                    label: SlideLabel(title: stock.name, number: nil, color: stock.color))
         // Fit it (a slide mount is bigger than the picture) in the middle, on black.
         let out = picture.extent
         let fit = min(bounds.width / out.width, bounds.height / out.height, 1)

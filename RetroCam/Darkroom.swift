@@ -61,9 +61,10 @@ enum Darkroom {
 
         // The frame format (35mm, 6×6, XPAN…) is cut before the film, so grain, glow and
         // vignette sit on the frame you chose.
-        source = finish.format.crop(source)
+        source = finish.format.crop(source, wide: finish.orientation == .landscape)
         let film = FilmLook.apply(stock, to: source, stamp: stampText)
-        let developed = PrintBorder.apply(finish.border, to: film, seed: finish.seed, width: finish.width).settingProperties(metadata)
+        let developed = PrintBorder.apply(finish.border, to: film, seed: finish.seed, width: finish.width,
+                                          label: finish.label).settingProperties(metadata)
 
         guard let sRGB = CGColorSpace(name: CGColorSpace.sRGB),
               let jpeg = context.jpegRepresentation(

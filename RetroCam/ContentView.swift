@@ -551,6 +551,16 @@ struct ContentView: View {
             .padding(.horizontal, -Self.panelPadding)
             .sensoryFeedback(.selection, trigger: camera.format)
 
+            if camera.format.hasOrientation {
+                HStack(spacing: 8) {
+                    ForEach(FrameOrientation.allCases, id: \.self) { way in
+                        chip(way.label, selected: way == camera.orientation) { camera.selectOrientation(way) }
+                    }
+                    Spacer(minLength: 0)
+                }
+                .sensoryFeedback(.selection, trigger: camera.orientation)
+            }
+
             Text("BORDER").font(.mono(9, .semibold)).foregroundStyle(.secondary)
             HStack(spacing: 8) {
                 ForEach(BorderStyle.allCases, id: \.self) { style in
