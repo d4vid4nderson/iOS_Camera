@@ -55,7 +55,7 @@ struct ProfileSheet: View {
                 if needsSignIn {
                     signInFirst
                 } else if needsSetup || settingUp {
-                    AccountSetup(accent: accent, onStart: { settingUp = true }) {
+                    AccountSetup(accent: accent, onStart: { settingUp = true }, onRefused: { settingUp = false }) {
                         settingUp = false
                         profile = Profile.load()
                         nameDraft = profile.name
@@ -356,9 +356,9 @@ struct ProfileSheet: View {
         follows = (mine.followers ?? 0, mine.following ?? 0)
     }
 
-    /// Signed in without a handle yet: pick one (and a photo) before the rest of the profile.
+    /// Signed in without a confirmed age or a handle yet: those (and a photo) come before the rest of the profile.
     private var needsSetup: Bool {
-        ShareLinks.isConfigured && account.isSignedIn && account.me != nil && account.me?.handle == nil
+        ShareLinks.isConfigured && account.isSignedIn && account.needsSetup
     }
 
     /// Your name and photo belong to an account, so signed out there's only signing in.
@@ -595,7 +595,7 @@ struct ProfileSheet: View {
 
                     There's no place here for nudity or sexual content, violence, hate, harassment, spam, or photos of people who didn't agree to be shared. Reported rolls are hidden and reviewed, and accounts that break these rules are removed.
 
-                    Only post photos you took. The full terms are at filmexposures.com/terms.
+                    Film Exposures is for people 13 and older. Only post photos you took. The full terms are at filmexposures.com/terms.
                     """)
                     .font(.mono(10)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

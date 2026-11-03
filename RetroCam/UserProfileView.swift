@@ -20,6 +20,7 @@ struct UserProfileView: View {
     @State private var opening: OpenRoll?
     @State private var sharing: ShareItems?
     @State private var confirmingBlock = false
+    @State private var reporting = false
     @State private var makingCard = false
     @State private var followStatus = "none"
     @State private var listing: PeopleListRef?
@@ -55,6 +56,7 @@ struct UserProfileView: View {
             .padding(.bottom, 8)
 
             if confirmingBlock { blockCard }
+            if reporting { reportCard }
         }
         .preferredColorScheme(.dark)
         .task { await load() }
@@ -114,6 +116,9 @@ struct UserProfileView: View {
                         .disabled(makingCard)
                     Spacer(minLength: 0)
                     if !isMe {
+                        if account.isSignedIn {
+                            chip("REPORT", selected: false) { withAnimation(.snappy(duration: 0.15)) { reporting = true } }
+                        }
                         chip("BLOCK", selected: false) { withAnimation(.snappy(duration: 0.15)) { confirmingBlock = true } }
                     }
                 }
@@ -258,6 +263,39 @@ struct UserProfileView: View {
                     dismiss()
                 }
                 cardButton("CANCEL") { withAnimation(.snappy(duration: 0.15)) { confirmingBlock = false } }
+            }
+            .padding(18)
+            .background(RoundedRectangle(cornerRadius: 18).fill(Color(white: 0.11)))
+            .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color(white: 0.2), lineWidth: 1))
+            .padding(.horizontal, 22)
+        }
+        .transition(.opacity)
+    }
+
+    // MARK: Report
+
+    private var reportCard: some View {
+        ZStack {
+            Color.black.opacity(0.6).ignoresSafeArea()
+                .onTapGesture { withAnimation(.snappy(duration: 0.15)) { reporting = false } }
+            VStack(alignment: .leading, spacing: 10) {
+                Text("REPORT THIS PERSON").font(.mono(15, .bold)).foregroundStyle(accent)
+                Text("Tell us what's wrong. We review every report, and accounts that break the rules are removed.")
+                    .font(.mono(10)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                ForEach(["They may be under 13", "Pretending to be someone", "Hate or harassment", "Spam", "Something else"], id: \.self) { reason in
+                    cardButton(reason.uppercased()) {
+                        reporting = false
+                        Task {
+                            do {
+                                try await Social.report(userID, reason: reason)
+                                note = "THANKS. WE'LL TAKE A LOOK"
+                            } catch {
+                                note = error.localizedDescription.uppercased()
+                            }
+                        }
+                    }
+                }
+                cardButton("CANCEL") { withAnimation(.snappy(duration: 0.15)) { reporting = false } }
             }
             .padding(18)
             .background(RoundedRectangle(cornerRadius: 18).fill(Color(white: 0.11)))

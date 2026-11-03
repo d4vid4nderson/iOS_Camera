@@ -7,19 +7,25 @@ private extension Font {
     }
 }
 
-/// Right after signing in: pick your @handle (and name), then your photo, from your
-/// Google or Facebook sign-in or from your library. Shown in your profile until you have
-/// a handle; a handle is how people find you and know who's asking to follow them.
+/// Right after signing in: your date of birth (accounts are for people 13 and older; it's
+/// checked, not kept), then your @handle (and name), then your photo, from your Google or
+/// Facebook sign-in or from your library. Shown in your profile until you have a handle; a
+/// handle is how people find you and know who's asking to follow them.
 struct AccountSetup: View {
     let accent: Color
     var onStart: () -> Void = {}
+    /// Under 13: the account was deleted and this phone is signed out.
+    var onRefused: () -> Void = {}
     /// Setup is finished: your profile shows.
     let onDone: () -> Void
 
-    enum Step { case handle, photo }
+    enum Step { case age, handle, photo }
 
     @ObservedObject private var account = Account.shared
-    @State private var step: Step = .handle
+    @State private var step: Step = .age
+    // Starts on today, so nothing suggests an answer; CONTINUE waits until a date is picked.
+    @State private var born = Date()
+    @State private var bornPicked = false
     @State private var name = ""
     @State private var handle = ""
     @State private var note: String?
@@ -29,8 +35,9 @@ struct AccountSetup: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(step == .handle ? "STEP 1 OF 2" : "STEP 2 OF 2").font(.mono(9, .semibold)).foregroundStyle(.secondary)
+            Text(step == .age ? "STEP 1 OF 3" : step == .handle ? "STEP 2 OF 3" : "STEP 3 OF 3").font(.mono(9, .semibold)).foregroundStyle(.secondary)
             switch step {
+            case .age: ageStep
             case .handle: handleStep
             case .photo: photoStep
             }
@@ -47,7 +54,7 @@ struct AccountSetup: View {
             let saved = Profile.load()
             name = saved.name.isEmpty ? (account.me?.name ?? "") : saved.name
             photo = saved.photo
-            if account.me?.handle != nil { step = .photo }
+            if account.me?.ageConfirmed == true { step = account.me?.handle == nil ? .handle : .photo }
         }
         .onChange(of: account.headshotVersion) { _, _ in photo = Profile.load().photo }
         .onChange(of: pickerItem) { _, item in
@@ -66,6 +73,39 @@ struct AccountSetup: View {
                 pickerItem = nil
                 working = false
             }
+        }
+    }
+
+    // MARK: Date of birth
+
+    private var ageStep: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("YOUR DATE OF BIRTH").font(.mono(15, .bold)).foregroundStyle(accent)
+            Text("We ask everyone before they make a profile. It isn't shown on your profile or saved with your account.")
+                .font(.mono(10)).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            DatePicker("Date of birth", selection: $born, in: ...Date(), displayedComponents: .date)
+                .datePickerStyle(.wheel)
+                .labelsHidden()
+                .frame(maxWidth: .infinity)
+                .onChange(of: born) { _, _ in bornPicked = true }
+            primary(working ? "CHECKING…" : "CONTINUE", enabled: bornPicked && !working, action: saveAge)
+        }
+    }
+
+    private func saveAge() {
+        working = true
+        note = nil
+        Task {
+            do {
+                switch try await account.confirmAge(born: born) {
+                case .confirmed: step = account.me?.handle == nil ? .handle : .photo
+                case .tooYoung: onRefused()
+                }
+            } catch {
+                note = error.localizedDescription.uppercased()
+            }
+            working = false
         }
     }
 

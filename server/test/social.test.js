@@ -71,7 +71,14 @@ async function signIn(e, apple, sub, name) {
     type: 'application/json', body: JSON.stringify({ identityToken: await apple.sign({ sub }), name }),
   });
   assert.equal(res.status, 200);
-  return res.json();
+  const out = await res.json();
+  // Accounts confirm they're 13 or older before a handle, the rules, following or sharing.
+  if (!out.me.ageConfirmed) {
+    const age = await call(e, 'POST', '/api/me/age', { account: out.token, type: 'application/json', body: JSON.stringify({ born: '1990-05-01' }) });
+    assert.equal(age.status, 200);
+    out.me = await age.json();
+  }
+  return out;
 }
 
 async function liveRoll(e, frames, account, now) {
@@ -366,4 +373,78 @@ test('deleting an account takes its handle, follows and shares with it', async (
   assert.deepEqual((await getJSON(e, '/api/users/search?q=ana', ben)).people, []);
   assert.equal((await get(e, `/r/${id}/roll.json`, ben)).status, 404);
   await person(e, apple, 'z', 'Zed', 'ana');   // the handle is free again
+});
+
+test('accounts are for people 13 and older; an under-13 sign-in is deleted and locked until 13', async () => {
+  const { e, apple } = await accountEnv();
+  const now = Date.UTC(2026, 10, 3);
+  const signInRaw = async (sub) => (await call(e, 'POST', '/api/auth/apple', { type: 'application/json', now, body: JSON.stringify({ identityToken: await apple.sign({ sub, exp: 9e9 }) }) }));
+  const born = (who, date) => call(e, 'POST', '/api/me/age', { account: who.token, type: 'application/json', now, body: JSON.stringify({ born: date }) });
+
+  // Before the age is confirmed: no handle and no rules (so no following or sharing).
+  const kid = await (await signInRaw('kid')).json();
+  assert.equal(kid.me.ageConfirmed, false);
+  assert.equal((await call(e, 'PUT', '/api/me', { account: kid.token, type: 'application/json', now, body: '{"handle":"kiddo"}' })).status, 403);
+  assert.equal((await call(e, 'POST', '/api/me/terms', { account: kid.token, now })).status, 403);
+  assert.equal((await born(kid, '2026-13-01')).status, 400, 'not a date');
+  assert.equal((await born(kid, '2027-01-01')).status, 400, 'in the future');
+
+  // 12 years old: refused, the account is gone, and signing in again is refused until the 13th birthday.
+  const under = await born(kid, '2014-01-10');
+  assert.equal(under.status, 403);
+  assert.equal((await under.json()).error, 'under13');
+  assert.equal((await call(e, 'GET', '/api/me', { account: kid.token, now })).status, 401);
+  const again = await signInRaw('kid');
+  assert.equal(again.status, 403);
+  assert.equal((await again.json()).error, 'under13');
+  const later = await call(e, 'POST', '/api/auth/apple', { type: 'application/json', now: Date.UTC(2027, 0, 12), body: JSON.stringify({ identityToken: await apple.sign({ sub: 'kid', exp: 9e9 }) }) });
+  assert.equal(later.status, 200, 'welcome back at 13');
+
+  // 13 today: fine, and the date itself isn't stored.
+  const teen = await (await signInRaw('teen')).json();
+  const ok = await born(teen, '2013-11-03');
+  assert.equal(ok.status, 200);
+  assert.equal((await ok.json()).ageConfirmed, true);
+  const stored = await (await e.ROLLS.get(`users/${teen.me.id}.json`)).text();
+  assert.ok(!stored.includes('2013'), 'no birth date kept');
+  assert.equal((await call(e, 'PUT', '/api/me', { account: teen.token, type: 'application/json', now, body: '{"handle":"teen"}' })).status, 200);
+});
+
+test('reports reach the admin page, which restores, removes and bans', async () => {
+  const { e: base, apple } = await accountEnv();
+  const e = { ...base, ADMIN_TOKEN: 'admin-pass' };
+  const ana = await person(e, apple, 'a', 'Ana', 'ana');
+  const ben = await person(e, apple, 'b', 'Ben', 'ben');
+  const { id } = await liveRoll(e, 2, ana.token);
+  await call(e, 'POST', `/api/rolls/${id}/visibility`, { account: ana.token, type: 'application/json', body: '{"audience":"public"}' });
+  for (let i = 0; i < 3; i++) await call(e, 'POST', `/api/rolls/${id}/report`, { type: 'application/json', body: '{"reason":"Spam"}' });
+  assert.equal((await call(e, 'POST', `/api/users/${ben.id}/report`, { account: ana.token, type: 'application/json', body: '{"reason":"May be under 13"}' })).status, 200);
+
+  assert.equal((await call(e, 'GET', '/api/admin/reports')).status, 401);
+  const admin = (method, path, body) => call(e, method, path, { token: 'admin-pass', type: 'application/json', body: body && JSON.stringify(body) });
+  const reports = await (await admin('GET', '/api/admin/reports')).json();
+  assert.equal(reports.rolls.length, 1);
+  assert.equal(reports.rolls[0].status, 'hidden');
+  assert.equal(reports.rolls[0].reports.length, 3);
+  assert.equal(reports.rolls[0].owner.handle, 'ana');
+  assert.equal((await admin('GET', new URL(reports.rolls[0].photos[1]).pathname)).status, 200, 'hidden photos open for the admin');
+  assert.equal(reports.people[0].handle, 'ben');
+  assert.equal(reports.people[0].reports[0].reason, 'May be under 13');
+
+  // Restore the roll: it's live again and off the list.
+  assert.equal((await admin('POST', `/api/admin/rolls/${id}`, { action: 'restore' })).status, 200);
+  assert.equal((await get(e, `/r/${id}/roll.json`)).status, 200);
+  assert.equal((await (await admin('GET', '/api/admin/reports')).json()).rolls.length, 0);
+
+  // Remove Ben as under 13: account gone, and his sign-in can't make a new one.
+  assert.equal((await admin('POST', `/api/admin/users/${ben.id}`, { action: 'remove', reason: 'under13' })).status, 200);
+  assert.equal((await call(e, 'GET', '/api/me', { account: ben.token })).status, 401);
+  const back = await call(e, 'POST', '/api/auth/apple', { type: 'application/json', body: JSON.stringify({ identityToken: await apple.sign({ sub: 'b' }) }) });
+  assert.equal(back.status, 403);
+  assert.deepEqual(await (await admin('GET', '/api/admin/reports')).json(), { rolls: [], people: [] });
+
+  // Remove a roll outright.
+  await call(e, 'POST', `/api/rolls/${id}/report`, { type: 'application/json', body: '{"reason":"Violence or abuse"}' });
+  assert.equal((await admin('POST', `/api/admin/rolls/${id}`, { action: 'remove' })).status, 200);
+  assert.equal((await get(e, `/r/${id}/roll.json`)).status, 404);
 });

@@ -30,6 +30,8 @@ final class Account: ObservableObject {
         var handle: String?
         /// Whether search finds you (on unless you turn it off).
         var discoverable: Bool?
+        /// You've confirmed you're 13 or older (asked once, before your handle).
+        var ageConfirmed: Bool?
 
         func has(_ provider: String) -> Bool { logins?.contains(provider) == true }
     }
@@ -40,6 +42,12 @@ final class Account: ObservableObject {
     @Published private(set) var headshotVersion = 0
 
     var isSignedIn: Bool { me != nil && Self.sessionToken != nil }
+
+    /// Signed in, but the date of birth or the handle isn't done yet: setup shows first.
+    var needsSetup: Bool {
+        guard let me else { return false }
+        return me.ageConfirmed != true || me.handle == nil
+    }
 
 
     private init() {
@@ -230,6 +238,58 @@ final class Account: ObservableObject {
         forget()
     }
 
+    // MARK: Age
+
+    /// Accounts are for people 13 and older.
+    static let minimumAge = 13
+    /// Its own Keychain service: signing out clears the session's items, not this one.
+    nonisolated private static let ageLockService = AccountKeys.keychainService + ".age-lock"
+
+    /// Someone on this phone said they're under 13: no signing in until their 13th birthday.
+    /// Kept in the Keychain, so deleting and reinstalling the app doesn't reset it.
+    nonisolated static var ageLockedUntil: Date? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: ageLockService,
+            kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        var out: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &out) == errSecSuccess, let data = out as? Data,
+              let seconds = Double(String(decoding: data, as: UTF8.self)) else { return nil }
+        let until = Date(timeIntervalSince1970: seconds)
+        return until > Date() ? until : nil
+    }
+
+    nonisolated private static func storeAgeLock(_ until: Date) {
+        let base: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: ageLockService]
+        SecItemDelete(base as CFDictionary)
+        var item = base
+        item[kSecValueData as String] = Data(String(until.timeIntervalSince1970).utf8)
+        item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        SecItemAdd(item as CFDictionary, nil)
+    }
+
+    enum AgeResult { case confirmed, tooYoung }
+
+    /// Send your date of birth to be checked (the server doesn't keep it). Under 13, the
+    /// server deletes the new account, this phone signs out and remembers until you're 13.
+    func confirmAge(born: Date) async throws -> AgeResult {
+        guard let base = ShareLinks.base, let token = Self.sessionToken else { throw Failure.notConfigured }
+        let calendar = Calendar(identifier: .gregorian)
+        let parts = calendar.dateComponents(in: .current, from: born)
+        let text = String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
+        working = true
+        defer { working = false }
+        do {
+            let data = try await ShareAPI.send(base.appendingPathComponent("api/me/age"), method: "POST", account: token, json: ["born": text])
+            if let me = try? JSONDecoder().decode(Me.self, from: data) { remember(me) }
+            return .confirmed
+        } catch let error as ShareAPI.HTTPError where error.status == 403 {
+            Self.storeAgeLock(calendar.date(byAdding: .year, value: Self.minimumAge, to: born) ?? .distantFuture)
+            forget()
+            return .tooYoung
+        }
+    }
+
     // MARK: Your profile
 
     /// Fetch your profile again (and notice if the session has ended).
@@ -342,6 +402,18 @@ struct SignInButtons: View {
     var onSignedIn: () -> Void = {}
 
     var body: some View {
+        if Account.ageLockedUntil != nil {
+            // Someone here said they're under 13: no accounts on this phone until then.
+            Text("FILM EXPOSURES ACCOUNTS ARE FOR PEOPLE 13 AND OLDER. YOU CAN STILL USE THE CAMERA, AND YOUR ROLLS STAY ON THIS PHONE.")
+                .font(.mono(10, .semibold)).foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+        } else {
+            buttons
+        }
+    }
+
+    private var buttons: some View {
         VStack(spacing: 8) {
             AppleSignInButton(onError: onError, onSignedIn: onSignedIn)
             if SocialSignIn.googleAvailable {
@@ -417,5 +489,11 @@ struct AppleSignInButton: View {
         .clipShape(Capsule())
         .disabled(account.working)
         .opacity(account.working ? 0.5 : 1)
+    }
+}
+
+private extension Font {
+    static func mono(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
+        .system(size: size, weight: weight, design: .monospaced)
     }
 }

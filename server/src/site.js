@@ -290,6 +290,17 @@ select,button,input,textarea{font:inherit;color:var(--fg)}
 .msg header{display:flex;justify-content:space-between;gap:10px;font:600 12px/1.4 var(--mono);color:var(--muted);flex-wrap:wrap}
 .msg pre{white-space:pre-wrap;font:15px/1.5 -apple-system,BlinkMacSystemFont,sans-serif;margin:10px 0}
 .msg button{padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:var(--panel2);cursor:pointer}
+.admin-tabs{display:flex;gap:8px;margin:8px 0 18px}
+.admin-tabs button{padding:8px 16px;border-radius:999px;border:1px solid var(--line);background:var(--panel2);color:var(--fg);font:600 13px/1 var(--mono);letter-spacing:.06em;cursor:pointer}
+.admin-tabs button.on{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+.admin-tabs b{margin-left:4px}
+.report .thumbs{display:flex;gap:6px;overflow-x:auto;margin:10px 0;padding-bottom:4px}
+.report .thumbs img{height:110px;width:auto;border-radius:4px;flex:none;background:#000}
+.report .reasons{margin:8px 0;padding-left:18px;font-size:14px}
+.report .actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.report .actions a{margin-right:6px}
+.msg button.danger{border-color:#c0392b;color:#e5533d}
+.muted{color:var(--muted)}
 .site-foot{border-top:1px solid var(--line);margin-top:24px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
 .site-foot nav{display:flex;gap:16px;flex-wrap:wrap}.site-foot a{color:var(--muted);text-decoration:none}.site-foot a:hover{color:var(--fg)}
 @media (max-width:520px){h1{font-size:36px}.nav{gap:12px}.nav .optional{display:none}.films{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 12px}.mount .label{font-size:12px}.mount .note{font-size:11px}}
@@ -628,7 +639,7 @@ export function privacyBody() {
 <li>An identifier for your Apple, Google or Facebook account. We store it only in a scrambled (one-way hashed) form, used to recognise you when you sign in again.</li>
 <li>Your name, if the service provides it or you set one, and your profile photo from Google or Facebook, which you can replace or remove.</li>
 </ul>
-<p>We don't ask for your email address, contacts or friends list. We also store which frames and rolls you have liked, the time you agreed to our rules for public rolls, and sign-in sessions for your devices.</p>
+<p>We don't ask for your email address, contacts or friends list. We also store which frames and rolls you have liked, the time you confirmed you're 13 or older (not your date of birth), the time you agreed to our rules for public rolls, and sign-in sessions for your devices.</p>
 <p><b>Following and search.</b> If you choose a @handle, we store it with the people you follow, the people who follow you, follow requests, the people you block, and who you've shared rolls with. Your handle and name can be found in search unless you turn that off. Who follows whom is visible to signed-in users. Blocking someone ends following both ways and hides your rolls and profile from them.</p>
 <p><b>Likes are public.</b> When you like a frame or a roll, anyone who opens that roll in the app can see that you liked it, with your name and profile photo. Unlike it, or delete your account, and it's gone.</p>
 
@@ -658,8 +669,15 @@ export function privacyBody() {
 <h2>Security and retention</h2>
 <p>Information is sent to our servers over encrypted connections. We keep information only as long as described above: link shares for 30 days, public rolls and accounts until you remove them, and support messages until resolved.</p>
 
-<h2>Children</h2>
-<p>Film Exposures is not directed at children under 13, and we don't knowingly collect information from them. If you believe a child has shared information with us, contact us and we will delete it.</p>
+<h2>Children under 13</h2>
+<p>Film Exposures accounts are for people 13 and older. The app is not directed at children under 13, and we don't knowingly collect personal information from them.</p>
+<ul>
+<li><b>We ask everyone's age.</b> Before you can pick a handle, follow anyone or share a roll, the app asks for your date of birth. We use it once to check that you're 13 or older and don't store it; your account only records that you confirmed.</li>
+<li><b>Under 13, the account is deleted.</b> If the date shows you're under 13, we delete the account straight away, with any name, photo and rolls it had. To stop a new account being made, we keep only a scrambled code for that sign-in (not your name, email or the sign-in itself) and the date you turn 13; the phone remembers that date too. After it, you're welcome to sign in.</li>
+<li><b>The camera needs no account.</b> Anyone can shoot and keep rolls on their phone without an account. Nothing is sent to us unless you share.</li>
+<li><b>Reports.</b> Anyone can report a person who seems to be under 13. We review reports, usually within 24 hours, and delete accounts that belong to children under 13.</li>
+<li><b>Parents and guardians.</b> If you believe your child under 13 has an account or has shared information with us, tell us through the <a href="/support">support form</a> and we will delete it.</li>
+</ul>
 
 <h2>Changes</h2>
 <p>If we change this policy, we will update the date at the top and, for significant changes, tell you in the app.</p>
@@ -675,7 +693,8 @@ export function termsBody() {
 <p>These terms are an agreement between you and ${OWNER} ("we", "us") about your use of the Film Exposures app and filmexposures.com (together, "Film Exposures"). By using Film Exposures you agree to them. If you don't agree, please don't use it.</p>
 
 <h2>Who can use Film Exposures</h2>
-<p>You must be at least 13 years old. If you are under the age of majority where you live, you may use Film Exposures only with the permission of a parent or guardian.</p>
+<p>You must be at least 13 years old to create an account. The app asks for your date of birth before you make a profile; giving a false date of birth breaks these terms. If you are under the age of majority where you live, you may use Film Exposures only with the permission of a parent or guardian.</p>
+<p>If we learn that an account belongs to someone under 13, we delete it and everything it shared. The camera itself can be used without an account. Our <a href="/privacy">privacy policy</a> explains what we keep.</p>
 
 <h2>Your account</h2>
 <p>An account is optional. If you create one, you are responsible for what happens under it. Keep your Apple, Google or Facebook sign-in secure, and tell us through the <a href="/support">support form</a> if you think someone else is using your account. You can delete your account in the app at any time.</p>
@@ -700,7 +719,7 @@ export function termsBody() {
 <li>photos of people who didn't agree to be shared, or content that infringes someone else's rights;</li>
 <li>anything illegal.</li>
 </ul>
-<p>Anyone can report a roll, and you can block people whose rolls you don't want to see. We review reports, remove content that breaks these rules and remove accounts of people who share it, usually within 24 hours of a report. We may remove any content or suspend any account that we reasonably believe breaks these terms.</p>
+<p>Anyone can report a roll or a person, and you can block people whose rolls you don't want to see. We review reports, remove content that breaks these rules and remove accounts of people who share it, usually within 24 hours of a report. We may remove any content or suspend any account that we reasonably believe breaks these terms.</p>
 
 <h2>Shared films</h2>
 <p>Films you share as links carry their settings and name. Anyone with the link can load and use the film. Don't give a film a name that is offensive or that misleads people about who made it.</p>
@@ -756,42 +775,111 @@ ${error ? `<div class="notice error">${error}</div>` : ''}
 }
 
 export function inboxBody() {
-  return `<p class="eyebrow">Support inbox</p><h1>Messages</h1>
+  return `<p class="eyebrow">Admin</p><h1>Reports and support</h1>
 <form class="form" id="unlock"><label>Admin password<input type="password" id="token" autocomplete="current-password" required></label>
-<button class="button primary" type="submit">Open inbox</button></form>
-<div id="list"></div>
+<button class="button primary" type="submit">Open</button></form>
+<nav class="admin-tabs" id="tabs" hidden><button data-tab="reports" class="on">Reports <b id="n-reports"></b></button><button data-tab="support">Support <b id="n-support"></b></button></nav>
+<div id="reports"></div>
+<div id="support" hidden></div>
 <script>
-const list = document.getElementById('list');
 const form = document.getElementById('unlock');
 const input = document.getElementById('token');
+const tabs = document.getElementById('tabs');
+const panes = { reports: document.getElementById('reports'), support: document.getElementById('support') };
 try { input.value = sessionStorage.getItem('inbox-token') || ''; } catch {}
-async function load() {
-  const token = input.value.trim();
-  const res = await fetch('/api/admin/support', { headers: { authorization: 'Bearer ' + token } });
-  list.textContent = '';
-  if (!res.ok) { list.textContent = res.status === 401 ? 'Wrong password.' : 'The inbox is not set up yet.'; return; }
-  try { sessionStorage.setItem('inbox-token', token); } catch {}
-  form.style.display = 'none';
-  const { messages } = await res.json();
-  if (!messages.length) { list.textContent = 'No messages.'; return; }
-  for (const m of messages) {
-    const box = document.createElement('div'); box.className = 'msg';
-    const head = document.createElement('header');
-    const who = document.createElement('span'); who.textContent = (m.name ? m.name + ' · ' : '') + m.email;
-    const meta = document.createElement('span'); meta.textContent = m.topic + ' · ' + new Date(m.at).toLocaleString();
-    head.append(who, meta);
-    const body = document.createElement('pre'); body.textContent = m.message;
-    const reply = document.createElement('a'); reply.textContent = 'Reply by email';
-    reply.href = 'mailto:' + encodeURIComponent(m.email) + '?subject=' + encodeURIComponent('Re: Film Exposures support');
-    const done = document.createElement('button'); done.textContent = 'Done'; done.style.marginLeft = '12px';
-    done.onclick = async () => {
-      const r = await fetch('/api/admin/support/' + m.id, { method: 'DELETE', headers: { authorization: 'Bearer ' + token } });
-      if (r.ok) box.remove();
-    };
-    box.append(head, body, reply, done);
-    list.append(box);
-  }
+const auth = () => ({ authorization: 'Bearer ' + input.value.trim() });
+const el = (tag, cls, text) => { const x = document.createElement(tag); if (cls) x.className = cls; if (text != null) x.textContent = text; return x; };
+const when = (at) => new Date(at).toLocaleString();
+const post = (path, body) => fetch(path, { method: 'POST', headers: { ...auth(), 'content-type': 'application/json' }, body: JSON.stringify(body) });
+const button = (label, cls, onclick) => { const b = el('button', cls, label); b.onclick = onclick; return b; };
+function reasons(list) {
+  const ul = el('ul', 'reasons');
+  for (const r of list) { const li = el('li'); li.append(el('b', null, r.reason), ' · ' + when(r.at)); ul.append(li); }
+  return ul;
 }
+// Photos come from an admin-only route, so they're fetched with the password and shown as blobs.
+async function photo(src, box) {
+  const r = await fetch(src, { headers: auth() });
+  if (!r.ok) return;
+  const img = el('img'); img.src = URL.createObjectURL(await r.blob()); img.alt = ''; box.append(img);
+}
+function who(p) {
+  if (!p) return 'No account (shared before signing in)';
+  if (p.removed) return 'Account deleted';
+  return (p.handle ? '@' + p.handle : '(no handle)') + (p.name ? ' · ' + p.name : '');
+}
+async function loadReports() {
+  const res = await fetch('/api/admin/reports', { headers: auth() });
+  if (!res.ok) return res.status;
+  const { rolls, people } = await res.json();
+  const pane = panes.reports; pane.textContent = '';
+  document.getElementById('n-reports').textContent = rolls.length + people.length || '';
+  pane.append(el('h2', null, 'Reported people'));
+  if (!people.length) pane.append(el('p', 'muted', 'Nobody reported.'));
+  for (const p of people) {
+    const box = el('div', 'msg report');
+    const head = el('header'); head.append(el('span', null, who(p)), el('span', null, p.reports.length + (p.reports.length === 1 ? ' report' : ' reports') + (p.createdAt ? ' · joined ' + when(p.createdAt) : '')));
+    box.append(head);
+    if (p.avatar) { const a = el('div', 'thumbs'); photo(p.avatar, a); box.append(a); }
+    box.append(reasons(p.reports));
+    const link = el('a', null, 'Open profile'); link.href = p.profile; link.target = '_blank'; link.rel = 'noopener';
+    const act = async (body, label) => { if (!confirm(label + '?')) return; if ((await post('/api/admin/users/' + p.id, body)).ok) box.remove(); };
+    const row = el('div', 'actions');
+    row.append(link,
+      button('Remove: under 13', 'danger', () => act({ action: 'remove', reason: 'under13' }, 'Delete this account as under 13 and lock its sign-ins for a year')),
+      button('Remove: broke the rules', 'danger', () => act({ action: 'remove', reason: 'rules' }, 'Delete this account and lock its sign-ins for good')),
+      button('Dismiss', null, () => act({ action: 'dismiss' }, 'Dismiss these reports')));
+    box.append(row); pane.append(box);
+  }
+  pane.append(el('h2', null, 'Reported rolls'));
+  if (!rolls.length) pane.append(el('p', 'muted', 'No reported rolls.'));
+  for (const r of rolls) {
+    const box = el('div', 'msg report');
+    const head = el('header');
+    head.append(el('span', null, (r.title || 'A roll') + ' · ' + who(r.owner)), el('span', null, r.gone ? 'already deleted' : (r.status === 'hidden' ? 'HIDDEN' : r.status) + ' · ' + r.audience));
+    box.append(head);
+    const thumbs = el('div', 'thumbs'); box.append(thumbs);
+    for (const src of r.photos) photo(src, thumbs);
+    box.append(reasons(r.reports));
+    const act = async (action, label) => { if (!confirm(label + '?')) return; if ((await post('/api/admin/rolls/' + r.id, { action })).ok) box.remove(); };
+    const row = el('div', 'actions');
+    if (!r.gone) row.append(button('Remove roll', 'danger', () => act('remove', 'Delete this roll for everyone')));
+    row.append(button(r.gone ? 'Clear' : 'Restore: nothing wrong', null, () => act('restore', r.gone ? 'Clear these reports' : 'Show this roll again and clear its reports')));
+    box.append(row); pane.append(box);
+  }
+  return 200;
+}
+async function loadSupport() {
+  const res = await fetch('/api/admin/support', { headers: auth() });
+  if (!res.ok) return res.status;
+  const { messages } = await res.json();
+  const pane = panes.support; pane.textContent = '';
+  document.getElementById('n-support').textContent = messages.length || '';
+  if (!messages.length) { pane.textContent = 'No messages.'; return 200; }
+  for (const m of messages) {
+    const box = el('div', 'msg');
+    const head = el('header'); head.append(el('span', null, (m.name ? m.name + ' · ' : '') + m.email), el('span', null, m.topic + ' · ' + when(m.at)));
+    const reply = el('a', null, 'Reply by email');
+    reply.href = 'mailto:' + encodeURIComponent(m.email) + '?subject=' + encodeURIComponent('Re: Film Exposures support');
+    const done = button('Done', null, async () => { if ((await fetch('/api/admin/support/' + m.id, { method: 'DELETE', headers: auth() })).ok) box.remove(); });
+    done.style.marginLeft = '12px';
+    box.append(head, el('pre', null, m.message), reply, done);
+    pane.append(box);
+  }
+  return 200;
+}
+async function load() {
+  const status = await loadReports();
+  if (status !== 200) { panes.reports.textContent = status === 401 ? 'Wrong password.' : 'Admin is not set up yet.'; return; }
+  try { sessionStorage.setItem('inbox-token', input.value.trim()); } catch {}
+  form.style.display = 'none'; tabs.hidden = false;
+  await loadSupport();
+}
+tabs.addEventListener('click', (e) => {
+  const tab = e.target.closest('button')?.dataset.tab; if (!tab) return;
+  for (const b of tabs.querySelectorAll('button')) b.classList.toggle('on', b.dataset.tab === tab);
+  for (const [k, v] of Object.entries(panes)) v.hidden = k !== tab;
+});
 form.addEventListener('submit', (e) => { e.preventDefault(); load(); });
 if (input.value) load();
 </script>`;
