@@ -287,8 +287,11 @@ struct RollViewer: View {
                             }
                         }
                     }
-                    chip(makingSheet ? "PRINTING…" : "SHEET", selected: !ShareLinks.isConfigured) { shareContactSheet(roll) }
+                    // Keeps its label (and its size) while the sheet prints: a longer label
+                    // got squeezed to "…" in this row and the pill turned into a circle.
+                    chip("SHEET", selected: !ShareLinks.isConfigured, busy: makingSheet) { shareContactSheet(roll) }
                         .disabled(makingSheet)
+                        .accessibilityValue(makingSheet ? "Printing" : "")
                 }
                 Spacer(minLength: 0)
                 if let roll, roll.isOpen, !isInCamera {
@@ -607,11 +610,13 @@ struct RollViewer: View {
         .buttonStyle(.plain)
     }
 
-    private func chip(_ text: String, selected: Bool, action: @escaping () -> Void) -> some View {
+    private func chip(_ text: String, selected: Bool, busy: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(text)
                 .font(.mono(10, .bold))
                 .lineLimit(1)
+                .opacity(busy ? 0 : 1)
+                .overlay { if busy { ProgressView().controlSize(.mini).tint(selected ? accent : .white) } }
                 .padding(.horizontal, 10).padding(.vertical, 7)
                 .background(Capsule().fill(selected ? accent.opacity(0.18) : Color(white: 0.15)))
                 .overlay(Capsule().stroke(selected ? accent : .clear, lineWidth: 1))
