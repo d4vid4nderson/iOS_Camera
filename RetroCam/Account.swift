@@ -26,6 +26,10 @@ final class Account: ObservableObject {
         var avatarSource: String?
         /// Sign-ins whose photo you can go back to.
         var photos: [String]?
+        /// Your @handle (without the @): how people find and follow you.
+        var handle: String?
+        /// Whether search finds you (on unless you turn it off).
+        var discoverable: Bool?
 
         func has(_ provider: String) -> Bool { logins?.contains(provider) == true }
     }
@@ -229,6 +233,17 @@ final class Account: ObservableObject {
     func acceptTerms() async throws {
         guard let base = ShareLinks.base, let token = Self.sessionToken else { throw Failure.notConfigured }
         let data = try await ShareAPI.send(base.appendingPathComponent("api/me/terms"), method: "POST", account: token)
+        if let me = try? JSONDecoder().decode(Me.self, from: data) { remember(me) }
+    }
+
+    /// Your @handle and whether search finds you. Throws the server's reason when a handle
+    /// is taken or not allowed.
+    func updateSocial(handle: String? = nil, discoverable: Bool? = nil) async throws {
+        guard let base = ShareLinks.base, let token = Self.sessionToken else { throw Failure.notConfigured }
+        var body: [String: Any] = [:]
+        if let handle { body["handle"] = handle }
+        if let discoverable { body["discoverable"] = discoverable }
+        let data = try await ShareAPI.send(base.appendingPathComponent("api/me"), method: "PUT", account: token, json: body)
         if let me = try? JSONDecoder().decode(Me.self, from: data) { remember(me) }
     }
 

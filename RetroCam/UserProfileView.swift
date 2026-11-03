@@ -21,6 +21,9 @@ struct UserProfileView: View {
     @State private var sharing: ShareItems?
     @State private var confirmingBlock = false
     @State private var makingCard = false
+    @State private var followStatus = "none"
+    @State private var listing: PeopleListRef?
+    @State private var note: String?
 
     private var isMe: Bool { account.me?.id == userID }
 
@@ -33,7 +36,8 @@ struct UserProfileView: View {
                     centered("YOU BLOCKED THIS PERSON")
                 } else if let profile {
                     if profile.rolls.isEmpty {
-                        centered(isMe ? "NO PUBLIC ROLLS YET\nMAKE ONE PUBLIC FROM YOUR PROFILE" : "NO PUBLIC ROLLS YET")
+                        centered(isMe ? "NO SHARED ROLLS YET\nCHOOSE WHO SEES A ROLL FROM YOUR PROFILE"
+                                 : followStatus == "following" ? "NO ROLLS TO SHOW YET" : "NO PUBLIC ROLLS YET\nFOLLOW TO SEE ROLLS FOR FOLLOWERS")
                     } else {
                         grid(profile)
                     }
@@ -59,6 +63,9 @@ struct UserProfileView: View {
         .sheet(item: $sharing) { item in
             ActivityView(items: item.items).ignoresSafeArea()
         }
+        .sheet(item: $listing) { ref in
+            PeopleListSheet(userID: userID, which: ref.which, camera: camera, accent: accent)
+        }
     }
 
     // MARK: Header
@@ -82,22 +89,60 @@ struct UserProfileView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text((profile?.name ?? (profile == nil ? " " : "FILM EXPOSURES PHOTOGRAPHER")).uppercased())
                         .font(.mono(16, .bold)).foregroundStyle(accent).lineLimit(1)
+                    if let handle = profile?.handle {
+                        Text("@\(handle)").font(.mono(11, .semibold)).foregroundStyle(.white).lineLimit(1)
+                    }
                     if let profile {
                         Text("\(profile.rolls.count) \(profile.rolls.count == 1 ? "ROLL" : "ROLLS") · \(frameCount(profile)) FRAMES")
                             .font(.mono(10)).foregroundStyle(.secondary)
+                        if let followers = profile.followers, let following = profile.following {
+                            HStack(spacing: 12) {
+                                Button { if account.isSignedIn { listing = PeopleListRef(which: "followers") } } label: {
+                                    Text("\(followers) FOLLOWERS").font(.mono(10, .semibold)).foregroundStyle(.white)
+                                }
+                                Button { if account.isSignedIn { listing = PeopleListRef(which: "following") } } label: {
+                                    Text("\(following) FOLLOWING").font(.mono(10, .semibold)).foregroundStyle(.white)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        if profile.relation?.followsYou == true && !isMe {
+                            Text("FOLLOWS YOU").font(.mono(9, .bold)).foregroundStyle(accent)
+                        }
                     }
                 }
                 Spacer(minLength: 0)
             }
             if let profile {
                 HStack(spacing: 8) {
-                    chip(makingCard ? "MAKING CARD…" : "SHARE PROFILE", selected: true) { shareProfile(profile) }
+                    if !isMe && account.isSignedIn && profile.relation != nil {
+                        FollowButton(id: userID, status: $followStatus, accent: accent, onError: { note = $0 })
+                    }
+                    if profile.relation?.askedYou == true && !isMe {
+                        chip("APPROVE", selected: true) { approve() }
+                    }
+                    chip(makingCard ? "MAKING CARD…" : "SHARE PROFILE", selected: isMe || !account.isSignedIn) { shareProfile(profile) }
                         .disabled(makingCard)
                     Spacer(minLength: 0)
                     if !isMe {
                         chip("BLOCK", selected: false) { withAnimation(.snappy(duration: 0.15)) { confirmingBlock = true } }
                     }
                 }
+                if let note {
+                    Text(note).font(.mono(10, .semibold)).foregroundStyle(accent)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    private func approve() {
+        Task {
+            do {
+                try await Social.answer(userID, accept: true)
+                await load()
+            } catch {
+                note = error.localizedDescription.uppercased()
             }
         }
     }
@@ -143,6 +188,17 @@ struct UserProfileView: View {
                                     }
                                 }
                                 .clipShape(RoundedRectangle(cornerRadius: 10))
+                                .overlay(alignment: .topTrailing) {
+                                    if let audience = roll.audience.flatMap(Audience.init(rawValue:)), audience != .everyone {
+                                        Image(systemName: audience.icon)
+                                            .font(.system(size: 10, weight: .bold))
+                                            .foregroundStyle(.white)
+                                            .padding(6)
+                                            .background(Circle().fill(Color.black.opacity(0.6)))
+                                            .padding(6)
+                                            .accessibilityLabel(audience.label)
+                                    }
+                                }
                             Text(roll.title.uppercased())
                                 .font(.mono(11, .bold)).foregroundStyle(.white).lineLimit(1)
                             Text([String(roll.frames) + " FRAMES", roll.film].compactMap { $0 }.joined(separator: " · "))
@@ -167,10 +223,11 @@ struct UserProfileView: View {
                 .onTapGesture { withAnimation(.snappy(duration: 0.15)) { confirmingBlock = false } }
             VStack(alignment: .leading, spacing: 10) {
                 Text("BLOCK \(who.uppercased())?").font(.mono(15, .bold)).foregroundStyle(accent)
-                Text("You won't see their profile or rolls they share again on this phone.")
+                Text("You won't see their profile or rolls they share. Following ends both ways, and they can't find you, follow you or share with you.")
                     .font(.mono(10)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 cardButton("BLOCK", destructive: true) {
                     RollShare.block(userID)
+                    if account.isSignedIn { Task { try? await Social.block(userID, true) } }
                     confirmingBlock = false
                     dismiss()
                 }
@@ -223,11 +280,17 @@ struct UserProfileView: View {
     private func load() async {
         do {
             profile = try await RollShare.fetchProfile(id: userID)
+            followStatus = profile?.relation?.status ?? "none"
             failure = nil
         } catch {
             failure = error.localizedDescription
         }
     }
+}
+
+private struct PeopleListRef: Identifiable {
+    let which: String
+    var id: String { which }
 }
 
 private struct OpenRoll: Identifiable {
