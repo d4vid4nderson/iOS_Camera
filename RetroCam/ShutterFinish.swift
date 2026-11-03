@@ -57,6 +57,19 @@ enum ShutterFinish: String, CaseIterable, Identifiable {
 }
 
 extension ShutterFinish {
+    /// The app icon in this finish: copper is the main icon, the rest are alternates
+    /// (AppIcon-Silver and so on, drawn by design/icon/make_icon.py).
+    var appIconName: String? { self == .copper ? nil : "AppIcon-\(name)" }
+
+    /// Switch the home-screen icon to this finish's, if it isn't already.
+    @MainActor func applyAppIcon() {
+        let app = UIApplication.shared
+        guard app.supportsAlternateIcons, app.alternateIconName != appIconName else { return }
+        app.setAlternateIconName(appIconName) { _ in }
+    }
+}
+
+extension ShutterFinish {
     /// A small picture of this finish's shutter face for menus: the face gradient with
     /// its bevel. Rendered as an original-colour image, because menus otherwise tint
     /// icons a single flat colour.
