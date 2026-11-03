@@ -36,13 +36,17 @@ struct RollViewer: View {
     @State private var shareRecord: RollShare.Record?
     @State private var unsharing = false
     @State private var renaming: Roll?
-    /// A developing frame you tapped: asks before developing it early.
+    /// A developing frame you tapped: asks before showing it early.
     @State private var developingEarly: Int?
+    /// Developing frames you're peeking at.
+    @State private var peeking: Set<Int> = []
     @State private var nameDraft = ""
 
     private var roll: Roll? { rolls.first { $0.number == selected } }
     private var isInCamera: Bool { selected == camera.roll.number }
     private var developedFrames: [Int] { frames.filter { !pending.contains($0) } }
+    /// What you can see: developed frames, and developing ones you're peeking at.
+    private var visibleFrames: [Int] { frames.filter { !pending.contains($0) || peeking.contains($0) } }
     /// The roll's cover: the frame picked for it, or else its first developed frame.
     private var coverFrame: Int? {
         roll?.cover.flatMap { developedFrames.contains($0) ? $0 : nil } ?? developedFrames.first
@@ -79,7 +83,7 @@ struct RollViewer: View {
         .onChange(of: camera.rollsVersion) { _, _ in reload() }
         .onChange(of: selected) { _, _ in loadFrames() }
         .fullScreenCover(item: $viewing) { ref in
-            FramePager(roll: ref.roll, frames: developedFrames, start: ref.frame, accent: accent)
+            FramePager(roll: ref.roll, frames: visibleFrames, start: ref.frame, accent: accent)
         }
         .sheet(item: $sharing) { item in
             ActivityView(items: item.items).ignoresSafeArea()
@@ -183,7 +187,8 @@ struct RollViewer: View {
         ScrollView {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 3), spacing: 10) {
                 ForEach(frames, id: \.self) { frame in
-                    let waiting = pending.contains(frame)
+                    let waiting = pending.contains(frame) && !peeking.contains(frame)
+                    let peeked = pending.contains(frame) && peeking.contains(frame)
                     Button {
                         if waiting {
                             withAnimation(.snappy(duration: 0.15)) { developingEarly = frame }
@@ -223,8 +228,24 @@ struct RollViewer: View {
                         }
                     }
                     .buttonStyle(.plain)
+                    .overlay(alignment: .topTrailing) {
+                        if peeked, let number = selected {
+                            // Peeking: tap to cover it up again.
+                            Button { camera.setPeeking(roll: number, frame: frame, false) } label: {
+                                Label("HIDE", systemImage: "eye.slash.fill")
+                                    .font(.mono(8, .bold))
+                                    .padding(.horizontal, 6).padding(.vertical, 4)
+                                    .background(Capsule().fill(Color.black.opacity(0.7)))
+                                    .foregroundStyle(.white)
+                                    .padding(4)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Hide frame \(frame) again")
+                        }
+                    }
                     .contextMenu {
-                        if !waiting, let number = selected {
+                        if !waiting, !peeked, let number = selected {
                             if frame == coverFrame, roll?.cover != nil {
                                 Button("Use the First Frame as Cover", systemImage: "arrow.uturn.backward") {
                                     camera.setCover(ofRoll: number, to: nil)
@@ -469,12 +490,13 @@ struct RollViewer: View {
         return ZStack {
             Color.black.opacity(0.6).ignoresSafeArea().onTapGesture(perform: close)
             VStack(alignment: .leading, spacing: 12) {
-                Text(String(format: "DEVELOP FRAME %02d NOW?", frame)).font(.mono(15, .bold)).foregroundStyle(accent)
-                Text("Skips the wait for this frame only: it goes into Photos and you can see it now. The rest of the roll still develops \(roll.map(developWhen) ?? "on schedule").")
+                Text("DEVELOP THIS PHOTO?").font(.mono(15, .bold)).foregroundStyle(accent)
+                Text(String(format: "Take a peek at frame %02d before the rest of the roll develops. ", frame)
+                     + "It only shows here, and goes into Photos with the roll when it develops \(roll.map(developWhen) ?? "on schedule"). Tap HIDE on it to cover it up again.")
                     .font(.mono(10)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                cardButton("DEVELOP NOW", destructive: false) {
-                    if let number = selected { camera.developFrameNow(roll: number, frame: frame) }
+                cardButton("DEVELOP IT", destructive: false) {
+                    if let number = selected { camera.setPeeking(roll: number, frame: frame, true) }
                     close()
                 }
                 cardButton("KEEP WAITING", destructive: false, quiet: true, action: close)
@@ -490,8 +512,8 @@ struct RollViewer: View {
     private func developWhen(_ roll: Roll) -> String {
         switch roll.develop {
         case .instant: return "now"
-        case .rollEnd: return "when it's finished"
-        case .nextMorning: return "the morning after it's finished"
+        case .rollEnd: return "at the end of the roll"
+        case .nextMorning: return "the morning after the roll is finished"
         }
     }
 
@@ -646,6 +668,7 @@ struct RollViewer: View {
         guard let number = selected else { frames = []; pending = []; shareRecord = nil; return }
         frames = RollStore.frames(of: number)
         pending = Set(RollStore.pendingFrames(of: number))
+        peeking = Set(pending.filter { RollStore.isPeeking(roll: number, frame: $0) })
         shareRecord = RollShare.record(for: number)
     }
 }

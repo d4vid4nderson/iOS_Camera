@@ -54,6 +54,25 @@ enum RollStore {
 
     static func clearPending(roll: Int, frame: Int) {
         try? FileManager.default.removeItem(at: pendingURL(roll: roll, frame: frame))
+        setPeeking(roll: roll, frame: frame, false)
+    }
+
+    private static func peekURL(roll: Int, frame: Int) -> URL {
+        folder(for: roll).appendingPathComponent(String(format: "peek-%02d", frame))
+    }
+
+    /// A developing frame you chose to look at early (shown in the app only, until its roll
+    /// develops).
+    static func isPeeking(roll: Int, frame: Int) -> Bool {
+        FileManager.default.fileExists(atPath: peekURL(roll: roll, frame: frame).path)
+    }
+
+    static func setPeeking(roll: Int, frame: Int, _ on: Bool) {
+        if on {
+            FileManager.default.createFile(atPath: peekURL(roll: roll, frame: frame).path, contents: Data())
+        } else {
+            try? FileManager.default.removeItem(at: peekURL(roll: roll, frame: frame))
+        }
     }
 
     /// Record the roll's latest details (e.g. when it was finished).
