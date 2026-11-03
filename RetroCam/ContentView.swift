@@ -66,6 +66,7 @@ struct ContentView: View {
     @State private var incomingFilm: FilmStock?
     @State private var incomingRoll: IncomingRoll?
     @State private var incomingUser: IncomingUser?
+    @State private var showingWelcome = WelcomeView.isNeeded()
     @State private var showingProfile = false
     @State private var profile = Profile.load()
     @State private var confirmingDelete = false
@@ -144,6 +145,12 @@ struct ContentView: View {
         }
         .fullScreenCover(item: $incomingUser) { user in
             UserProfileView(userID: user.id, camera: camera, accent: accent)
+        }
+        .fullScreenCover(isPresented: $showingWelcome) {
+            WelcomeView(accent: accent) {
+                showingWelcome = false
+                profile = Profile.load()
+            }
         }
         .onReceive(Account.shared.$headshotVersion.dropFirst()) { _ in profile = Profile.load() }
         .onOpenURL { url in

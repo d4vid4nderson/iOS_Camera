@@ -297,6 +297,9 @@ final class Account: ObservableObject {
         UserDefaults.standard.removeObject(forKey: AccountKeys.appleUser)
         me = nil
         Self.wipeAccountData()
+        // Signed out: next launch, the welcome (sign in, or use the camera without an
+        // account) shows again.
+        UserDefaults.standard.removeObject(forKey: "welcome.skipped")
         headshotVersion += 1
     }
 
