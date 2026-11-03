@@ -294,13 +294,25 @@ final class Account: ObservableObject {
         UserDefaults.standard.removeObject(forKey: AccountKeys.me)
         UserDefaults.standard.removeObject(forKey: AccountKeys.appleUser)
         me = nil
-        // Your name and headshot belong to the account: signed out, they're off this phone
-        // (they come back when you sign in again).
+        Self.wipeAccountData()
+        headshotVersion += 1
+    }
+
+    /// Your name and headshot belong to the account: signed out, they're off this phone
+    /// (they come back from the account when you sign in again). Your rolls and photos stay.
+    nonisolated static func wipeAccountData() {
+        UserDefaults.standard.removeObject(forKey: AccountKeys.me)
         var profile = Profile.load()
         profile.name = ""
         profile.saveSettings()
         Profile.removeHeadshot()
-        headshotVersion += 1
+    }
+
+    /// At launch: signed out (including from an older version that left your name and photo
+    /// behind), wipe them before anything shows them.
+    nonisolated static func wipeIfSignedOut() {
+        guard ShareLinks.isConfigured, sessionToken == nil else { return }
+        wipeAccountData()
     }
 
     /// If you've stopped using Sign in with Apple for Film Exposures (in Settings), sign out.
