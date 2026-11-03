@@ -22,7 +22,7 @@ private enum SettingPanel: String, Identifiable {
         case .lens: return "LENS"
         case .exposure: return "EXPOSURE"
         case .grain: return "GRAIN"
-        case .border: return "BORDER"
+        case .border: return "FRAME"
         }
     }
 
@@ -274,7 +274,8 @@ struct ContentView: View {
             }
             barItem(.exposure, value: exposureText, highlighted: camera.exposureBias != 0)
             barItem(.grain, value: grainText)
-            barItem(.border, value: camera.border.label, highlighted: camera.border != .none)
+            barItem(.border, value: camera.format != .medium645 ? camera.format.ratioText : camera.border.label,
+                    highlighted: camera.border != .none || camera.format != .medium645)
             barItem(.fx, value: camera.stock.effect == .none ? "OFF" : camera.stock.effect.label,
                     highlighted: camera.stock.effect != .none)
             // Tap to cycle, no panel.
@@ -401,7 +402,9 @@ struct ContentView: View {
         case .lens: return camera.lens.map { $0.isNative ? $0.name : "\($0.name) CROP" } ?? ""
         case .exposure: return exposureText + " EV"
         case .grain: return grainText
-        case .border: return camera.border == .none ? camera.border.label : "\(camera.border.label) · \(borderWidthText)"
+        case .border:
+            let border = camera.border == .none || camera.border == .slide ? camera.border.label : "\(camera.border.label) \(borderWidthText)"
+            return "\(camera.format.label) · \(border)"
         }
     }
 
@@ -530,9 +533,25 @@ struct ContentView: View {
 
     private var borderWidthText: String { "\(Int((camera.borderWidth * 100).rounded()))%" }
 
-    /// Style chips, then the width dial (only when there is a border to size).
+    /// The frame: its format (35mm, 6×6, XPAN… a crop of the sensor), then the border
+    /// style and, for WHITE and BLACK, its width.
     private var borderPicker: some View {
         VStack(alignment: .leading, spacing: 10) {
+            Text("FORMAT").font(.mono(9, .semibold)).foregroundStyle(.secondary)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(FrameFormat.allCases, id: \.self) { format in
+                        chip(format.label, selected: format == camera.format) { camera.selectFormat(format) }
+                            .accessibilityLabel("\(format.label), \(format.ratioText)")
+                    }
+                }
+                .padding(.horizontal, Self.scrollInset)
+            }
+            .edgeFade(Self.scrollInset)
+            .padding(.horizontal, -Self.panelPadding)
+            .sensoryFeedback(.selection, trigger: camera.format)
+
+            Text("BORDER").font(.mono(9, .semibold)).foregroundStyle(.secondary)
             HStack(spacing: 8) {
                 ForEach(BorderStyle.allCases, id: \.self) { style in
                     chip(style.label, selected: style == camera.border) { camera.selectBorder(style) }
@@ -541,7 +560,7 @@ struct ContentView: View {
             }
             .sensoryFeedback(.selection, trigger: camera.border)
 
-            if camera.border != .none {
+            if camera.border == .white || camera.border == .black {
                 ScrubDial(value: camera.borderWidth * 100,
                           range: PrintBorder.widthRange.lowerBound * 100...PrintBorder.widthRange.upperBound * 100,
                           step: 1, majorEvery: 2, accent: accent,
@@ -551,7 +570,7 @@ struct ContentView: View {
                     .transition(.opacity)
             }
         }
-        .animation(.snappy(duration: 0.2), value: camera.border == .none)
+        .animation(.snappy(duration: 0.2), value: camera.border == .white || camera.border == .black)
     }
 
     /// B&W | COLOR: which films the picker below shows (your own films sit with their kind).

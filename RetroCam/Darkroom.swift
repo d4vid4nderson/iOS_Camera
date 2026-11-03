@@ -59,6 +59,9 @@ enum Darkroom {
                                            parameters: [kCIInputScaleKey: scale, kCIInputAspectRatioKey: 1])
         }
 
+        // The frame format (35mm, 6×6, XPAN…) is cut before the film, so grain, glow and
+        // vignette sit on the frame you chose.
+        source = finish.format.crop(source)
         let film = FilmLook.apply(stock, to: source, stamp: stampText)
         let developed = PrintBorder.apply(finish.border, to: film, seed: finish.seed, width: finish.width).settingProperties(metadata)
 

@@ -16,6 +16,7 @@ final class PreviewRenderer: NSObject, MTKViewDelegate {
     var stampMode: StampMode = .off
     var border: BorderStyle = .none
     var borderWidth: Double = PrintBorder.defaultWidth
+    var format: FrameFormat = .medium645
     /// Fixed per-session seed for textured borders, so the live view does not flicker.
     private let borderSeed = UInt32.random(in: 0...UInt32.max)
 
@@ -64,8 +65,21 @@ final class PreviewRenderer: NSObject, MTKViewDelegate {
             translationX: (target.width - image.extent.width) / 2 - image.extent.minX,
             y: (target.height - image.extent.height) / 2 - image.extent.minY))
         let bounds = CGRect(origin: .zero, size: target)
-        image = FilmLook.apply(stock, to: image.cropped(to: bounds), stamp: stampMode.text(for: Date()))
-        image = PrintBorder.apply(border, to: image, seed: borderSeed, width: borderWidth)
+        // The frame format, as the photo will be cut: the picture inside the viewfinder.
+        let frameRect = format.rect(in: bounds)
+        var picture = image.cropped(to: frameRect)
+            .transformed(by: CGAffineTransform(translationX: -frameRect.minX, y: -frameRect.minY))
+        let pictureBounds = CGRect(origin: .zero, size: frameRect.size)
+        picture = FilmLook.apply(stock, to: picture, stamp: stampMode.text(for: Date())).cropped(to: pictureBounds)
+        picture = PrintBorder.apply(border, to: picture, seed: borderSeed, width: borderWidth)
+        // Fit it (a slide mount is bigger than the picture) in the middle, on black.
+        let out = picture.extent
+        let fit = min(bounds.width / out.width, bounds.height / out.height, 1)
+        picture = picture.transformed(by: CGAffineTransform(scaleX: fit, y: fit))
+        picture = picture.transformed(by: CGAffineTransform(
+            translationX: (bounds.width - picture.extent.width) / 2 - picture.extent.minX,
+            y: (bounds.height - picture.extent.height) / 2 - picture.extent.minY))
+        image = picture.composited(over: CIImage(color: .black).cropped(to: bounds))
 
         let destination = CIRenderDestination(
             width: Int(target.width),
