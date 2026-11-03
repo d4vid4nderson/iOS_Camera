@@ -90,7 +90,7 @@ test('a roll uploads, publishes, shows and unshares', async () => {
   assert.match(page, /og:image/);
   assert.match(page, new RegExp(`exposures://r/${id}`), 'opens in the app');
   assert.doesNotMatch(page, /frame-01\.jpg/, 'the web page is a teaser, not the roll');
-  assert.match(page, /coming soon to the App Store/);
+  assert.match(page, /class="store-badge soon"><img src="\/app-store-badge\.svg"[^>]*><span>Coming soon/, 'the badge, unlinked, until the app is listed');
   const meta = await (await call(e, 'GET', `/r/${id}/roll.json`)).json();
   assert.equal(meta.frames.length, 2);
   assert.equal(meta.film.code, PAN50);
@@ -142,6 +142,7 @@ test('roll pages send people without the app to the App Store', async () => {
   await call(e, 'POST', `/api/rolls/${id}/publish`, { token });
   const page = await (await call(e, 'GET', `/r/${id}`)).text();
   assert.match(page, /Get Film Exposures to see the whole roll/);
+  assert.match(page, /<a href="https:\/\/apps\.apple\.com\/app\/id6740000000"><img src="\/app-store-badge\.svg" alt="Download on the App Store"/, 'the badge links to the app');
   assert.match(page, /apple-itunes-app" content="app-id=6740000000, app-argument=https:/);
 });
 

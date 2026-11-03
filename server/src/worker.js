@@ -63,7 +63,7 @@
 // Link-shared rolls are deleted 30 days after they're shared (checked on every read, and swept
 // daily). Rolls on a profile stay until they're taken off it or deleted.
 
-import { SITE_CSS, siteHeader, siteFooter, homeBody, privacyBody, termsBody, supportBody, inboxBody, SUPPORT_TOPICS } from './site.js';
+import { SITE_CSS, siteHeader, siteFooter, homeBody, storeBadge, privacyBody, termsBody, supportBody, inboxBody, SUPPORT_TOPICS } from './site.js';
 
 export const APP_ID = 'RN599658F9.com.davidanderson.retrocam';
 export const TTL_DAYS = 30;
@@ -1692,9 +1692,7 @@ function rollPage(roll, meta, url, env) {
   const frames = `${meta.frames} ${meta.frames === 1 ? 'frame' : 'frames'}`;
   const film = meta.film.name ? ` · shot on ${esc(meta.film.name)}` : '';
   const store = storeURL(env);
-  const get = store
-    ? `<a class="button primary" href="${esc(store)}">Get Film Exposures to see the whole roll</a>`
-    : '<p class="button disabled">Film Exposures is coming soon to the App Store</p>';
+  const get = storeBadge(esc(store), 'Get Film Exposures to see the whole roll.');
   return layout({
     title: `${meta.title} · ${who} on Film Exposures`,
     description: `${meta.frames} frames${meta.film.name ? ` shot on ${meta.film.name}` : ''}. Open it in Film Exposures.`,
@@ -1732,7 +1730,7 @@ function profilePage(profile, url, env) {
       <div class="profile-head">${avatar}<div><h1>${who}</h1>
         <p class="muted">${profile.rolls.length} ${profile.rolls.length === 1 ? 'roll' : 'rolls'}</p></div></div>
       ${profile.rolls.length ? `<div class="rolls">${tiles}</div>` : '<p class="muted">No public rolls yet.</p>'}
-      ${store ? `<a class="button primary" href="${esc(store)}">Get Film Exposures</a>` : '<p class="button disabled">Film Exposures is coming soon to the App Store</p>'}
+      ${storeBadge(esc(store))}
       <a class="button" href="exposures://u/${profile.id}">Already have Film Exposures? Open the profile</a>`,
   });
 }
@@ -1760,7 +1758,7 @@ export function storeURL(env) {
 
 function storeButton(env) {
   const store = storeURL(env);
-  return store ? `<a class="button" href="${esc(store)}">Get Film Exposures</a>` : '';
+  return store ? storeBadge(esc(store)) : '';
 }
 
 function layout({ title, description, image, url, body, env, appArgument, wide = false, noindex = false }) {
