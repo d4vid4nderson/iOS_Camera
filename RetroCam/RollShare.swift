@@ -430,6 +430,16 @@ enum RollShare {
         return (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["count"] as? Int ?? 0
     }
 
+    /// Make your profile's link preview from your public rolls and send it to the server,
+    /// so links to your profile show it. Quietly does nothing signed out or offline.
+    static func uploadProfilePreview() async {
+        guard let base = ShareLinks.base, let account = Account.sessionToken, let id = Account.storedID,
+              let mine = try? await fetchProfile(id: id),
+              let jpeg = await ProfileCard.makePreview(for: mine)?.jpegData(compressionQuality: 0.85) else { return }
+        _ = try? await send(base.appendingPathComponent("api/me/preview"), method: "PUT", account: account,
+                            body: jpeg, type: "image/jpeg")
+    }
+
     /// The card for a roll you've already shared, to share the link again.
     static func card(for roll: Roll, record: Record, film: FilmStock?, profile: Profile) -> UIImage? {
         let frames = RollStore.frames(of: roll.number).filter { !RollStore.isPending(roll: roll.number, frame: $0) }

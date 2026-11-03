@@ -166,6 +166,20 @@ test('browsing lists findable people by handle, a page at a time', async () => {
   assert.ok(!rest.some((h) => first.includes(h)), 'no repeats');
 });
 
+test('a profile link shows the preview the app made, or the site image', async () => {
+  const { e, ana } = await cast();
+  let page = await (await call(e, 'GET', `/u/${ana.id}`)).text();
+  assert.match(page, /og:image" content="https:\/\/exposures.example.workers.dev\/og-image.png"/);
+  assert.equal((await call(e, 'PUT', '/api/me/preview', { body: jpeg() })).status, 401);
+  assert.equal((await call(e, 'PUT', '/api/me/preview', { account: ana.token, body: new Uint8Array([1, 2, 3]) })).status, 415);
+  const { preview } = await (await call(e, 'PUT', '/api/me/preview', { account: ana.token, body: jpeg() })).json();
+  assert.match(preview, /\/u\/\w{12}\/preview.jpg\?v=1$/);
+  page = await (await call(e, 'GET', `/u/${ana.id}`)).text();
+  assert.ok(page.includes(`og:image" content="${preview}"`));
+  assert.equal((await call(e, 'GET', `/u/${ana.id}/preview.jpg`)).status, 200);
+  assert.equal((await getJSON(e, `/u/${ana.id}/profile.json`)).preview, preview);
+});
+
 test('following is a request the other person approves', async () => {
   const { e, apple, ana, ben } = await cast();
   const noHandle = await person(e, apple, 'd', 'Dee');
