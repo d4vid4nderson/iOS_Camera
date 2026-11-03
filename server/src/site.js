@@ -444,6 +444,7 @@ export function privacyBody() {
 <li><b>Sharing a film</b> creates a link that contains the film's settings and name. Nothing is stored on our servers.</li>
 <li><b>Sharing a roll</b> uploads its developed frames and a share card, the roll's title, the name and settings of the film it was shot on, the date it was started, and a random identifier for your phone that lets others block you. If you choose to show your name and headshot on cards, those are uploaded too. Anyone with the link can see the roll. Link shares are deleted automatically 30 days after you share them, and you can unshare at any time to delete them sooner.</li>
 <li><b>Public rolls</b>, if you have an account, are shown on your public profile and can be seen and liked by anyone. They stay until you make them private or delete them, which deletes them from our servers.</li>
+<li><b>Rolls for your followers or for specific people</b> can be seen only by the followers you approved or the people you chose, signed in to their accounts. Their photos are sent through links that stop working within two hours. They stay until you change who can see them or delete them.</li>
 </ul>
 
 <h2>Accounts</h2>
@@ -453,6 +454,7 @@ export function privacyBody() {
 <li>Your name, if the service provides it or you set one, and your profile photo from Google or Facebook, which you can replace or remove.</li>
 </ul>
 <p>We don't ask for your email address, contacts or friends list. We also store which frames and rolls you have liked, the time you agreed to our rules for public rolls, and sign-in sessions for your devices.</p>
+<p><b>Following and search.</b> If you choose a @handle, we store it with the people you follow, the people who follow you, follow requests, the people you block, and who you've shared rolls with. Your handle and name can be found in search unless you turn that off. Who follows whom is visible to signed-in users. Blocking someone ends following both ways and hides your rolls and profile from them.</p>
 <p><b>Likes are public.</b> When you like a frame or a roll, anyone who opens that roll in the app can see that you liked it, with your name and profile photo. Unlike it, or delete your account, and it's gone.</p>
 
 <h2>Reports, blocks and support</h2>

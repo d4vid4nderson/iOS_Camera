@@ -34,6 +34,10 @@ struct ProfileSheet: View {
     @State private var makingCard = false
     @State private var openRoll: RollRef?
     @State private var sharing: ShareItems?
+    @State private var socialTab: SocialTabRef?
+    @State private var pickingPeople: RollRef?
+    /// The audience a roll was going to get when the rules had to be agreed to first.
+    @State private var pendingAudience: (Audience, [String]) = (.everyone, [])
 
     var body: some View {
         ScrollView {
@@ -143,6 +147,14 @@ struct ProfileSheet: View {
         .sheet(item: $sharing) { item in
             ActivityView(items: item.items).ignoresSafeArea()
         }
+        .fullScreenCover(item: $socialTab) { ref in
+            SocialView(camera: camera, accent: accent, tab: ref.tab)
+        }
+        .sheet(item: $pickingPeople) { ref in
+            PeoplePicker(accent: accent, initial: records[ref.number]?.people ?? []) { people in
+                if let roll = myRolls.first(where: { $0.number == ref.number }) { apply(.people, people: people, to: roll) }
+            }
+        }
         .onAppear {
             loadRolls()
             // Catch up shared rolls on frames that developed while the app was closed.
@@ -202,6 +214,20 @@ struct ProfileSheet: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            HandleEditor(accent: accent)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("PEOPLE").font(.mono(9, .semibold)).foregroundStyle(.secondary)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        chip("FOLLOWING", selected: true) { socialTab = SocialTabRef(tab: .feed) }
+                        chip("SHARED WITH YOU", selected: false) { socialTab = SocialTabRef(tab: .shared) }
+                        chip("REQUESTS", selected: false) { socialTab = SocialTabRef(tab: .requests) }
+                        chip("FIND PEOPLE", selected: false) { socialTab = SocialTabRef(tab: .find) }
+                    }
+                }
+            }
+
             VStack(alignment: .leading, spacing: 10) {
                 Text("YOUR ROLLS").font(.mono(9, .semibold)).foregroundStyle(.secondary)
                 if myRolls.isEmpty {
@@ -212,17 +238,18 @@ struct ProfileSheet: View {
                         ForEach(myRolls, id: \.number) { roll in rollTile(roll) }
                     }
                 }
-                HStack(alignment: .top, spacing: 6) {
-                    Image(systemName: "lock.open.fill").foregroundStyle(accent)
-                    Text("Public: on your profile for anyone to see and like.")
+                ForEach(Audience.choices) { audience in
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: audience.icon).frame(width: 14)
+                            .foregroundStyle(audience.isShared ? accent : .secondary)
+                        Text("\(audience.label): \(audience.detail)")
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .font(.mono(9)).foregroundStyle(.secondary)
                 }
-                .font(.mono(9)).foregroundStyle(.secondary)
-                HStack(alignment: .top, spacing: 6) {
-                    Image(systemName: "lock.fill")
-                    Text("Private: only on this phone. Tap the lock to switch; making a roll private takes it off the server, and links to it stop working.")
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .font(.mono(9)).foregroundStyle(.secondary)
+                Text("Tap a roll's badge to choose. Making a roll private takes it off the server, and links to it stop working.")
+                    .font(.mono(9)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
         }
@@ -327,7 +354,8 @@ struct ProfileSheet: View {
     private func rollTile(_ roll: Roll) -> some View {
         let record = records[roll.number]
         let waiting = record == nil && RollShare.waitsForProfile(roll.number)
-        let isPublic = record?.onProfile == true || waiting
+        let audience: Audience = waiting ? .everyone : record?.shownAudience ?? .onlyMe
+        let isPublic = audience.isShared
         let working = busy[roll.number]
         return VStack(alignment: .leading, spacing: 5) {
             Button { openRoll = RollRef(number: roll.number) } label: {
@@ -336,14 +364,21 @@ struct ProfileSheet: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Open \(roll.title)")
             .overlay(alignment: .topTrailing) {
-                Button {
-                    if isPublic { makePrivate(roll) } else { makePublic(roll) }
+                Menu {
+                    ForEach(Audience.choices) { choice in
+                        Button {
+                            choose(choice, for: roll)
+                        } label: {
+                            Label(choice == .people && audience == .people ? "SPECIFIC PEOPLE (EDIT)" : choice.label,
+                                  systemImage: choice == audience ? "checkmark" : choice.icon)
+                        }
+                    }
                 } label: {
                     Group {
                         if working != nil {
                             ProgressView().controlSize(.mini).tint(.white)
                         } else {
-                            Image(systemName: isPublic ? "lock.open.fill" : "lock.fill")
+                            Image(systemName: audience.icon)
                                 .font(.system(size: 12, weight: .bold))
                         }
                     }
@@ -355,10 +390,10 @@ struct ProfileSheet: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(working != nil)
-                .accessibilityLabel(isPublic ? "Public. Make \(roll.title) private" : "Private. Make \(roll.title) public")
+                .accessibilityLabel("\(audience.label.capitalized). Choose who sees \(roll.title)")
             }
             Text(roll.title.uppercased()).font(.mono(10, .bold)).foregroundStyle(.white).lineLimit(1)
-            Text(working ?? (waiting ? "PUBLIC WHEN DEVELOPED" : isPublic ? "PUBLIC" : record != nil ? "SHARED BY LINK" : "PRIVATE"))
+            Text(working ?? (waiting ? "PUBLIC WHEN DEVELOPED" : audience == .link ? "SHARED BY LINK" : audience.label))
                 .font(.mono(8)).foregroundStyle(isPublic ? accent : .secondary).lineLimit(1)
         }
     }
@@ -384,23 +419,43 @@ struct ProfileSheet: View {
         })
     }
 
-    private func makePublic(_ roll: Roll) {
-        guard records[roll.number]?.onProfile != true else { return }
-        guard account.me?.termsAccepted == true else {
+    /// A choice from a roll's audience menu.
+    private func choose(_ audience: Audience, for roll: Roll) {
+        switch audience {
+        case .onlyMe: makePrivate(roll)
+        case .people: pickingPeople = RollRef(number: roll.number)
+        default: apply(audience, to: roll)
+        }
+    }
+
+    private func makePublic(_ roll: Roll) { apply(.everyone, to: roll) }
+
+    /// Share a roll with an audience: uploads it if needed. Public, followers and specific
+    /// people need the rules agreed to first.
+    private func apply(_ audience: Audience, people: [String] = [], to roll: Roll) {
+        let current = records[roll.number]
+        if current?.shownAudience == audience && (audience != .people || Set(current?.people ?? []) == Set(people)) { return }
+        guard !audience.isShared || account.me?.termsAccepted == true else {
+            pendingAudience = (audience, people)
             withAnimation(.snappy(duration: 0.15)) { askingTerms = roll }
             return
         }
         guard !RollShare.developedFrames(of: roll.number).isEmpty else {
-            // Nothing developed yet: it goes on your profile when its first frames do.
-            RollShare.setWaitsForProfile(roll.number, true)
-            loadRolls()
+            if audience == .everyone {
+                // Nothing developed yet: it goes on your profile when its first frames do.
+                RollShare.setWaitsForProfile(roll.number, true)
+                loadRolls()
+            } else {
+                note = "DEVELOP A FRAME FIRST, THEN SHARE THE ROLL"
+            }
             return
         }
-        busy[roll.number] = "PUTTING ON PROFILE…"
+        busy[roll.number] = audience == .people ? "SHARING…" : "PUTTING ON PROFILE…"
         note = nil
         Task {
             do {
-                let record = try await RollShare.makePublic(roll: roll, film: camera.film(ofRoll: roll.number), profile: profile) { done, total in
+                let record = try await RollShare.setAudience(audience, people: people, roll: roll,
+                                                             film: camera.film(ofRoll: roll.number), profile: profile) { done, total in
                     busy[roll.number] = "UPLOADING \(done)/\(total)"
                 }
                 records[roll.number] = record
@@ -453,9 +508,9 @@ struct ProfileSheet: View {
             Color.black.opacity(0.6).ignoresSafeArea()
                 .onTapGesture { withAnimation(.snappy(duration: 0.15)) { askingTerms = nil } }
             VStack(alignment: .leading, spacing: 12) {
-                Text("BEFORE YOU GO PUBLIC").font(.mono(15, .bold)).foregroundStyle(accent)
+                Text(pendingAudience.0 == .everyone ? "BEFORE YOU GO PUBLIC" : "BEFORE YOU SHARE").font(.mono(15, .bold)).foregroundStyle(accent)
                 Text("""
-                    Public rolls can be seen, liked and reported by anyone.
+                    Shared rolls can be seen, liked and reported by the people you share them with. Public rolls, by anyone.
 
                     There's no place here for nudity or sexual content, violence, hate, harassment, spam, or photos of people who didn't agree to be shared. Reported rolls are hidden and reviewed, and accounts that break these rules are removed.
 
@@ -468,13 +523,13 @@ struct ProfileSheet: View {
                     Task {
                         do {
                             try await account.acceptTerms()
-                            makePublic(roll)
+                            apply(pendingAudience.0, people: pendingAudience.1, to: roll)
                         } catch {
                             note = error.localizedDescription.uppercased()
                         }
                     }
                 } label: {
-                    Text("I AGREE · MAKE IT PUBLIC")
+                    Text(pendingAudience.0 == .everyone ? "I AGREE · MAKE IT PUBLIC" : "I AGREE · SHARE IT")
                         .font(.mono(11, .bold)).frame(maxWidth: .infinity).padding(.vertical, 11)
                         .background(Capsule().fill(accent.opacity(0.18)))
                         .overlay(Capsule().stroke(accent, lineWidth: 1))
@@ -578,6 +633,11 @@ struct ProfileAvatar: View {
 }
 
 /// A roll to open from your profile.
+private struct SocialTabRef: Identifiable {
+    let tab: SocialView.Tab
+    var id: String { tab.rawValue }
+}
+
 private struct RollRef: Identifiable {
     let number: Int
     var id: Int { number }

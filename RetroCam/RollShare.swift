@@ -33,14 +33,22 @@ enum RollShare {
         var owner: String?
         /// The roll's frame numbers in the order they were uploaded (frame-01, -02…).
         var frames: [Int]?
+        /// Who it's for ("people", "followers", "public", "link"); older records only know isPublic.
+        var audience: String?
+        /// The accounts a "people" roll is shared with.
+        var people: [String]?
 
         var onProfile: Bool { isPublic == true }
+        /// Who the roll is for.
+        var shownAudience: Audience {
+            audience.flatMap(Audience.init(rawValue:)) ?? (isPublic == true ? .everyone : .link)
+        }
     }
 
     /// A roll someone shared, as the app's viewer needs it.
     struct RemoteRoll: Decodable {
         struct Film: Decodable { var name: String?; var code: String? }
-        struct Sharer: Decodable { var id: String?; var name: String?; var avatar: URL?; var profile: URL? }
+        struct Sharer: Decodable { var id: String?; var name: String?; var avatar: URL?; var profile: URL?; var handle: String? }
         var id: String
         var title: String
         var film: Film
@@ -51,6 +59,7 @@ enum RollShare {
         var cover: Int?
         var expiresAt: String?
         var `public`: Bool?
+        var audience: String?
     }
 
     /// Someone's public profile.
@@ -62,12 +71,24 @@ enum RollShare {
             var frames: Int
             var shotAt: String?
             var cover: URL
+            var audience: String?
+        }
+        /// How you stand with them: "self", "none", "requested" or "following".
+        struct Relation: Decodable {
+            var status: String
+            var followsYou: Bool?
+            var askedYou: Bool?
+            var blocked: Bool?
         }
         var id: String
         var name: String?
         var avatar: URL?
         var url: URL
         var rolls: [RollTile]
+        var handle: String?
+        var followers: Int?
+        var following: Int?
+        var relation: Relation?
     }
 
     /// Someone who liked a frame or a roll: their name and headshot, to open their profile.
@@ -266,6 +287,14 @@ enum RollShare {
     /// you shared before signing in is claimed with its token.
     static func makePublic(roll: Roll, film: FilmStock?, profile: Profile,
                            progress: @escaping @MainActor (Int, Int) -> Void) async throws -> Record {
+        try await setAudience(.everyone, roll: roll, film: film, profile: profile, progress: progress)
+    }
+
+    /// Choose who sees a roll: specific people, your followers, everyone, or anyone with the
+    /// link. Uploads it first if it isn't shared yet. (Private is `unshare`: off the server.)
+    static func setAudience(_ audience: Audience, people: [String] = [], roll: Roll, film: FilmStock?, profile: Profile,
+                            progress: @escaping @MainActor (Int, Int) -> Void) async throws -> Record {
+        guard audience != .onlyMe else { throw ShareError.server("Make a roll private by unsharing it.") }
         guard let base = ShareLinks.base else { throw ShareError.notConfigured }
         guard let account = Account.sessionToken else { throw ProfileError.signIn }
         var record: Record
@@ -275,15 +304,20 @@ enum RollShare {
             let frames = RollStore.frames(of: roll.number).filter { !RollStore.isPending(roll: roll.number, frame: $0) }
             record = try await share(roll: roll, frames: frames, film: film, profile: profile, progress: progress).0
         }
+        let data: Data
         do {
-            _ = try await send(base.appendingPathComponent("api/rolls").appendingPathComponent(record.id).appendingPathComponent("visibility"),
-                               method: "POST", token: record.token, account: account, json: ["public": true])
+            data = try await send(base.appendingPathComponent("api/rolls").appendingPathComponent(record.id).appendingPathComponent("visibility"),
+                                  method: "POST", token: record.token, account: account,
+                                  json: ["audience": audience.rawValue, "public": audience == .everyone, "people": people])
         } catch let error as ShareAPI.HTTPError where error.status == 403 && error.message == "terms" {
             throw ProfileError.terms
         }
-        record.isPublic = true
+        let reply = (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+        record.isPublic = audience == .everyone
+        record.audience = audience.rawValue
+        record.people = audience == .people ? (reply["people"] as? [String] ?? people) : nil
         record.owner = Account.storedID
-        record.expiresAt = .distantFuture
+        record.expiresAt = (reply["expiresAt"] as? String).flatMap(parseDate) ?? (audience.isShared ? .distantFuture : Date().addingTimeInterval(Double(lifetimeDays) * 86_400))
         save(record, roll: roll.number)
         return record
     }
@@ -368,7 +402,7 @@ enum RollShare {
     static func fetchProfile(id: String) async throws -> RemoteProfile {
         guard let base = ShareLinks.base else { throw ShareError.notConfigured }
         let data = try await send(base.appendingPathComponent("u").appendingPathComponent(id).appendingPathComponent("profile.json"),
-                                  method: "GET", notFound: "There's no profile here any more.")
+                                  method: "GET", account: Account.sessionToken, notFound: "There's no profile here any more.")
         do {
             return try JSONDecoder().decode(RemoteProfile.self, from: data)
         } catch {
@@ -411,7 +445,8 @@ enum RollShare {
     static func fetch(id: String) async throws -> RemoteRoll {
         guard let base = ShareLinks.base else { throw ShareError.notConfigured }
         let data = try await send(base.appendingPathComponent("r").appendingPathComponent(id).appendingPathComponent("roll.json"),
-                                  method: "GET", notFound: "This roll has expired or was unshared.")
+                                  method: "GET", account: Account.sessionToken,
+                                  notFound: "This roll has expired, was unshared, or isn't shared with you.")
         do {
             return try JSONDecoder().decode(RemoteRoll.self, from: data)
         } catch {
@@ -422,7 +457,7 @@ enum RollShare {
     static func report(id: String, reason: String) async throws {
         guard let base = ShareLinks.base else { throw ShareError.notConfigured }
         _ = try await send(base.appendingPathComponent("api/rolls").appendingPathComponent(id).appendingPathComponent("report"),
-                           method: "POST", json: ["reason": reason])
+                           method: "POST", account: Account.sessionToken, json: ["reason": reason])
     }
 
     private static func send(_ url: URL, method: String, token: String? = nil, account: String? = nil,

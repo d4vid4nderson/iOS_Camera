@@ -32,6 +32,24 @@
 //   PUT|DELETE /api/me/avatar               your headshot (JPEG)             (account)
 //   POST /api/me/terms                      agree to the rules for public rolls (account)
 //   GET  /u/<id>                            a profile page; /u/<id>/profile.json for the app
+//        (signed in: also the rolls shared with your followers or with you, and whether you follow)
+//
+//   Social (all "(account)"):
+//   PUT  /api/me { name, handle, discoverable }   your @handle (unique) and whether search finds you
+//   GET  /api/users/search?q=                search people by @handle or name
+//   POST|DELETE /api/users/<id>/follow       ask to follow (they approve) / unfollow or cancel
+//   GET  /api/users/<id>/followers|following  who follows them / whom they follow
+//   POST|DELETE /api/users/<id>/block        block: no following, finding or sharing either way
+//   GET  /api/me/requests                    people asking to follow you
+//   POST /api/me/requests/<id> { accept }    approve or turn down a follow request
+//   DELETE /api/me/followers/<id>            remove a follower
+//   GET  /api/feed                           recent rolls from people you follow
+//   GET  /api/me/inbox                       rolls shared with you
+//   POST /api/rolls/<id>/visibility { audience, people }  who sees a roll: private, people,
+//        followers, public, or link (anyone with the link, for 30 days)
+//
+// A roll that isn't public or link-shared hands out its photos as signed links that expire,
+// so only the people it's for can load them.
 //   GET  /privacy, /terms, /support         the website's policy pages and support form
 //   POST /api/support                       a support message (stored; no email address is published)
 //   GET  /admin                             the support inbox (password: the ADMIN_TOKEN secret)
@@ -170,13 +188,29 @@ export async function route(request, env, now = Date.now()) {
     });
   }
 
+  if (path === '/api/users/search' && method === 'GET') return searchUsers(request, env, url);
+  if ((m = path.match(new RegExp(`^/api/users/${USER}/follow$`))) && (method === 'POST' || method === 'DELETE')) {
+    return follow(request, env, url, m[1], method === 'POST', now);
+  }
+  if ((m = path.match(new RegExp(`^/api/users/${USER}/(followers|following)$`))) && method === 'GET') {
+    return followList(request, env, url, m[1], m[2]);
+  }
+  if ((m = path.match(new RegExp(`^/api/users/${USER}/block$`))) && (method === 'POST' || method === 'DELETE')) {
+    return block(request, env, m[1], method === 'POST');
+  }
+  if (path === '/api/me/requests' && method === 'GET') return listRequests(request, env, url);
+  if ((m = path.match(new RegExp(`^/api/me/requests/${USER}$`))) && method === 'POST') return answerRequest(request, env, url, m[1]);
+  if ((m = path.match(new RegExp(`^/api/me/followers/${USER}$`))) && method === 'DELETE') return removeFollower(request, env, m[1]);
+  if (path === '/api/feed' && method === 'GET') return feed(request, env, url, now);
+  if (path === '/api/me/inbox' && method === 'GET') return inbox(request, env, url, now);
+
   if ((m = path.match(new RegExp(`^/u/${USER}$`))) && method === 'GET') {
     const profile = await publicProfile(env, m[1], url, now);
     if (!profile) return html(404, messagePage('There is no profile here.', env));
     return html(200, profilePage(profile, url, env));
   }
   if ((m = path.match(new RegExp(`^/u/${USER}/profile\\.json$`))) && method === 'GET') {
-    const profile = await publicProfile(env, m[1], url, now);
+    const profile = await publicProfile(env, m[1], url, now, await currentUser(request, env));
     if (!profile) return json(404, { error: 'gone' });
     return json(200, profile);
   }
@@ -189,20 +223,27 @@ export async function route(request, env, now = Date.now()) {
   if ((m = path.match(/^\/r\/([A-Za-z0-9]{10})$/)) && method === 'GET') {
     const meta = await liveRoll(env, m[1], now);
     if (!meta) return html(404, messagePage('This roll has expired or was unshared.', env));
-    return html(200, rollPage(await rollPayload(env, meta, url), meta, url, env));
+    // The web has no sign-in, so it only shows rolls that anyone may see.
+    if (!isOpen(meta)) return html(404, messagePage('This roll is only for the people it was shared with. Open it in Film Exposures.', env));
+    return html(200, rollPage(await rollPayload(env, meta, url, now), meta, url, env));
   }
   if ((m = path.match(/^\/r\/([A-Za-z0-9]{10})\/roll\.json$/)) && method === 'GET') {
     const meta = await liveRoll(env, m[1], now);
-    if (!meta) return json(404, { error: 'gone' });
-    return json(200, await rollPayload(env, meta, url));
+    const viewer = await currentUser(request, env);
+    if (!meta || !(await canView(env, meta, viewer))) return json(404, { error: 'gone' });
+    return json(200, await rollPayload(env, meta, url, now, viewer));
   }
   if ((m = path.match(/^\/r\/([A-Za-z0-9]{10})\/(frame-\d{2}\.jpg|card\.jpg|avatar\.jpg)$/)) && method === 'GET') {
     const meta = await liveRoll(env, m[1], now);
     if (!meta) return text(404, 'Not found');
+    const open = isOpen(meta);
+    if (!open && !(await signedOK(env, meta.id, m[2], url, now)) && !(await canView(env, meta, await currentUser(request, env)))) {
+      return text(404, 'Not found');
+    }
     const object = await env.ROLLS.get(`rolls/${m[1]}/${m[2]}`);
     if (!object) return text(404, 'Not found');
     return new Response(object.body, {
-      headers: { 'content-type': 'image/jpeg', 'cache-control': 'public, max-age=86400' },
+      headers: { 'content-type': 'image/jpeg', 'cache-control': open ? 'public, max-age=86400' : 'private, max-age=3600' },
     });
   }
 
@@ -299,6 +340,7 @@ async function unshareRoll(request, env, id) {
 async function reportRoll(request, env, id, now) {
   const meta = await getMeta(env, id);
   if (!meta || expired(meta, now)) return json(404, { error: 'gone' });
+  if (!isOpen(meta) && !(await canView(env, meta, await currentUser(request, env)))) return json(404, { error: 'gone' });
   let reason = 'Inappropriate';
   const type = request.headers.get('content-type') || '';
   if (type.includes('application/json')) {
@@ -415,16 +457,31 @@ async function setVisibility(request, env, id, url, now) {
     await env.ROLLS.put(`users/${user.id}/rolls/${id}`, '1');
   }
   const body = (await readJSON(request)) || {};
-  if (body.public) {
-    if (!user.termsAt) return json(403, { error: 'terms' });
-    meta.public = true;
-    meta.expiresAt = null;
-  } else {
-    meta.public = false;
-    meta.expiresAt = now + TTL_DAYS * DAY;
+  // Older apps send { public }; newer ones say who the roll is for.
+  const audience = AUDIENCES.includes(body.audience) ? body.audience : body.public ? 'public' : 'link';
+  if (SHARED.includes(audience) && !user.termsAt) return json(403, { error: 'terms' });
+  let people = [];
+  if (audience === 'people') {
+    const ids = [...new Set(Array.isArray(body.people) ? body.people : [])].filter((x) => typeof x === 'string' && new RegExp(`^${USER}$`).test(x) && x !== user.id);
+    if (ids.length > MAX_PEOPLE) return json(400, { error: `at most ${MAX_PEOPLE} people` });
+    for (const pid of ids) {
+      if ((await getUser(env, pid)) && !(await blockedEitherWay(env, user.id, pid))) people.push(pid);
+    }
+    if (!people.length) return json(400, { error: 'choose who to share it with' });
   }
+  // The inbox follows who the roll is shared with.
+  const before = audienceOf(meta) === 'people' ? meta.people || [] : [];
+  for (const pid of before.filter((x) => !people.includes(x))) await env.ROLLS.delete(`inbox/${pid}/${id}`);
+  for (const pid of people.filter((x) => !before.includes(x))) await env.ROLLS.put(`inbox/${pid}/${id}`, String(now));
+  meta.audience = audience;
+  meta.people = people;
+  meta.public = audience === 'public';
+  meta.expiresAt = SHARED.includes(audience) ? null : now + TTL_DAYS * DAY;
   await putMeta(env, meta);
-  return json(200, { public: meta.public, expiresAt: meta.expiresAt == null ? null : new Date(meta.expiresAt).toISOString() });
+  return json(200, {
+    audience, people, public: meta.public,
+    expiresAt: meta.expiresAt == null ? null : new Date(meta.expiresAt).toISOString(),
+  });
 }
 
 /// The roll's cover frame (1-based); anything out of range is the first frame.
@@ -452,8 +509,8 @@ export const MAX_LIKERS_SHOWN = 50;
 
 async function listLikes(request, env, id, now) {
   const meta = await liveRoll(env, id, now);
-  if (!meta) return json(404, { error: 'gone' });
   const user = await currentUser(request, env);
+  if (!meta || !(await canView(env, meta, user))) return json(404, { error: 'gone' });
   const origin = new URL(request.url).origin;
   const counts = {};
   const mine = [];
@@ -490,7 +547,7 @@ async function likeFrame(request, env, id, frame, on, now) {
   const user = await currentUser(request, env);
   if (!user) return json(401, { error: 'sign in first' });
   const meta = await liveRoll(env, id, now);
-  if (!meta) return json(404, { error: 'gone' });
+  if (!meta || !(await canView(env, meta, user))) return json(404, { error: 'gone' });
   if (frame < 0 || frame > meta.frames) return json(400, { error: 'frame out of range' });   // 0: the roll
   const nn = String(frame).padStart(2, '0');
   // One object per like, so two people liking at once can't overwrite each other.
@@ -666,6 +723,17 @@ async function updateMe(request, env, url) {
     const body = await readJSON(request);
     if (!body) return json(400, { error: 'Expected JSON' });
     if (typeof body.name === 'string') user.name = clean(body.name, 24);
+    if (typeof body.discoverable === 'boolean') user.discoverable = body.discoverable;
+    if (typeof body.handle === 'string') {
+      const handle = body.handle.trim().replace(/^@/, '').toLowerCase();
+      if (handle !== user.handle) {
+        if (!validHandle(handle)) return json(400, { error: 'handle', reason: 'Use 3 to 20 letters, numbers, _ or .' });
+        if (!(await claimHandle(env, handle, user.id))) return json(409, { error: 'handle', reason: 'That handle is taken.' });
+        if (user.handle) await env.ROLLS.delete(`handles/${user.handle}`);
+        user.handle = handle;
+      }
+    }
+    await indexUser(env, user);
     await putUser(env, user);
     return json(200, mePayload(user, url));
   });
@@ -701,6 +769,7 @@ async function deleteAccount(request, env) {
 }
 
 async function removeUser(env, user) {
+  await forgetSocial(env, user);
   for await (const keys of listKeys(env, `users/${user.id}/`)) {
     for (const key of keys) {
       const parts = key.split('/');
@@ -752,24 +821,29 @@ async function appleNotification(request, env, now) {
 }
 
 /// Someone's public rolls, newest first (hidden and expired ones left out).
-async function publicProfile(env, id, url, now) {
+async function publicProfile(env, id, url, now, viewer = null) {
   const user = await getUser(env, id);
   if (!user) return null;
+  if (viewer && viewer.id !== id && (await blockedEitherWay(env, viewer.id, id))) return null;
   const rolls = [];
   for await (const keys of listKeys(env, `users/${id}/rolls/`)) {
     for (const key of keys) {
       const meta = await getMeta(env, key.split('/')[3]);
-      if (!meta || !meta.public || meta.status !== 'live' || expired(meta, now)) continue;
-      const base = `${url.origin}/r/${meta.id}`;
-      rolls.push({
-        id: meta.id, title: meta.title, film: meta.film.name || null, frames: meta.frames, shotAt: meta.shotAt,
-        cover: `${base}/${frameName(coverFrame(meta.cover, meta.frames))}`, card: `${base}/card.jpg`, url: base, createdAt: meta.createdAt,
-      });
+      if (!meta || meta.status !== 'live' || expired(meta, now)) continue;
+      // A profile shows public rolls, and the ones shared with you; link shares stay off it.
+      if (!(await onProfile(env, meta, viewer))) continue;
+      rolls.push({ ...(await rollTile(env, meta, url, now)), createdAt: meta.createdAt });
     }
   }
   rolls.sort((a, b) => b.createdAt - a.createdAt);
-  const { id: uid, name, avatar, url: link } = mePayload(user, url);
-  return { id: uid, name, avatar, url: link, rolls: rolls.map(({ createdAt, ...r }) => r) };
+  const { id: uid, name, avatar, url: link, handle } = mePayload(user, url);
+  const profile = {
+    id: uid, name, avatar, url: link, handle, rolls: rolls.map(({ createdAt, ...r }) => r),
+    followers: await countKeys(env, `followers/${id}/`),
+    following: await countKeys(env, `following/${id}/`),
+  };
+  if (viewer) profile.relation = await relation(env, viewer.id, id);
+  return profile;
 }
 
 function mePayload(user, url) {
@@ -782,6 +856,8 @@ function mePayload(user, url) {
     logins: PROVIDERS.filter((p) => logins(user)[p]),
     avatarSource: user.avatar ? user.avatarSource || 'own' : null,
     photos: PROVIDERS.filter((p) => user.photos?.[p]),
+    handle: user.handle || null,
+    discoverable: user.discoverable !== false,
   };
 }
 
@@ -917,6 +993,7 @@ async function deleteRoll(env, id) {
   // Likes go with the roll; the likers' own lists are tidied when they're read or deleted.
   await deletePrefix(env, `likes/${id}/`);
   if (meta?.owner) await env.ROLLS.delete(`users/${meta.owner}/rolls/${id}`);
+  for (const pid of meta?.people || []) await env.ROLLS.delete(`inbox/${pid}/${id}`);
   await env.ROLLS.delete(`meta/${id}.json`);
 }
 
@@ -938,29 +1015,38 @@ async function* listKeys(env, prefix) {
 
 /// A roll as the app and the page show it. A roll that belongs to an account shows that
 /// account's current name and headshot, and links to its profile.
-async function rollPayload(env, meta, url) {
+async function rollPayload(env, meta, url, now = Date.now(), viewer = null) {
   const base = `${url.origin}/r/${meta.id}`;
-  let sharer = { id: meta.sharer.id, name: meta.sharer.name, avatar: meta.sharer.avatar ? `${base}/avatar.jpg` : null, profile: null };
+  const file = (name) => fileURL(env, meta, name, url, now);
+  let sharer = { id: meta.sharer.id, name: meta.sharer.name, avatar: meta.sharer.avatar ? await file('avatar.jpg') : null, profile: null };
   const owner = meta.owner ? await getUser(env, meta.owner) : null;
   if (owner) {
     sharer = {
       id: owner.id, name: owner.name || null,
       avatar: owner.avatar ? `${url.origin}/u/${owner.id}/avatar.jpg?v=${owner.avatar}` : null,
       profile: `${url.origin}/u/${owner.id}`,
+      handle: owner.handle || null,
     };
   }
-  return {
+  const payload = {
     id: meta.id,
     title: meta.title,
     film: meta.film,
     sharer,
     shotAt: meta.shotAt,
-    frames: Array.from({ length: meta.frames }, (_, i) => `${base}/${frameName(i + 1)}`),
+    frames: await Promise.all(Array.from({ length: meta.frames }, (_, i) => file(frameName(i + 1)))),
     cover: coverFrame(meta.cover, meta.frames),
-    card: `${base}/card.jpg`,
+    card: await file('card.jpg'),
+    url: base,
     public: Boolean(meta.public && owner),
+    audience: audienceOf(meta),
     expiresAt: meta.expiresAt == null ? null : new Date(meta.expiresAt).toISOString(),
   };
+  // Only the owner sees who a roll is shared with.
+  if (viewer && meta.owner === viewer.id && payload.audience === 'people') {
+    payload.people = (await Promise.all((meta.people || []).map((pid) => getUser(env, pid)))).filter(Boolean).map((u) => personPayload(u, url));
+  }
+  return payload;
 }
 
 const frameName = (n) => `frame-${String(n).padStart(2, '0')}.jpg`;
@@ -977,6 +1063,319 @@ async function authorised(request, meta, env) {
   if (!token) return false;
   if (env.ADMIN_TOKEN && token === env.ADMIN_TOKEN) return true;
   return (await sha256(token)) === meta.tokenHash;
+}
+
+
+// MARK: Social: handles, search, following, blocking, audiences
+
+export const AUDIENCES = ['private', 'people', 'followers', 'public', 'link'];
+const SHARED = ['people', 'followers', 'public'];   // on a profile or in an inbox: needs the rules, never expires
+export const MAX_PEOPLE = 50;
+const RESERVED = new Set(['admin', 'support', 'help', 'filmexposures', 'film_exposures', 'exposures', 'official', 'staff', 'team', 'me', 'you', 'null', 'undefined']);
+
+const audienceOf = (meta) => meta.audience || (meta.public ? 'public' : 'link');
+const isOpen = (meta) => ['public', 'link'].includes(audienceOf(meta));
+const has = async (env, key) => Boolean(await env.ROLLS.head(key));
+const following = (env, a, b) => has(env, `following/${a}/${b}`);   // a follows b
+
+export function validHandle(handle) {
+  return /^[a-z0-9_](?:[a-z0-9_.]{1,18})[a-z0-9_]$/.test(handle) && !handle.includes('..') && !RESERVED.has(handle);
+}
+
+/// Take a handle if nobody else has it. Claimed by writing the key, then reading it back,
+/// so of two people claiming at once only one keeps it.
+async function claimHandle(env, handle, uid) {
+  const existing = await env.ROLLS.get(`handles/${handle}`);
+  if (existing && (await existing.text()) !== uid) return false;
+  await env.ROLLS.put(`handles/${handle}`, uid);
+  const check = await env.ROLLS.get(`handles/${handle}`);
+  return (await check.text()) === uid;
+}
+
+/// Lower case, accents off, letters and numbers only: what search compares.
+export function searchWord(value) {
+  return String(value || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9_.]/g, '');
+}
+
+/// Search keys for an account: its handle and each word of its name. Kept on the account
+/// so they can be taken down when they change.
+async function indexUser(env, user) {
+  const words = user.discoverable === false || !user.handle ? [] : [...new Set([
+    user.handle, ...String(user.name || '').split(/\s+/).map(searchWord),
+  ].filter((w) => w && w.length >= 1).map((w) => w.slice(0, 30)))];
+  const keys = words.map((w) => `search/${w}/${user.id}`);
+  const old = (user.searchKeys || []).filter((k) => !keys.includes(k));
+  if (old.length) await env.ROLLS.delete(old);
+  for (const key of keys) await env.ROLLS.put(key, '1');
+  user.searchKeys = keys;
+}
+
+function personPayload(u, url) {
+  return { id: u.id, handle: u.handle || null, name: u.name || null, avatar: u.avatar ? `${url.origin}/u/${u.id}/avatar.jpg?v=${u.avatar}` : null };
+}
+
+async function blockedEitherWay(env, a, b) {
+  return (await has(env, `blocks/${a}/${b}`)) || (await has(env, `blocks/${b}/${a}`));
+}
+
+/// How the viewer stands with someone: "self", "following", "requested" or "none", plus
+/// whether they follow (or ask to follow) the viewer back.
+async function relation(env, viewer, id) {
+  if (viewer === id) return { status: 'self' };
+  const status = (await following(env, viewer, id)) ? 'following' : (await has(env, `requests/${id}/${viewer}`)) ? 'requested' : 'none';
+  return {
+    status,
+    followsYou: await following(env, id, viewer),
+    askedYou: await has(env, `requests/${viewer}/${id}`),
+    blocked: await has(env, `blocks/${viewer}/${id}`),
+  };
+}
+
+/// Who may see a roll. Its owner always; then by audience: anyone (public, link), approved
+/// followers, or the people it was shared with. Blocking either way shuts it.
+async function canView(env, meta, viewer) {
+  if (!meta || meta.status !== 'live') return false;
+  if (viewer && meta.owner === viewer.id) return true;
+  if (viewer && meta.owner && (await blockedEitherWay(env, viewer.id, meta.owner))) return false;
+  const audience = audienceOf(meta);
+  if (audience === 'public' || audience === 'link') return true;
+  if (!viewer || !meta.owner) return false;
+  if (audience === 'followers') return following(env, viewer.id, meta.owner);
+  if (audience === 'people') return (meta.people || []).includes(viewer.id);
+  return false;
+}
+
+/// Whether a roll shows on its owner's profile for this viewer (not link shares).
+async function onProfile(env, meta, viewer) {
+  if (viewer && meta.owner === viewer.id) return true;
+  return audienceOf(meta) !== 'link' && canView(env, meta, viewer);
+}
+
+async function rollTile(env, meta, url, now) {
+  const base = `${url.origin}/r/${meta.id}`;
+  return {
+    id: meta.id, title: meta.title, film: meta.film.name || null, frames: meta.frames, shotAt: meta.shotAt,
+    cover: await fileURL(env, meta, frameName(coverFrame(meta.cover, meta.frames)), url, now),
+    card: await fileURL(env, meta, 'card.jpg', url, now), url: base, audience: audienceOf(meta),
+  };
+}
+
+// Signed links for photos that aren't for everyone. A link lasts until the end of the next
+// hour, so it can be cached for a while but can't be passed around for long.
+const HOUR = 60 * 60 * 1000;
+let urlKey = null;
+
+async function signingKey(env) {
+  // One promise, so photos signed at the same moment all wait for the same key.
+  urlKey ||= (async () => {
+    let secret = env.URL_SIGNING_KEY;
+    if (!secret) {
+      const stored = await env.ROLLS.get('config/url-signing-key');
+      secret = stored ? await stored.text() : null;
+      if (!secret) {
+        // Read it back: if two servers made a key at once, both use whichever was kept.
+        await env.ROLLS.put('config/url-signing-key', randomHex(32));
+        secret = await (await env.ROLLS.get('config/url-signing-key')).text();
+      }
+    }
+    return crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
+  })();
+  return urlKey;
+}
+export function resetSigningKey() { urlKey = null; }
+
+async function signature(env, id, file, exp) {
+  const mac = await crypto.subtle.sign('HMAC', await signingKey(env), new TextEncoder().encode(`${id}/${file}/${exp}`));
+  return btoa(String.fromCharCode(...new Uint8Array(mac).slice(0, 18))).replace(/\+/g, '-').replace(/\//g, '_');
+}
+
+async function fileURL(env, meta, file, url, now) {
+  const plain = `${url.origin}/r/${meta.id}/${file}`;
+  if (isOpen(meta)) return plain;
+  const exp = (Math.floor(now / HOUR) + 2) * HOUR;
+  return `${plain}?exp=${exp}&sig=${await signature(env, meta.id, file, exp)}`;
+}
+
+async function signedOK(env, id, file, url, now) {
+  const exp = Number(url.searchParams.get('exp'));
+  const sig = url.searchParams.get('sig') || '';
+  if (!Number.isFinite(exp) || exp < now || exp > now + 3 * HOUR || !sig) return false;
+  return sig === (await signature(env, id, file, exp));
+}
+
+async function countKeys(env, prefix) {
+  let n = 0;
+  for await (const keys of listKeys(env, prefix)) n += keys.length;
+  return n;
+}
+
+async function people(env, url, ids) {
+  return (await Promise.all(ids.map((pid) => getUser(env, pid)))).filter(Boolean).map((u) => personPayload(u, url));
+}
+
+async function searchUsers(request, env, url) {
+  return withUser(request, env, async (user) => {
+    const q = searchWord(url.searchParams.get('q')).slice(0, 30);
+    if (q.length < 2) return json(200, { people: [] });
+    const ids = [];
+    for await (const keys of listKeys(env, `search/${q}`)) {
+      for (const key of keys) {
+        const pid = key.split('/')[2];
+        if (pid !== user.id && !ids.includes(pid)) ids.push(pid);
+      }
+      if (ids.length >= 40) break;
+    }
+    const found = [];
+    for (const pid of ids) {
+      if (found.length >= 20) break;
+      if (await blockedEitherWay(env, user.id, pid)) continue;
+      const u = await getUser(env, pid);
+      if (!u || u.discoverable === false || !u.handle) continue;
+      found.push({ ...personPayload(u, url), status: (await relation(env, user.id, pid)).status });
+    }
+    // Handles that start with the search first, then names.
+    found.sort((a, b) => (b.handle?.startsWith(q) || 0) - (a.handle?.startsWith(q) || 0));
+    return json(200, { people: found });
+  });
+}
+
+async function follow(request, env, url, id, on, now) {
+  return withUser(request, env, async (user) => {
+    if (id === user.id) return json(400, { error: 'that is you' });
+    const target = await getUser(env, id);
+    if (!target) return json(404, { error: 'no such person' });
+    if (!on) {
+      await env.ROLLS.delete([`following/${user.id}/${id}`, `followers/${id}/${user.id}`, `requests/${id}/${user.id}`]);
+      return json(200, { status: 'none' });
+    }
+    if (!user.handle) return json(409, { error: 'handle', reason: 'Choose a handle first, so people know who is asking.' });
+    if (await blockedEitherWay(env, user.id, id)) return json(404, { error: 'no such person' });
+    if (await following(env, user.id, id)) return json(200, { status: 'following' });
+    // Every follow is a request that the other person approves.
+    await env.ROLLS.put(`requests/${id}/${user.id}`, String(now));
+    return json(200, { status: 'requested' });
+  });
+}
+
+async function listRequests(request, env, url) {
+  return withUser(request, env, async (user) => {
+    const ids = [];
+    for await (const keys of listKeys(env, `requests/${user.id}/`)) ids.push(...keys.map((k) => k.split('/')[2]));
+    return json(200, { people: await people(env, url, ids) });
+  });
+}
+
+async function answerRequest(request, env, url, id) {
+  return withUser(request, env, async (user) => {
+    if (!(await has(env, `requests/${user.id}/${id}`))) return json(404, { error: 'no request' });
+    const body = (await readJSON(request)) || {};
+    await env.ROLLS.delete(`requests/${user.id}/${id}`);
+    if (body.accept && (await getUser(env, id)) && !(await blockedEitherWay(env, user.id, id))) {
+      await env.ROLLS.put(`following/${id}/${user.id}`, '1');
+      await env.ROLLS.put(`followers/${user.id}/${id}`, '1');
+      return json(200, { status: 'follower' });
+    }
+    return json(200, { status: 'declined' });
+  });
+}
+
+async function removeFollower(request, env, id) {
+  return withUser(request, env, async (user) => {
+    await env.ROLLS.delete([`following/${id}/${user.id}`, `followers/${user.id}/${id}`]);
+    return json(200, { ok: true });
+  });
+}
+
+async function followList(request, env, url, id, which) {
+  return withUser(request, env, async (user) => {
+    if (id !== user.id && (await blockedEitherWay(env, user.id, id))) return json(404, { error: 'no such person' });
+    const ids = [];
+    for await (const keys of listKeys(env, `${which}/${id}/`)) ids.push(...keys.map((k) => k.split('/')[2]));
+    return json(200, { people: await people(env, url, ids.slice(0, 500)) });
+  });
+}
+
+async function block(request, env, id, on) {
+  return withUser(request, env, async (user) => {
+    if (id === user.id) return json(400, { error: 'that is you' });
+    if (!on) {
+      await env.ROLLS.delete(`blocks/${user.id}/${id}`);
+      return json(200, { blocked: false });
+    }
+    await env.ROLLS.put(`blocks/${user.id}/${id}`, '1');
+    // Blocking ends following and requests both ways.
+    await env.ROLLS.delete([
+      `following/${user.id}/${id}`, `followers/${id}/${user.id}`, `following/${id}/${user.id}`, `followers/${user.id}/${id}`,
+      `requests/${user.id}/${id}`, `requests/${id}/${user.id}`,
+    ]);
+    return json(200, { blocked: true });
+  });
+}
+
+export const FEED_SIZE = 50;
+
+/// Recent rolls from the people you follow that you may see, newest first.
+async function feed(request, env, url, now) {
+  return withUser(request, env, async (user) => {
+    const rolls = [];
+    for await (const keys of listKeys(env, `following/${user.id}/`)) {
+      for (const key of keys) {
+        const owner = await getUser(env, key.split('/')[2]);
+        if (!owner) continue;
+        for await (const rollKeys of listKeys(env, `users/${owner.id}/rolls/`)) {
+          for (const rk of rollKeys) {
+            const meta = await getMeta(env, rk.split('/')[3]);
+            if (!meta || meta.status !== 'live' || expired(meta, now) || audienceOf(meta) === 'link') continue;
+            if (!(await canView(env, meta, user))) continue;
+            rolls.push({ ...(await rollTile(env, meta, url, now)), by: personPayload(owner, url), createdAt: meta.createdAt });
+          }
+        }
+      }
+    }
+    rolls.sort((a, b) => b.createdAt - a.createdAt);
+    return json(200, { rolls: rolls.slice(0, FEED_SIZE).map(({ createdAt, ...r }) => ({ ...r, sharedAt: new Date(createdAt).toISOString() })) });
+  });
+}
+
+/// Rolls shared with you by name, newest first.
+async function inbox(request, env, url, now) {
+  return withUser(request, env, async (user) => {
+    const rolls = [];
+    for await (const keys of listKeys(env, `inbox/${user.id}/`)) {
+      for (const key of keys) {
+        const id = key.split('/')[2];
+        const meta = await liveRoll(env, id, now);
+        if (!meta || !(await canView(env, meta, user))) continue;
+        const owner = await getUser(env, meta.owner);
+        if (!owner) continue;
+        const at = Number(await (await env.ROLLS.get(key))?.text()) || meta.createdAt;
+        rolls.push({ ...(await rollTile(env, meta, url, now)), by: personPayload(owner, url), at });
+      }
+    }
+    rolls.sort((a, b) => b.at - a.at);
+    return json(200, { rolls: rolls.map(({ at, ...r }) => ({ ...r, sharedAt: new Date(at).toISOString() })) });
+  });
+}
+
+/// An account's handle, search entries, follows, requests, blocks and inbox, for deleting it.
+async function forgetSocial(env, user) {
+  if (user.handle) {
+    const owner = await env.ROLLS.get(`handles/${user.handle}`);
+    if (owner && (await owner.text()) === user.id) await env.ROLLS.delete(`handles/${user.handle}`);
+  }
+  if (user.searchKeys?.length) await env.ROLLS.delete(user.searchKeys);
+  const id = user.id;
+  for (const [mine, theirs] of [['following', 'followers'], ['followers', 'following']]) {
+    for await (const keys of listKeys(env, `${mine}/${id}/`)) {
+      for (const key of keys) await env.ROLLS.delete(`${theirs}/${key.split('/')[2]}/${id}`);
+    }
+    await deletePrefix(env, `${mine}/${id}/`);
+  }
+  await deletePrefix(env, `requests/${id}/`);
+  await deletePrefix(env, `blocks/${id}/`);
+  await deletePrefix(env, `inbox/${id}/`);
+  // Requests and blocks this account made of others are left to expire with nothing to point at:
+  // every read checks that the account still exists.
 }
 
 // MARK: Film codes (mirror of RetroCam/FilmCode.swift)

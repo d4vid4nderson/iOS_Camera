@@ -303,12 +303,14 @@ struct RollViewer: View {
             }
             if let shareRecord {
                 HStack(spacing: 8) {
-                    Text(shareRecord.onProfile
-                         ? "PUBLIC · ON YOUR PROFILE"
+                    let audience = shareRecord.shownAudience
+                    Text(audience == .everyone ? "PUBLIC · ON YOUR PROFILE"
+                         : audience == .followers ? "FOLLOWERS · ON YOUR PROFILE"
+                         : audience == .people ? "SHARED WITH \(shareRecord.people?.count ?? 0) \((shareRecord.people?.count ?? 0) == 1 ? "PERSON" : "PEOPLE")"
                          : "SHARED · LINK WORKS UNTIL " + shareRecord.expiresAt.formatted(.dateTime.month(.abbreviated).day()).uppercased())
-                        .font(.mono(9, .semibold)).foregroundStyle(shareRecord.onProfile ? accent : .secondary)
+                        .font(.mono(9, .semibold)).foregroundStyle(audience.isShared ? accent : .secondary)
                     Spacer(minLength: 0)
-                    chip(unsharing ? "UNSHARING…" : shareRecord.onProfile ? "MAKE PRIVATE" : "UNSHARE", selected: false) { unshare() }
+                    chip(unsharing ? "UNSHARING…" : audience.isShared ? "MAKE PRIVATE" : "UNSHARE", selected: false) { unshare() }
                         .disabled(unsharing)
                 }
             }

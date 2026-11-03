@@ -39,8 +39,8 @@ enum ShareAPI {
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
             if status == 404, let notFound { throw Failure.server(notFound) }
-            let message = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
-            throw HTTPError(status: status, message: message)
+            let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            throw HTTPError(status: status, message: body?["error"] as? String, reason: body?["reason"] as? String)
         }
         return data
     }
@@ -50,7 +50,9 @@ enum ShareAPI {
     struct HTTPError: LocalizedError {
         let status: Int
         let message: String?
-        var errorDescription: String? { "The share server said: \(message ?? "error \(status)")." }
+        /// A sentence meant for people (e.g. "That handle is taken."), when the server sends one.
+        var reason: String? = nil
+        var errorDescription: String? { reason ?? "The share server said: \(message ?? "error \(status)")." }
     }
 
     static func parseDate(_ string: String) -> Date? {
