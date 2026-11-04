@@ -5,6 +5,7 @@ import Foundation
 ///   https://<host>/f/<code>   a film: opens Film Exposures and offers to add it
 ///   https://<host>/r/<id>     a shared roll: opens in Film Exposures' viewer
 ///   https://<host>/u/<id>     someone's profile and their public rolls
+///   https://<host>/@<handle>  the same, by their @handle (what profile links share once you have one)
 ///
 /// Until `host` is set, film links fall back to exposures://f/<code> and roll sharing
 /// is hidden.
@@ -23,6 +24,18 @@ enum ShareLinks {
     /// Someone's account id if `url` is a profile link (https://<host>/u/<id> or exposures://u/<id>).
     static func userID(from url: URL, host expected: String = host) -> String? {
         id(from: url, kind: "u", length: 12, host: expected)
+    }
+
+    /// "@handle" if `url` is a handle link (https://<host>/@handle). Handles are lower case
+    /// letters, numbers, _ and . (3 to 20).
+    static func userHandle(from url: URL, host expected: String = host) -> String? {
+        let parts = url.pathComponents.filter { $0 != "/" }
+        guard url.scheme == "https", !expected.isEmpty, url.host == expected, parts.count == 1,
+              parts[0].hasPrefix("@") else { return nil }
+        let handle = parts[0].dropFirst().lowercased()
+        guard (3...20).contains(handle.count),
+              handle.allSatisfy({ ($0.isLetter || $0.isNumber || $0 == "_" || $0 == ".") && $0.isASCII }) else { return nil }
+        return "@" + handle
     }
 
     private static func id(from url: URL, kind: String, length: Int, host expected: String) -> String? {

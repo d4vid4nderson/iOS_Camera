@@ -401,7 +401,9 @@ enum RollShare {
 
     static func fetchProfile(id: String) async throws -> RemoteProfile {
         guard let base = ShareLinks.base else { throw ShareError.notConfigured }
-        let data = try await send(base.appendingPathComponent("u").appendingPathComponent(id).appendingPathComponent("profile.json"),
+        // An id (/u/<id>/profile.json) or a handle link's "@handle" (/@handle/profile.json).
+        let profileBase = id.hasPrefix("@") ? base.appendingPathComponent(id) : base.appendingPathComponent("u").appendingPathComponent(id)
+        let data = try await send(profileBase.appendingPathComponent("profile.json"),
                                   method: "GET", account: Account.sessionToken, notFound: "There's no profile here any more.")
         do {
             return try JSONDecoder().decode(RemoteProfile.self, from: data)
@@ -441,13 +443,14 @@ enum RollShare {
     }
 
     /// The card for a roll you've already shared, to share the link again.
-    static func card(for roll: Roll, record: Record, film: FilmStock?, profile: Profile) -> UIImage? {
+    static func card(for roll: Roll, record: Record, film: FilmStock?, profile: Profile, style: CardStyle = .light) -> UIImage? {
         let frames = RollStore.frames(of: roll.number).filter { !RollStore.isPending(roll: roll.number, frame: $0) }
         let thumbs = cardFrames(roll, from: frames).compactMap { UIImage(contentsOfFile: RollStore.thumbURL(roll: roll.number, frame: $0).path) }
         let showProfile = profile.showOnCards && !profile.isEmpty
         return RollCard.render(title: roll.title, filmName: film?.name ?? roll.film,
                                frameCount: frames.count, frames: Array(thumbs), url: record.url,
-                               sharer: showProfile ? FilmCodeCard.Sharer(name: profile.name, avatar: profile.photo) : nil)
+                               sharer: showProfile ? FilmCodeCard.Sharer(name: profile.name, avatar: profile.photo) : nil,
+                               style: style)
     }
 
     // MARK: Someone else's roll

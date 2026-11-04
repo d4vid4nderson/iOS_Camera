@@ -9,6 +9,7 @@ private extension Font {
 /// Someone's profile: their headshot, name and public rolls. Tap a roll to look through it
 /// (and like its frames). Opened from a roll's sharer, a profile link, or your own profile.
 struct UserProfileView: View {
+    /// An account id, or "@handle" from a handle link (filmexposures.com/@handle).
     let userID: String
     @ObservedObject var camera: CameraModel
     let accent: Color
@@ -16,6 +17,8 @@ struct UserProfileView: View {
     @ObservedObject private var account = Account.shared
 
     @State private var profile: RollShare.RemoteProfile?
+    /// The account id once known (a handle link is looked up when the profile loads).
+    private var uid: String { profile?.id ?? userID }
     @State private var failure: String?
     @State private var opening: OpenRoll?
     @State private var sharing: ShareItems?
@@ -27,14 +30,14 @@ struct UserProfileView: View {
     @State private var note: String?
     @State private var scrollToRolls = 0
 
-    private var isMe: Bool { account.me?.id == userID }
+    private var isMe: Bool { account.me?.id == uid }
 
     var body: some View {
         ZStack {
             Color(white: 0.06).ignoresSafeArea()
             VStack(alignment: .leading, spacing: 16) {
                 header
-                if RollShare.isBlocked(userID) {
+                if RollShare.isBlocked(uid) {
                     centered("YOU BLOCKED THIS PERSON")
                 } else if let profile {
                     if profile.rolls.isEmpty {
@@ -64,10 +67,10 @@ struct UserProfileView: View {
             SharedRollView(rollID: roll.id, camera: camera, accent: accent)
         }
         .sheet(item: $sharing) { item in
-            ActivityView(items: item.items, activities: item.activities).ignoresSafeArea()
+            ShareSheetView(item: item)
         }
         .sheet(item: $listing) { ref in
-            PeopleListSheet(userID: userID, which: ref.which, camera: camera, accent: accent)
+            PeopleListSheet(userID: uid, which: ref.which, camera: camera, accent: accent)
         }
     }
 
@@ -107,7 +110,7 @@ struct UserProfileView: View {
                 stats(profile)
                 HStack(spacing: 8) {
                     if !isMe && account.isSignedIn && profile.relation != nil {
-                        FollowButton(id: userID, status: $followStatus, accent: accent, onError: { note = $0 })
+                        FollowButton(id: uid, status: $followStatus, accent: accent, onError: { note = $0 })
                     }
                     if profile.relation?.askedYou == true && !isMe {
                         chip("APPROVE", selected: true) { approve() }
@@ -133,7 +136,7 @@ struct UserProfileView: View {
     private func approve() {
         Task {
             do {
-                try await Social.answer(userID, accept: true)
+                try await Social.answer(uid, accept: true)
                 await load()
             } catch {
                 note = error.localizedDescription.uppercased()
@@ -257,8 +260,8 @@ struct UserProfileView: View {
                 Text("You won't see their profile or rolls they share. Following ends both ways, and they can't find you, follow you or share with you.")
                     .font(.mono(10)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 cardButton("BLOCK", destructive: true) {
-                    RollShare.block(userID)
-                    if account.isSignedIn { Task { try? await Social.block(userID, true) } }
+                    RollShare.block(uid)
+                    if account.isSignedIn { Task { try? await Social.block(uid, true) } }
                     confirmingBlock = false
                     dismiss()
                 }
@@ -287,7 +290,7 @@ struct UserProfileView: View {
                         reporting = false
                         Task {
                             do {
-                                try await Social.report(userID, reason: reason)
+                                try await Social.report(uid, reason: reason)
                                 note = "THANKS. WE'LL TAKE A LOOK"
                             } catch {
                                 note = error.localizedDescription.uppercased()
@@ -322,9 +325,10 @@ struct UserProfileView: View {
     private func shareProfile(_ profile: RollShare.RemoteProfile) {
         makingCard = true
         Task {
-            let card = await ProfileCard.make(for: profile)
+            let content = await ProfileCard.content(for: profile)
             makingCard = false
-            sharing = ShareItems(items: [card as Any?, profile.url].compactMap { $0 }, activities: SendInAppActivity.forProfile(profile.id))
+            sharing = ShareItems(items: [profile.url], activities: SendInAppActivity.forProfile(profile.id),
+                                 card: CardShare(link: profile.url) { ProfileCard.render(content, style: $0) })
         }
     }
 
@@ -343,7 +347,7 @@ struct UserProfileView: View {
 
     private func load() async {
         do {
-            profile = try await RollShare.fetchProfile(id: userID)
+            profile = try await RollShare.fetchProfile(id: uid)
             followStatus = profile?.relation?.status ?? "none"
             failure = nil
         } catch {

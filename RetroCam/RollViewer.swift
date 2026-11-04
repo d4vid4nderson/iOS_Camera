@@ -90,7 +90,7 @@ struct RollViewer: View {
             FramePager(roll: ref.roll, frames: visibleFrames, start: ref.frame, accent: accent)
         }
         .sheet(item: $sharing) { item in
-            ActivityView(items: item.items, activities: item.activities).ignoresSafeArea()
+            ShareSheetView(item: item)
         }
     }
 
@@ -672,7 +672,10 @@ struct RollViewer: View {
                 uploading = nil
                 if roll.number == selected { shareRecord = record }
                 sharing = ShareItems(items: [card as Any?, record.url].compactMap { $0 },
-                                     activities: SendInAppActivity.forRoll(record.id))
+                                     activities: SendInAppActivity.forRoll(record.id),
+                                     card: CardShare(link: record.url) { style in
+                                         RollShare.card(for: roll, record: record, film: film, profile: profile, style: style)
+                                     })
             } catch {
                 uploading = nil
                 camera.message = error.localizedDescription
@@ -682,9 +685,12 @@ struct RollViewer: View {
 
     private func shareLinkAgain(_ roll: Roll) {
         guard let record = shareRecord else { return }
-        let card = RollShare.card(for: roll, record: record, film: camera.film(ofRoll: roll.number), profile: Profile.load())
-        sharing = ShareItems(items: [card as Any?, record.url].compactMap { $0 },
-                             activities: SendInAppActivity.forRoll(record.id))
+        let film = camera.film(ofRoll: roll.number)
+        let profile = Profile.load()
+        sharing = ShareItems(items: [record.url], activities: SendInAppActivity.forRoll(record.id),
+                             card: CardShare(link: record.url) { style in
+                                 RollShare.card(for: roll, record: record, film: film, profile: profile, style: style)
+                             })
     }
 
     private func unshare() {
@@ -755,6 +761,8 @@ struct ShareItems: Identifiable {
     let items: [Any]
     /// The app's own buttons in the share sheet (e.g. Send in Film Exposures).
     var activities: [UIActivity] = []
+    /// A card that comes in LIGHT / DARK / SLIDE: the style is picked before the share sheet.
+    var card: CardShare? = nil
 }
 
 /// The system share sheet.
@@ -817,7 +825,7 @@ private struct FramePager: View {
         .statusBarHidden()
         .sensoryFeedback(.selection, trigger: current)
         .sheet(item: $sharing) { item in
-            ActivityView(items: item.items, activities: item.activities).ignoresSafeArea()
+            ShareSheetView(item: item)
         }
     }
 

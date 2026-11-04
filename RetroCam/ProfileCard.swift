@@ -6,8 +6,27 @@ import UIKit
 enum ProfileCard {
     static let size = FilmCodeCard.size
 
+    /// What the card shows, fetched once so it can be drawn in each style.
+    struct Content {
+        var name: String?
+        var avatar: UIImage?
+        var rolls: Int
+        var frames: Int
+        var covers: [UIImage]
+        var url: URL
+    }
+
     /// Fetch the headshot and roll covers, then draw the card. nil if it couldn't be drawn.
-    static func make(for profile: RollShare.RemoteProfile) async -> UIImage? {
+    static func make(for profile: RollShare.RemoteProfile, style: CardStyle = .light) async -> UIImage? {
+        render(await content(for: profile), style: style)
+    }
+
+    static func render(_ c: Content, style: CardStyle) -> UIImage? {
+        render(name: c.name, avatar: c.avatar, rolls: c.rolls, frames: c.frames, covers: c.covers, url: c.url, style: style)
+    }
+
+    /// The headshot and the covers of the latest public rolls.
+    static func content(for profile: RollShare.RemoteProfile) async -> Content {
         // The card goes out to anyone: only public rolls on it, never ones shared with
         // followers or specific people (your own profile lists those too).
         let open = profile.rolls.filter { $0.audience == nil || $0.audience == "public" }
@@ -21,8 +40,7 @@ enum ProfileCard {
             return found.sorted { $0.0 < $1.0 }.map(\.1)
         }
         let frames = open.reduce(0) { $0 + $1.frames }
-        return render(name: profile.name, avatar: await avatar, rolls: open.count,
-                      frames: frames, covers: covers, url: profile.url)
+        return Content(name: profile.name, avatar: await avatar, rolls: open.count, frames: frames, covers: covers, url: profile.url)
     }
 
     private static func image(at url: URL?) async -> UIImage? {
@@ -32,11 +50,11 @@ enum ProfileCard {
     }
 
     static func render(name: String?, avatar: UIImage?, rolls: Int, frames: Int,
-                       covers: [UIImage], url: URL) -> UIImage? {
+                       covers: [UIImage], url: URL, style: CardStyle = .light) -> UIImage? {
         guard let modules = FilmCodeCard.modules(for: url.absoluteString) else { return nil }
-        let background = UIColor(red: 0.961, green: 0.953, blue: 0.937, alpha: 1)
-        let ink = UIColor(white: 0.067, alpha: 1)
-        let muted = UIColor(red: 0.50, green: 0.486, blue: 0.463, alpha: 1)
+        let background = style.background
+        let ink = style.ink
+        let muted = style.muted
         let margin: CGFloat = 56
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
@@ -53,8 +71,7 @@ enum ProfileCard {
             let gap: CGFloat = 10
             let gridHeight: CGFloat = 760
             if shown.isEmpty {
-                UIColor(white: 0.88, alpha: 1).setFill()
-                UIBezierPath(roundedRect: CGRect(x: margin, y: margin, width: width, height: gridHeight), cornerRadius: 12).fill()
+                style.drawEmpty(in: CGRect(x: margin, y: margin, width: width, height: gridHeight))
             } else {
                 let columns = shown.count >= 3 ? 3 : shown.count
                 let rows = shown.count > 3 ? 2 : 1
@@ -68,13 +85,7 @@ enum ProfileCard {
                 for (i, image) in shown.enumerated() {
                     let rect = CGRect(x: left + CGFloat(i % columns) * (cellW + gap),
                                       y: top + CGFloat(i / columns) * (cellH + gap), width: cellW, height: cellH)
-                    cg.saveGState()
-                    UIBezierPath(roundedRect: rect, cornerRadius: 10).addClip()
-                    let scale = max(rect.width / image.size.width, rect.height / image.size.height)
-                    let drawn = CGSize(width: image.size.width * scale, height: image.size.height * scale)
-                    image.draw(in: CGRect(x: rect.midX - drawn.width / 2, y: rect.midY - drawn.height / 2,
-                                          width: drawn.width, height: drawn.height))
-                    cg.restoreGState()
+                    style.drawPhoto(image, in: rect, context: cg)
                 }
             }
 
@@ -84,7 +95,7 @@ enum ProfileCard {
             let avatarRect = CGRect(x: margin, y: textTop, width: side, height: side)
             let displayName = (name?.isEmpty == false ? name! : "Film Exposures photographer")
             FilmCodeCard.drawAvatar(FilmCodeCard.Sharer(name: displayName, avatar: avatar), in: avatarRect,
-                                    fill: UIColor(white: 0.86, alpha: 1), initialsColor: ink)
+                                    fill: style.avatarFill, initialsColor: ink)
             let textX = avatarRect.maxX + 28
             let textWidth = size.width - margin - textX
             let nameFont = FilmCodeCard.fitted(displayName, weight: .bold, size: 72, minSize: 40, width: textWidth)
@@ -99,7 +110,7 @@ enum ProfileCard {
             let codeSide: CGFloat = 180
             let codeRect = CGRect(x: size.width - margin - codeSide, y: size.height - margin - codeSide,
                                   width: codeSide, height: codeSide)
-            FilmCodeCard.drawCode(modules, in: codeRect, ink: ink, paper: background, context: cg)
+            style.drawCode(modules, in: codeRect, context: cg)
             let mark = UIFont.systemFont(ofSize: 22, weight: .semibold)
             let markWidth = ("FILM EXPOSURES" as NSString).size(withAttributes: [.font: mark, .kern: 1]).width
             let lineY = size.height - margin - mark.lineHeight

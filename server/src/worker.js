@@ -36,6 +36,8 @@
 //        kept. Under 13: the account is deleted and its sign-ins can't make a new one until the
 //        child turns 13. A handle and the rules (so following and sharing) need this first.
 //   GET  /u/<id>                            a profile page; /u/<id>/profile.json for the app
+//   GET  /@<handle>                         the same, by @handle (what profile links share once there's
+//        one); /@<handle>/profile.json for the app. A changed handle's old link redirects to the new.
 //        (signed in: also the rolls shared with your followers or with you, and whether you follow)
 //
 //   Social (all "(account)"):
@@ -119,7 +121,7 @@ export async function route(request, env, now = Date.now()) {
 
   if (path === '/.well-known/apple-app-site-association' || path === '/apple-app-site-association') {
     return json(200, {
-      applinks: { details: [{ appIDs: [APP_ID], components: [{ '/': '/f/*' }, { '/': '/r/*' }, { '/': '/u/*' }] }] },
+      applinks: { details: [{ appIDs: [APP_ID], components: [{ '/': '/f/*' }, { '/': '/r/*' }, { '/': '/u/*' }, { '/': '/@*' }] }] },
     });
   }
   if (path === '/' && method === 'GET') return html(200, homePage(env));
@@ -240,6 +242,25 @@ export async function route(request, env, now = Date.now()) {
     });
   }
 
+  if ((m = path.match(/^\/@([a-z0-9_.]{3,20})(\/profile\.json)?$/i)) && method === 'GET') {
+    const handle = m[1].toLowerCase();
+    const owner = await env.ROLLS.get(`handles/${handle}`);
+    if (!owner) {
+      // A handle someone changed: send the old link to their new one.
+      const moved = await env.ROLLS.get(`handle-history/${handle}`);
+      const user = moved ? await getUser(env, await moved.text()) : null;
+      if (user?.handle) return new Response(null, { status: 301, headers: { location: `${url.origin}/@${user.handle}${m[2] || ''}` } });
+      return m[2] ? json(404, { error: 'gone' }) : html(404, messagePage('There is no profile here.', env));
+    }
+    const id = await owner.text();
+    if (m[2]) {
+      const profile = await publicProfile(env, id, url, now, await currentUser(request, env));
+      return profile ? json(200, profile) : json(404, { error: 'gone' });
+    }
+    const profile = await publicProfile(env, id, url, now);
+    if (!profile) return html(404, messagePage('There is no profile here.', env));
+    return html(200, profilePage(profile, url, env));
+  }
   if ((m = path.match(new RegExp(`^/u/${USER}$`))) && method === 'GET') {
     const profile = await publicProfile(env, m[1], url, now);
     if (!profile) return html(404, messagePage('There is no profile here.', env));
@@ -951,7 +972,10 @@ async function updateMe(request, env, url) {
       if (handle !== user.handle) {
         if (!validHandle(handle)) return json(400, { error: 'handle', reason: 'Use 3 to 20 letters, numbers, _ or .' });
         if (!(await claimHandle(env, handle, user.id))) return json(409, { error: 'handle', reason: 'That handle is taken.' });
-        if (user.handle) await env.ROLLS.delete(`handles/${user.handle}`);
+        if (user.handle) {
+          await env.ROLLS.delete(`handles/${user.handle}`);
+          await env.ROLLS.put(`handle-history/${user.handle}`, user.id);
+        }
         user.handle = handle;
       }
     }
@@ -1083,12 +1107,18 @@ async function publicProfile(env, id, url, now, viewer = null) {
   return profile;
 }
 
+/// The link to someone's profile: by @handle once they have one, else by account id.
+/// (/u/<id> links keep working either way.)
+export function profileURL(url, user) {
+  return user.handle ? `${url.origin}/@${user.handle}` : `${url.origin}/u/${user.id}`;
+}
+
 function mePayload(user, url) {
   return {
     id: user.id,
     name: user.name || null,
     avatar: user.avatar ? `${url.origin}/u/${user.id}/avatar.jpg?v=${user.avatar}` : null,
-    url: `${url.origin}/u/${user.id}`,
+    url: profileURL(url, user),
     termsAccepted: Boolean(user.termsAt),
     ageConfirmed: Boolean(user.ageAt),
     logins: PROVIDERS.filter((p) => logins(user)[p]),
@@ -1267,7 +1297,7 @@ async function rollPayload(env, meta, url, now = Date.now(), viewer = null) {
     sharer = {
       id: owner.id, name: owner.name || null,
       avatar: owner.avatar ? `${url.origin}/u/${owner.id}/avatar.jpg?v=${owner.avatar}` : null,
-      profile: `${url.origin}/u/${owner.id}`,
+      profile: profileURL(url, owner),
       handle: owner.handle || null,
     };
   }

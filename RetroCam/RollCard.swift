@@ -7,11 +7,11 @@ enum RollCard {
     static let size = FilmCodeCard.size
 
     static func render(title: String, filmName: String?, frameCount: Int, frames: [UIImage],
-                       url: URL, sharer: FilmCodeCard.Sharer?) -> UIImage? {
+                       url: URL, sharer: FilmCodeCard.Sharer?, style: CardStyle = .light) -> UIImage? {
         guard let modules = FilmCodeCard.modules(for: url.absoluteString) else { return nil }
-        let background = UIColor(red: 0.961, green: 0.953, blue: 0.937, alpha: 1)
-        let ink = UIColor(white: 0.067, alpha: 1)
-        let muted = UIColor(red: 0.50, green: 0.486, blue: 0.463, alpha: 1)
+        let background = style.background
+        let ink = style.ink
+        let muted = style.muted
         let margin: CGFloat = 56
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
@@ -32,16 +32,14 @@ enum RollCard {
                            (900 - gap * CGFloat(rows - 1)) / CGFloat(rows))
             let gridWidth = cell * CGFloat(columns) + gap * CGFloat(columns - 1)
             let left = (size.width - gridWidth) / 2
+            if shown.isEmpty {
+                // No developed frames yet: the app's icon.
+                style.drawEmpty(in: CGRect(x: margin, y: margin, width: width, height: cell))
+            }
             for (i, image) in shown.enumerated() {
                 let rect = CGRect(x: left + CGFloat(i % columns) * (cell + gap),
                                   y: margin + CGFloat(i / columns) * (cell + gap), width: cell, height: cell)
-                cg.saveGState()
-                UIBezierPath(roundedRect: rect, cornerRadius: 10).addClip()
-                let scale = max(rect.width / image.size.width, rect.height / image.size.height)
-                let drawn = CGSize(width: image.size.width * scale, height: image.size.height * scale)
-                image.draw(in: CGRect(x: rect.midX - drawn.width / 2, y: rect.midY - drawn.height / 2,
-                                      width: drawn.width, height: drawn.height))
-                cg.restoreGState()
+                style.drawPhoto(image, in: rect, context: cg)
             }
             let gridBottom = margin + CGFloat(rows) * cell + CGFloat(rows - 1) * gap
 
@@ -57,7 +55,7 @@ enum RollCard {
             let codeSide: CGFloat = 180
             let codeRect = CGRect(x: size.width - margin - codeSide, y: size.height - margin - codeSide,
                                   width: codeSide, height: codeSide)
-            FilmCodeCard.drawCode(modules, in: codeRect, ink: ink, paper: background, context: cg)
+            style.drawCode(modules, in: codeRect, context: cg)
 
             let mark = UIFont.systemFont(ofSize: 22, weight: .semibold)
             let markWidth = ("FILM EXPOSURES" as NSString).size(withAttributes: [.font: mark, .kern: 1]).width
@@ -66,7 +64,7 @@ enum RollCard {
             if let sharer {
                 let side: CGFloat = 76
                 let avatarRect = CGRect(x: margin, y: size.height - margin - side, width: side, height: side)
-                FilmCodeCard.drawAvatar(sharer, in: avatarRect, fill: UIColor(white: 0.86, alpha: 1), initialsColor: ink)
+                FilmCodeCard.drawAvatar(sharer, in: avatarRect, fill: style.avatarFill, initialsColor: ink)
                 x = avatarRect.maxX + 18
                 let nameFont = UIFont.systemFont(ofSize: 28, weight: .semibold)
                 if !sharer.name.isEmpty {

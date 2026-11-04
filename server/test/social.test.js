@@ -480,3 +480,29 @@ test('reports reach the admin page, which restores, removes and bans', async () 
   assert.equal((await admin('POST', `/api/admin/rolls/${id}`, { action: 'remove' })).status, 200);
   assert.equal((await get(e, `/r/${id}/roll.json`)).status, 404);
 });
+
+test('profile links use the @handle; old handles redirect and /u/<id> keeps working', async () => {
+  const { e, apple } = await accountEnv();
+  const ana = await person(e, apple, 'a', 'Ana', 'ana.lind');
+  const me = await getJSON(e, '/api/me', ana);
+  assert.equal(me.url, `${ORIGIN}/@ana.lind`, 'shared profile links are by handle');
+
+  const page = await get(e, '/@ana.lind');
+  assert.equal(page.status, 200);
+  assert.match(await page.text(), /Ana/);
+  assert.equal((await getJSON(e, '/@Ana.Lind/profile.json')).id, ana.id, 'case-insensitive, same profile');
+  assert.equal((await get(e, `/u/${ana.id}`)).status, 200, 'id links still work');
+  assert.equal((await get(e, '/@nobody_here')).status, 404);
+
+  const aasa = await getJSON(e, '/.well-known/apple-app-site-association');
+  assert.ok(aasa.applinks.details[0].components.some((c) => c['/'] === '/@*'), 'handle links open the app');
+
+  // Change the handle: the old link redirects to the new one until someone else takes it.
+  await call(e, 'PUT', '/api/me', { account: ana.token, type: 'application/json', body: '{"handle":"ana.photos"}' });
+  const moved = await get(e, '/@ana.lind');
+  assert.equal(moved.status, 301);
+  assert.equal(moved.headers.get('location'), `${ORIGIN}/@ana.photos`);
+  assert.equal((await get(e, '/@ana.lind/profile.json')).headers.get('location'), `${ORIGIN}/@ana.photos/profile.json`);
+  const ben = await person(e, apple, 'b', 'Ben', 'ana.lind');
+  assert.equal((await getJSON(e, '/@ana.lind/profile.json')).id, ben.id, 'a reused handle belongs to its new owner');
+});
