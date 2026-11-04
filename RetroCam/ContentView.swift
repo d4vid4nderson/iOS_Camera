@@ -153,6 +153,14 @@ struct ContentView: View {
             }
         }
         .onReceive(Account.shared.$headshotVersion.dropFirst()) { _ in profile = Profile.load() }
+        .onReceive(NotificationCenter.default.publisher(for: .showCamera)) { _ in
+            // The camera control (Control Center, Lock Screen): back to the viewfinder.
+            showingPrint = false
+            showingProfile = false
+            filmShare = nil
+            incomingRoll = nil
+            incomingUser = nil
+        }
         .onOpenURL { url in
             if let film = FilmCode.film(from: url) {
                 withAnimation(.snappy(duration: 0.2)) { incomingFilm = film }

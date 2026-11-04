@@ -10,6 +10,8 @@ name: TestFlight
 #   DIST_CERT_P12        base64 of the exported Apple Distribution .p12   (signing)
 #   DIST_CERT_PASSWORD   password chosen when exporting the .p12          (signing)
 #   PROVISIONING_PROFILE base64 of the App Store .mobileprovision         (signing)
+#   PROVISIONING_PROFILE_CONTROLS  base64 of the App Store .mobileprovision for
+#                        com.davidanderson.retrocam.controls (the camera control)
 on:
   push:
     branches: [main]
@@ -40,11 +42,15 @@ jobs:
           DIST_CERT_P12: ${{ secrets.DIST_CERT_P12 }}
           DIST_CERT_PASSWORD: ${{ secrets.DIST_CERT_PASSWORD }}
           PROVISIONING_PROFILE: ${{ secrets.PROVISIONING_PROFILE }}
+          PROVISIONING_PROFILE_CONTROLS: ${{ secrets.PROVISIONING_PROFILE_CONTROLS }}
         run: |
           missing=0
-          for v in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8 DIST_CERT_P12 DIST_CERT_PASSWORD PROVISIONING_PROFILE; do
+          for v in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8 DIST_CERT_P12 DIST_CERT_PASSWORD PROVISIONING_PROFILE PROVISIONING_PROFILE_CONTROLS; do
             if [ -z "${!v}" ]; then echo "::error::Missing repository secret $v"; missing=1; fi
           done
+          if [ -z "$PROVISIONING_PROFILE_CONTROLS" ]; then
+            echo "::error::The camera control is its own extension and needs its own App Store profile. developer.apple.com -> Identifiers -> + -> App IDs -> com.davidanderson.retrocam.controls; then Profiles -> + -> App Store Connect -> that App ID -> your distribution certificate. Download it, run: base64 -i <file>.mobileprovision | pbcopy  and save it as the PROVISIONING_PROFILE_CONTROLS secret."
+          fi
           exit $missing
 
       - name: Select Xcode 26
@@ -77,6 +83,7 @@ jobs:
           DIST_CERT_P12: ${{ secrets.DIST_CERT_P12 }}
           DIST_CERT_PASSWORD: ${{ secrets.DIST_CERT_PASSWORD }}
           PROVISIONING_PROFILE: ${{ secrets.PROVISIONING_PROFILE }}
+          PROVISIONING_PROFILE_CONTROLS: ${{ secrets.PROVISIONING_PROFILE_CONTROLS }}
         run: ci/install-signing.sh
 
       - name: Archive (signed)
@@ -94,8 +101,9 @@ jobs:
             CODE_SIGN_STYLE=Manual \
             DEVELOPMENT_TEAM="$TEAM_ID" \
             CODE_SIGN_IDENTITY="Apple Distribution" \
-            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_UUID" \
-            CODE_SIGN_ENTITLEMENTS="$APP_ENTITLEMENTS" \
+            APP_PROFILE="$PROFILE_UUID" \
+            CONTROLS_PROFILE="$CONTROLS_PROFILE_UUID" \
+            APP_ENTITLEMENTS="$APP_ENTITLEMENTS" \
             OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN" \
             | tee archive.log
 
@@ -115,6 +123,7 @@ jobs:
             <key>provisioningProfiles</key>
             <dict>
               <key>${BUNDLE_ID}</key><string>${PROFILE_UUID}</string>
+              <key>${BUNDLE_ID}.controls</key><string>${CONTROLS_PROFILE_UUID}</string>
             </dict>
             <key>manageAppVersionAndBuildNumber</key><false/>
             <key>uploadSymbols</key><true/>
