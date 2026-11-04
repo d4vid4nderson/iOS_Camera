@@ -39,22 +39,39 @@ enum CardStyle: String, CaseIterable, Identifiable {
     private static let mount = UIColor(red: 0.925, green: 0.89, blue: 0.81, alpha: 1)
     private static let mountShade = UIColor(red: 0.866, green: 0.82, blue: 0.714, alpha: 1)
 
+    private static let mountInk = UIColor(red: 0.227, green: 0.176, blue: 0.122, alpha: 1)
+
+    /// A cream slide mount filling `rect` (a light-to-dark sweep, rounded corners, an
+    /// optional label printed across the wider top band). Returns the window inside it.
+    private func drawMount(in rect: CGRect, label: String? = nil, context cg: CGContext) -> CGRect {
+        let side = min(rect.width, rect.height) * 0.11
+        let mount = UIBezierPath(roundedRect: rect, cornerRadius: min(rect.width, rect.height) * 0.06)
+        cg.saveGState()
+        mount.addClip()
+        let colors = [Self.mount.cgColor, Self.mountShade.cgColor] as CFArray
+        if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 1]) {
+            cg.drawLinearGradient(gradient, start: CGPoint(x: rect.minX, y: rect.minY), end: CGPoint(x: rect.maxX, y: rect.maxY), options: [])
+        }
+        cg.restoreGState()
+        let window = CGRect(x: rect.minX + side, y: rect.minY + side * 1.35,
+                            width: rect.width - 2 * side, height: rect.height - side * 2.35)
+        if let label {
+            let font = UIFont.monospacedSystemFont(ofSize: side * 0.36, weight: .bold)
+            let y = rect.minY + (side * 1.35 - font.lineHeight) / 2
+            FilmCodeCard.draw(label, font: font, color: Self.mountInk, at: CGPoint(x: window.minX, y: y), kern: side * 0.04)
+            let count = "36"
+            let w = (count as NSString).size(withAttributes: [.font: font]).width
+            FilmCodeCard.draw(count, font: font, color: Self.mountInk, at: CGPoint(x: window.maxX - w, y: y))
+        }
+        return window
+    }
+
     /// A photo in `rect`, cropped to fill it: rounded on LIGHT and DARK, in a slide mount on SLIDE.
     func drawPhoto(_ image: UIImage, in rect: CGRect, context cg: CGContext) {
         var window = rect
         if self == .slide {
             // The mount fills the cell; the picture sits in a window with a wider top.
-            let side = rect.width * 0.11
-            let mount = UIBezierPath(roundedRect: rect, cornerRadius: rect.width * 0.06)
-            cg.saveGState()
-            mount.addClip()
-            let colors = [Self.mount.cgColor, Self.mountShade.cgColor] as CFArray
-            if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 1]) {
-                cg.drawLinearGradient(gradient, start: CGPoint(x: rect.minX, y: rect.minY), end: CGPoint(x: rect.maxX, y: rect.maxY), options: [])
-            }
-            cg.restoreGState()
-            window = CGRect(x: rect.minX + side, y: rect.minY + side * 1.35,
-                            width: rect.width - 2 * side, height: rect.height - side * 2.35)
+            window = drawMount(in: rect, context: cg)
         }
         cg.saveGState()
         UIBezierPath(roundedRect: window, cornerRadius: self == .slide ? window.width * 0.03 : 10).addClip()
@@ -65,13 +82,21 @@ enum CardStyle: String, CaseIterable, Identifiable {
         cg.restoreGState()
     }
 
-    /// Nothing to show yet: a soft panel with the Film Exposures icon in the middle.
-    func drawEmpty(in rect: CGRect) {
-        placeholder.setFill()
-        UIBezierPath(roundedRect: rect, cornerRadius: 12).fill()
+    /// Nothing to show yet: the Film Exposures icon, large, on a soft panel (LIGHT, DARK)
+    /// or in the window of a labelled slide mount (SLIDE).
+    func drawEmpty(in rect: CGRect, context cg: CGContext) {
+        var area = rect
+        if self == .slide {
+            area = drawMount(in: rect, label: "FILM EXPOSURES", context: cg)
+            UIColor(red: 0.09, green: 0.08, blue: 0.07, alpha: 1).setFill()
+            UIBezierPath(roundedRect: area, cornerRadius: min(area.width, area.height) * 0.03).fill()
+        } else {
+            placeholder.setFill()
+            UIBezierPath(roundedRect: rect, cornerRadius: 12).fill()
+        }
         guard let logo = UIImage(named: "CardLogo") else { return }
-        let side = min(rect.width, rect.height) * 0.36
-        let logoRect = CGRect(x: rect.midX - side / 2, y: rect.midY - side / 2, width: side, height: side)
+        let side = min(area.width, area.height) * 0.62
+        let logoRect = CGRect(x: area.midX - side / 2, y: area.midY - side / 2, width: side, height: side)
         UIGraphicsGetCurrentContext()?.saveGState()
         UIBezierPath(roundedRect: logoRect, cornerRadius: side * 0.225).addClip()
         logo.draw(in: logoRect)

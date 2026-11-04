@@ -71,7 +71,7 @@ enum ProfileCard {
             let gap: CGFloat = 10
             let gridHeight: CGFloat = 760
             if shown.isEmpty {
-                style.drawEmpty(in: CGRect(x: margin, y: margin, width: width, height: gridHeight))
+                style.drawEmpty(in: CGRect(x: margin, y: margin, width: width, height: gridHeight), context: cg)
             } else {
                 let columns = shown.count >= 3 ? 3 : shown.count
                 let rows = shown.count > 3 ? 2 : 1
