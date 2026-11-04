@@ -216,7 +216,7 @@ struct CardShareSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityLabel("Posted with: \(ShareCaption.text(card.kind, link: card.link))")
             PillButton(text: "Share", filled: true, accent: accent) {
-                sharing = ShareItems(items: [image as Any?, ShareCaption.text(card.kind, link: card.link)].compactMap { $0 },
+                sharing = ShareItems(items: [image.map(SharedPicture.init) as Any?, ShareCaption.text(card.kind, link: card.link)].compactMap { $0 },
                                      activities: activities)
             }
             .disabled(image == nil)
@@ -250,5 +250,50 @@ enum ShareCaption {
         }
         let url = link ?? ShareLinks.base ?? URL(string: "https://\(ShareLinks.host)")
         return [line, url?.absoluteString].compactMap { $0 }.joined(separator: "\n")
+    }
+}
+
+/// A picture shared through the system sheet. Instagram crops whatever it's handed to its
+/// own shapes (9:16 for reels and stories, 4:5 for posts), so XPAN and 16:9 frames came
+/// out as a zoomed-in middle. For Instagram the picture goes on a 9:16 near-black canvas,
+/// fitted inside the middle 4:5: every Instagram shape then shows it whole. Every other
+/// app gets the picture as it is.
+final class SharedPicture: NSObject, UIActivityItemSource {
+    let image: UIImage
+
+    init(_ image: UIImage) { self.image = image }
+
+    func activityViewControllerPlaceholderItem(_ controller: UIActivityViewController) -> Any { image }
+
+    func activityViewController(_ controller: UIActivityViewController,
+                                itemForActivityType type: UIActivity.ActivityType?) -> Any? {
+        guard let type, Self.crops(type) else { return image }
+        return Self.fittedCanvas(image)
+    }
+
+    /// Share targets that crop pictures to their own shape.
+    static func crops(_ type: UIActivity.ActivityType) -> Bool {
+        type.rawValue.lowercased().contains("instagram")
+    }
+
+    /// The picture fitted, whole, in the middle 4:5 of a 1080×1920 canvas.
+    static func fittedCanvas(_ image: UIImage) -> UIImage {
+        let size = CGSize(width: 1080, height: 1920)
+        let post = CGRect(x: 0, y: (size.height - 1350) / 2, width: 1080, height: 1350)
+        let safe = post.insetBy(dx: 54, dy: 54)
+        let source = image.size
+        guard source.width > 0, source.height > 0 else { return image }
+        let scale = min(safe.width / source.width, safe.height / source.height)
+        let drawn = CGSize(width: source.width * scale, height: source.height * scale)
+        let rect = CGRect(x: safe.midX - drawn.width / 2, y: safe.midY - drawn.height / 2,
+                          width: drawn.width, height: drawn.height)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        return UIGraphicsImageRenderer(size: size, format: format).image { ctx in
+            Brand.dark.setFill()
+            ctx.fill(CGRect(origin: .zero, size: size))
+            image.draw(in: rect)
+        }
     }
 }
