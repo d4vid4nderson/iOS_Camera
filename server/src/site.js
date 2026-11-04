@@ -68,7 +68,7 @@ select,button,input,textarea{font:inherit;color:var(--fg)}
 /* Home: hero with the phone */
 .hero-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:40px;align-items:center}
 .phone{--w:min(300px,78vw);position:relative;justify-self:center;width:var(--w);aspect-ratio:9/19.5;margin:0;padding:calc(var(--w)*.035);border-radius:calc(var(--w)*.16);
-  background:linear-gradient(145deg,#3a3633,#1b1917 45%,#2c2926);box-shadow:inset 0 0 0 1.5px #4a4540,inset 0 0 0 4px #0c0b0a,0 40px 80px -30px rgba(0,0,0,.9),0 0 0 1px #000}
+  background:linear-gradient(145deg,#3a3a3c,#1b1b1c 45%,#2c2c2e);box-shadow:inset 0 0 0 1.5px #48484a,inset 0 0 0 4px #0b0b0b,0 40px 80px -30px rgba(0,0,0,.9),0 0 0 1px #000}
 .phone .screen{--u:calc(var(--w) * .93 / 390);position:relative;height:100%;border-radius:calc(var(--w)*.13);overflow:hidden;background:#171717;
   display:flex;flex-direction:column;justify-content:flex-end;gap:calc(12*var(--u));padding:calc(59*var(--u)) 0 calc(42*var(--u));color:#fff;font-family:var(--mono)}
 .phone .island{position:absolute;top:2.2%;left:50%;width:32%;height:3.6%;margin-left:-16%;border-radius:99px;background:#000;z-index:2}
@@ -100,6 +100,8 @@ select,button,input,textarea{font:inherit;color:var(--fg)}
   box-shadow:inset 0 calc(1.2*var(--u)) 0 rgba(255,184,122,.45),inset 0 calc(-1.2*var(--u)) 0 rgba(107,43,10,.8)}
 .phone .flip{width:calc(56*var(--u));height:calc(56*var(--u));border-radius:50%;background:#262626;display:grid;place-items:center}
 .phone .flip svg{width:calc(22*var(--u));height:calc(22*var(--u))}
+.phone .flip.you{background:#2e2e2e;box-shadow:0 0 0 calc(1.5*var(--u)) #4d4d4d;color:#808080}
+.phone .flip.you svg{width:calc(24*var(--u));height:calc(24*var(--u));fill:currentColor;stroke:none}
 /* More phones: the app's other screens (RollViewer, UserProfileView, SocialView) */
 .phones{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px;justify-items:center}
 .phones figure{margin:0;display:grid;gap:14px;justify-items:center;text-align:center}
@@ -126,7 +128,7 @@ select,button,input,textarea{font:inherit;color:var(--fg)}
 .phone .sheet .dev{display:grid;place-content:center;gap:calc(3*var(--u));background:#1a1a1a;box-shadow:inset 0 0 0 1px #383838;outline:1px dashed #383838;outline-offset:-1px}
 .phone .sheet .dev b{font-size:calc(8*var(--u));color:#666}.phone .sheet .dev small{font-size:calc(7*var(--u));color:#4d4d4d}
 .phone .who{display:flex;align-items:center;gap:calc(14*var(--u));margin:0}
-.phone .face{flex:none;width:calc(72*var(--u));height:calc(72*var(--u));border-radius:50%;display:grid;place-items:center;font-size:calc(28*var(--u));font-weight:700;color:#fff;background:linear-gradient(145deg,#6c5a4a,#3a3029)}
+.phone .face{flex:none;width:calc(72*var(--u));height:calc(72*var(--u));border-radius:50%;display:grid;place-items:center;font-size:calc(28*var(--u));font-weight:700;color:#fff;background:linear-gradient(145deg,#5e5e62,#343436)}
 .phone .face.s{width:calc(16*var(--u));height:calc(16*var(--u));font-size:calc(7*var(--u))}
 .phone .who b{display:block;font-size:calc(16*var(--u));color:var(--accent)}
 .phone .who small{display:block;margin-top:calc(4*var(--u));font-size:calc(11*var(--u));font-weight:600}
@@ -235,7 +237,7 @@ select,button,input,textarea{font:inherit;color:var(--fg)}
   background:linear-gradient(155deg,var(--card),var(--card2));
   box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -2px 0 rgba(0,0,0,.12),0 1px 0 rgba(0,0,0,.4),0 8px 18px -8px rgba(0,0,0,.7);
   display:flex;flex-direction:column;align-items:stretch;transition:transform .18s ease,box-shadow .18s ease}
-.mount.bw{--card:#e6e6e6;--card2:#cecece;--print:#26262a;--print2:#5d5c5a}
+.mount.bw{--card:#e6e6e6;--card2:#cecece;--print:#26262a;--print2:#5d5d5f}
 .mount::before{content:"";position:absolute;inset:0;border-radius:inherit;background:var(--grain);opacity:.18;mix-blend-mode:multiply;pointer-events:none}
 .mount .label{display:flex;align-items:baseline;justify-content:space-between;gap:6px;padding:9.5% 10% 0;font:800 clamp(11px,1.25vw,13px)/1 var(--mono);letter-spacing:.06em;white-space:nowrap;overflow:hidden}
 .mount .label em{font-style:normal;font-weight:600;font-size:.82em;color:var(--print2)}
@@ -253,7 +255,7 @@ select,button,input,textarea{font:inherit;color:var(--fg)}
 .slide{--card:#e9e9e9;--card2:#d4d4d4;--print:#2a2a2a;--print2:#6e6e70;position:relative;width:min(100%,calc((100vh - 96px) / .86));width:min(100%,calc((100svh - 96px) / .86));border-radius:clamp(12px,2vw,20px);color:var(--print);
   background:linear-gradient(155deg,var(--card),var(--card2));display:flex;flex-direction:column;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.6),inset 0 -3px 0 rgba(0,0,0,.12),0 2px 0 rgba(0,0,0,.4),0 30px 60px -24px rgba(0,0,0,.9)}
-.slide.bw{--card:#e6e6e6;--card2:#cecece;--print:#26262a;--print2:#5d5c5a}
+.slide.bw{--card:#e6e6e6;--card2:#cecece;--print:#26262a;--print2:#5d5d5f}
 .slide::before{content:"";position:absolute;inset:0;border-radius:inherit;background:var(--grain);opacity:.18;mix-blend-mode:multiply;pointer-events:none}
 .slide .label{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:6% 7% 0;font:800 clamp(14px,3.2vw,22px)/1 var(--mono);letter-spacing:.06em}
 .slide .label em{font-style:normal;font-weight:600;font-size:.62em;letter-spacing:.12em;color:var(--print2)}
@@ -470,13 +472,13 @@ export function homeBody(store) {
   <p class="lede">Load a roll of 36, shoot it on a film you choose, and let it develop: right away, when the roll is done, or the next morning, like dropping it at a lab.</p>
   ${get}
 </div>
-<figure class="phone" aria-label="Film Exposures on an iPhone: the roll counter at 12 of 36, Golden 100 loaded, a 35mm frame in the viewfinder, the settings bar and the copper shutter">
+<figure class="phone" aria-label="Film Exposures on an iPhone: the roll counter at 12 of 36, Golden 100 loaded, a 35mm frame in the viewfinder, the settings bar, the copper shutter and your profile">
   <div class="screen">
     <span class="island"></span>
     <div class="plate">
       <div class="count"><span>ROLL 03</span><b>12/36</b></div>
       <div class="stock">GOLDEN 100<em>100</em><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9l7 7 7-7"/></svg></div>
-      <div class="me"><i><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4.2"/><path d="M3.5 21c.8-4.6 4.2-7 8.5-7s7.7 2.4 8.5 7z"/></svg></i></div>
+      <div class="me"></div>
     </div>
     <div class="finder">
       <img src="/films/golden100.jpg" alt="" width="1200" height="800">
@@ -486,7 +488,7 @@ export function homeBody(store) {
     <div class="controls">
       <img class="last" src="/films/thumbs/warm400.jpg" alt="" width="420" height="280">
       <i class="shutter"></i>
-      <span class="flip"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 8.5h3.2L8.3 6h7.4l1.6 2.5h3.2V19h-17z"/><path d="M9 13.5a3 3 0 0 1 5.3-1.9M15 12.5a3 3 0 0 1-5.3 1.9"/><path d="M14.6 10.2v1.6H13M9.4 15.8v-1.6H11"/></svg></span>
+      <span class="flip you"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4.2"/><path d="M3.5 21c.8-4.6 4.2-7 8.5-7s7.7 2.4 8.5 7z"/></svg></span>
     </div>
   </div>
 </figure>
