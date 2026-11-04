@@ -149,6 +149,16 @@ final class CameraModel: NSObject, ObservableObject {
     /// The front (selfie) camera is in use; switched from the LENS panel.
     @Published private(set) var isFrontCamera = false
     @Published private(set) var lens: LensOption?
+
+    /// Megapixels a frame in `format` comes out at with the current lens: the format's cut
+    /// of the camera, capped like the film it's named after. Flash shots use the camera's
+    /// standard size (about 12 MP), since high-resolution capture and flash don't always mix.
+    func megapixels(for format: FrameFormat) -> Int {
+        var sensor = lens?.megapixels ?? 12
+        if sensor <= 0 { sensor = 12 }
+        if flash != .off { sensor = min(sensor, 12) }
+        return format.megapixels(fromSensor: sensor)
+    }
     /// The roll in the camera. Saved on every change, so it survives quitting the app.
     @Published private(set) var roll = Roll.load() {
         didSet { roll.save() }

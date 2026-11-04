@@ -20,6 +20,8 @@ struct LensOption: Equatable, Hashable, Identifiable {
     var crop: Double
     /// What to set `videoZoomFactor` to on the capture device.
     var zoomFactor: Double
+    /// The most detail this lens gives, in megapixels: its camera's, less what the crop costs.
+    var megapixels: Double = 0
 
     var id: Int { focalLength }
     var name: String { "\(focalLength)mm" }
@@ -38,7 +40,7 @@ enum LensPlanner {
     static func lenses(for cameras: [PhysicalCamera]) -> [LensOption] {
         let sorted = cameras.sorted { $0.focalLength < $1.focalLength }
         var options = sorted.map {
-            LensOption(focalLength: Int($0.focalLength.rounded()), crop: 1, zoomFactor: $0.zoomFactor)
+            LensOption(focalLength: Int($0.focalLength.rounded()), crop: 1, zoomFactor: $0.zoomFactor, megapixels: $0.megapixels)
         }
         for target in classicFocalLengths {
             let redundant = options.contains {
@@ -50,7 +52,8 @@ enum LensPlanner {
             let crop = target / camera.focalLength
             guard camera.megapixels / (crop * crop) >= minimumMegapixels else { continue }
             options.append(LensOption(focalLength: Int(target), crop: crop,
-                                      zoomFactor: camera.zoomFactor * crop))
+                                      zoomFactor: camera.zoomFactor * crop,
+                                      megapixels: camera.megapixels / (crop * crop)))
         }
         // Two cameras can round to the same focal length; keep the native one.
         var seen = Set<Int>()

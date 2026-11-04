@@ -64,6 +64,15 @@ enum FrameFormat: String, CaseIterable {
         }
     }
 
+    /// Megapixels a frame of this format comes out at from a camera giving `sensor` MP
+    /// (a 4:3 sensor): the format's cut of the sensor, capped at `maxPixels`. Whole numbers.
+    func megapixels(fromSensor sensor: Double) -> Int {
+        let sensorRatio: Double = 4 / 3
+        let r = Double(ratio)
+        let share = r >= sensorRatio ? sensorRatio / r : r / sensorRatio
+        return Int(min(Double(maxPixels) / 1_000_000, sensor * share).rounded())
+    }
+
     /// Whether the orientation can be chosen (6×4.5 is the sensor as held; 6×6 is square).
     var hasOrientation: Bool { self != .medium645 && self != .square }
 

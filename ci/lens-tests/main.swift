@@ -43,6 +43,13 @@ for (mm, want) in [(13, 1.0), (24, 1.85), (100, 7.7), (35, 1.85 * 35 / 24), (135
     else { print("FAIL  zoom for \(mm)mm: expected \(want), got \(zoom(mm))"); failures += 1 }
 }
 
+// Megapixels per lens: native lenses keep their camera's, crops lose the square of the crop
+func mp(_ mm: Int) -> Double { pro.first { $0.focalLength == mm }!.megapixels }
+for (mm, want) in [(24, 48.0), (35, 48.0 / pow(35.0 / 24.0, 2)), (100, 48.0)] {
+    if abs(mp(mm) - want) < 0.01 { print("PASS  \(mm)mm keeps \(String(format: "%.1f", want)) MP") }
+    else { print("FAIL  \(mm)mm: expected \(want) MP, got \(mp(mm))"); failures += 1 }
+}
+
 // Default selection
 let air = LensPlanner.lenses(for: [cam(26, 48, zoom: 1)])
 for (preferred, want) in [(nil, 26), (35, 35), (100, 50)] as [(Int?, Int)] {
