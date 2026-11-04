@@ -2072,7 +2072,7 @@ function layout({ title, description, image, url, body, env, appArgument, wide =
 <title>${esc(title)}</title>
 <meta name="description" content="${esc(description)}">
 <meta name="theme-color" content="#0e0e0f">
-<link rel="icon" type="image/png" href="/favicon.png"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="/favicon.png?v=2"><link rel="icon" href="/favicon.ico?v=2" sizes="any"><link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2">
 ${noindex ? '<meta name="robots" content="noindex">' : ''}
 <meta property="og:site_name" content="Film Exposures">
 <meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description)}">

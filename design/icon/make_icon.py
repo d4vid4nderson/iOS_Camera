@@ -160,7 +160,10 @@ if __name__ == '__main__':
     main = icon()
     public = ROOT / 'server/public'
     main.resize((180, 180), Image.LANCZOS).save(public / 'apple-touch-icon.png', optimize=True)
-    main.resize((64, 64), Image.LANCZOS).save(public / 'favicon.png', optimize=True)
+    # Browser tabs: the icon with its rounded corners (transparent outside), so it reads as
+    # the icon rather than a light grey square; plus favicon.ico for browsers that ask for it.
+    rounded(main, 64).save(public / 'favicon.png', optimize=True)
+    rounded(main, 64).save(public / 'favicon.ico', sizes=[(16, 16), (32, 32), (48, 48), (64, 64)])
     # The website's logo (header and home page) and its link preview use the same icon.
     rounded(main, 256).save(public / 'app-icon.png', optimize=True)
     og_image(main).save(public / 'og-image.png', optimize=True)
