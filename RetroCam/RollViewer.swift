@@ -675,7 +675,7 @@ struct RollViewer: View {
                 }
                 uploading = nil
                 if roll.number == selected { shareRecord = record }
-                sharing = ShareItems(items: [card as Any?, ShareCaption.text(.roll, link: record.url)].compactMap { $0 },
+                sharing = ShareItems(items: [card.map(SharedPicture.init) as Any?, ShareCaption.text(.roll, link: record.url)].compactMap { $0 },
                                      activities: SendInAppActivity.forRoll(record.id),
                                      card: CardShare(link: record.url) { style in
                                          RollShare.card(for: roll, record: record, film: film, profile: profile, style: style)
@@ -720,7 +720,7 @@ struct RollViewer: View {
             }.value
             makingSheet = false
             if let image {
-                sharing = ShareItems(items: [image, ShareCaption.text(.contactSheet, link: RollShare.record(for: roll.number)?.url)])
+                sharing = ShareItems(items: [SharedPicture(image), ShareCaption.text(.contactSheet, link: RollShare.record(for: roll.number)?.url)])
             }
         }
     }
@@ -819,7 +819,7 @@ private struct FramePager: View {
                 Spacer()
                 roundButton("square.and.arrow.up", label: "Share frame") {
                     if let image = UIImage(contentsOfFile: RollStore.frameURL(roll: roll, frame: current).path) {
-                        sharing = ShareItems(items: [image, ShareCaption.text(.frame, link: RollShare.frameLink(roll: roll, frame: current))])
+                        sharing = ShareItems(items: [SharedPicture(image), ShareCaption.text(.frame, link: RollShare.frameLink(roll: roll, frame: current))])
                     }
                 }
                 roundButton("xmark", label: "Close") { dismiss() }
