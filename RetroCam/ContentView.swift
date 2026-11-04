@@ -135,7 +135,7 @@ struct ContentView: View {
             RollViewer(camera: camera, accent: accent, opensInCamera: rollsFromCounter)
         }
         .sheet(item: $filmShare) { item in
-            ActivityView(items: item.items, activities: item.activities).ignoresSafeArea()
+            ShareSheetView(item: item)
         }
         .sheet(isPresented: $showingProfile) {
             ProfileSheet(camera: camera, accent: accent) { profile = $0 }
@@ -765,13 +765,14 @@ struct ContentView: View {
         .padding(.horizontal, 4)
     }
 
-    /// Straight to the share sheet with the film's card and link.
+    /// The film's card (LIGHT / DARK / SLIDE, as for profiles and rolls), then the share
+    /// sheet with the card and its link.
     private func shareFilm(_ film: FilmStock) {
         preparingShare = true
         Task {
-            let items = await Task.detached(priority: .userInitiated) { FilmShare.items(for: film) }.value
+            let card = await Task.detached(priority: .userInitiated) { FilmShare.card(for: film) }.value
             preparingShare = false
-            if let items { filmShare = ShareItems(items: items) } else {
+            if let card { filmShare = ShareItems(items: [card.link], card: card) } else {
                 camera.message = "This film couldn't be packed into a link."
             }
         }
