@@ -561,12 +561,9 @@ struct SocialView: View {
     private func tile(_ roll: Social.RollTile) -> some View {
         Button { opening = OpenSocialRoll(id: roll.id) } label: {
             VStack(alignment: .leading, spacing: 6) {
-                Color(white: 0.1)
-                    .aspectRatio(3 / 4, contentMode: .fit)
-                    .overlay {
-                        AsyncImage(url: roll.cover) { image in image.resizable().scaledToFill() } placeholder: { Color(white: 0.12) }
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                PrintCell(aspect: 4 / 5, cornerRadius: 10) {
+                    AsyncImage(url: roll.cover) { image in image.resizable().scaledToFit() } placeholder: { Color(white: 0.12) }
+                }
                     .overlay(alignment: .topTrailing) {
                         if let audience = roll.audience.flatMap(Audience.init(rawValue:)), audience != .everyone {
                             Image(systemName: audience.icon)

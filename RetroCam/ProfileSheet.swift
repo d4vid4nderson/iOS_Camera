@@ -556,13 +556,9 @@ struct ProfileSheet: View {
         let developed = RollStore.frames(of: roll.number).filter { !RollStore.isPending(roll: roll.number, frame: $0) }
         let first = roll.cover.flatMap { developed.contains($0) ? $0 : nil } ?? developed.first
         let image = first.flatMap { UIImage(contentsOfFile: RollStore.thumbURL(roll: roll.number, frame: $0).path) }
-        return Color(white: 0.15)
-            .aspectRatio(3 / 4, contentMode: .fit)
-            .overlay {
-                if let image { Image(uiImage: image).resizable().scaledToFill() }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-            .contentShape(RoundedRectangle(cornerRadius: 6))
+        return PrintCell(aspect: 4 / 5, cornerRadius: 6) {
+            if let image { Image(uiImage: image).resizable().scaledToFit() }
+        }
     }
 
     private func loadRolls() {

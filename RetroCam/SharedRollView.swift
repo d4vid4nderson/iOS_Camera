@@ -9,6 +9,8 @@ struct SharedRollView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var roll: RollShare.RemoteRoll?
+    /// The shape of this roll's prints (width ÷ height), once the first has loaded.
+    @State private var printAspect: CGFloat?
     @State private var failure: String?
     @State private var viewing: FrameIndex?
     @State private var reporting = false
@@ -145,18 +147,19 @@ struct SharedRollView: View {
     // MARK: Frames
 
     private func grid(_ roll: RollShare.RemoteRoll) -> some View {
-        ScrollView {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 3), spacing: 10) {
+        let cell = PrintLayout.cellAspect(for: printAspect)
+        return ScrollView {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: PrintLayout.columns(for: printAspect)), spacing: 10) {
                 ForEach(Array(roll.frames.enumerated()), id: \.offset) { index, url in
                     VStack(spacing: 4) {
                         Button { viewing = FrameIndex(index: index) } label: {
-                            AsyncImage(url: url) { image in
-                                image.resizable().scaledToFill()
-                            } placeholder: {
-                                Rectangle().fill(Color(white: 0.1))
+                            // Every cell the same shape, each print whole inside it (wide
+                            // formats aren't cropped into a zoomed-in middle).
+                            PrintCell(aspect: cell) {
+                                RemotePrint(url: url) { aspect in
+                                    if index == 0, printAspect == nil { printAspect = aspect }
+                                }
                             }
-                            .aspectRatio(3 / 4, contentMode: .fit)
-                            .clipped()
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("Frame \(index + 1)")

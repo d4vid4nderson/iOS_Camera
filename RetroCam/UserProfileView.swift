@@ -218,16 +218,14 @@ struct UserProfileView: View {
                 ForEach(profile.rolls) { roll in
                     Button { opening = OpenRoll(id: roll.id) } label: {
                         VStack(alignment: .leading, spacing: 6) {
-                            Color(white: 0.1)
-                                .aspectRatio(3 / 4, contentMode: .fit)
-                                .overlay {
-                                    AsyncImage(url: roll.cover) { image in
-                                        image.resizable().scaledToFill()
-                                    } placeholder: {
-                                        Color(white: 0.1)
-                                    }
+                            // The whole cover print, any format, on a mat: every tile the same size.
+                            PrintCell(aspect: 4 / 5, cornerRadius: 10) {
+                                AsyncImage(url: roll.cover) { image in
+                                    image.resizable().scaledToFit()
+                                } placeholder: {
+                                    Color(white: 0.1)
                                 }
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                            }
                                 .overlay(alignment: .topTrailing) {
                                     if let audience = roll.audience.flatMap(Audience.init(rawValue:)), audience != .everyone {
                                         Image(systemName: audience.icon)
