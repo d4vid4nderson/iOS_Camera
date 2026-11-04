@@ -38,9 +38,9 @@ enum FilmCodeCard {
     // MARK: Layouts
 
     private static func drawPhotoCard(film: FilmStock, photo: UIImage, sharer: Sharer?, modules: [[Bool]], in cg: CGContext) {
-        let background = UIColor(red: 0.961, green: 0.953, blue: 0.937, alpha: 1)
-        let ink = UIColor(white: 0.067, alpha: 1)
-        let muted = UIColor(red: 0.50, green: 0.486, blue: 0.463, alpha: 1)
+        let background = Brand.paper
+        let ink = Brand.ink
+        let muted = Brand.mutedOnLight
         let margin: CGFloat = 56
 
         background.setFill()
@@ -100,9 +100,9 @@ enum FilmCodeCard {
     }
 
     private static func drawToneCard(film: FilmStock, sharer: Sharer?, modules: [[Bool]], in cg: CGContext) {
-        let background = UIColor(red: 0.055, green: 0.055, blue: 0.059, alpha: 1)
-        let light = UIColor(red: 0.949, green: 0.941, blue: 0.925, alpha: 1)
-        let muted = UIColor(red: 0.55, green: 0.54, blue: 0.525, alpha: 1)
+        let background = Brand.dark
+        let light = Brand.light
+        let muted = Brand.muted
         let margin: CGFloat = 64
 
         background.setFill()

@@ -71,7 +71,7 @@ enum ProfileCard {
             let gap: CGFloat = 10
             let gridHeight: CGFloat = 760
             if shown.isEmpty {
-                style.drawEmpty(in: CGRect(x: margin, y: margin, width: width, height: gridHeight))
+                style.drawEmpty(in: CGRect(x: margin, y: margin, width: width, height: gridHeight), context: cg)
             } else {
                 let columns = shown.count >= 3 ? 3 : shown.count
                 let rows = shown.count > 3 ? 2 : 1
@@ -143,12 +143,12 @@ enum ProfileCard {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         format.opaque = true
-        let copper = UIColor(red: 0.91, green: 0.46, blue: 0.18, alpha: 1)
-        let cream = UIColor(red: 0.95, green: 0.93, blue: 0.89, alpha: 1)
-        let muted = UIColor(red: 0.56, green: 0.53, blue: 0.49, alpha: 1)
+        let copper = Brand.orange
+        let cream = Brand.light
+        let muted = Brand.muted
         return UIGraphicsImageRenderer(size: previewSize, format: format).image { ctx in
             let g = ctx.cgContext
-            UIColor(red: 0.059, green: 0.051, blue: 0.047, alpha: 1).setFill()
+            Brand.dark.setFill()
             g.fill(CGRect(origin: .zero, size: previewSize))
 
             // Who: headshot, name, handle, counts.

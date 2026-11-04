@@ -93,15 +93,15 @@ def print_with(border, picture, film, number):
         d = ImageDraw.Draw(card)
         for y in range(H):   # the mount's card, a little darker toward the bottom
             t = y / (H - 1)
-            d.line([(0, y), (W, y)], fill=tuple(round(a + (b - a) * t) for a, b in zip((236, 227, 207), (221, 209, 182))))
+            d.line([(0, y), (W, y)], fill=tuple(round(a + (b - a) * t) for a, b in zip((236, 236, 236), (214, 214, 216))))
         font = ImageFont.truetype(FONT, 22)
-        ink = (58, 45, 31)
+        ink = (42, 42, 44)
         d.text((box[0], round(H * 0.06)), FILM_NAMES.get(film, film.upper()), font=font, fill=ink)
         num = f'{number:02d}'
-        d.text((box[2] - d.textlength(num, font=font), round(H * 0.06)), num, font=font, fill=(111, 96, 76))
-        d.rounded_rectangle((box[0] - 2, box[1] - 2, box[2] + 1, box[3] + 1), 6, fill=(150, 135, 110))
+        d.text((box[2] - d.textlength(num, font=font), round(H * 0.06)), num, font=font, fill=(110, 110, 112))
+        d.rounded_rectangle((box[0] - 2, box[1] - 2, box[2] + 1, box[3] + 1), 6, fill=(150, 150, 152))
     else:
-        card = Image.new('RGB', (W, H), (244, 241, 234) if border == 'white' else (10, 10, 10))
+        card = Image.new('RGB', (W, H), (242, 242, 242) if border == 'white' else (10, 10, 10))
     card.paste(picture, box[:2])
     return card
 

@@ -34,7 +34,7 @@ enum RollCard {
             let left = (size.width - gridWidth) / 2
             if shown.isEmpty {
                 // No developed frames yet: the app's icon.
-                style.drawEmpty(in: CGRect(x: margin, y: margin, width: width, height: cell))
+                style.drawEmpty(in: CGRect(x: margin, y: margin, width: width, height: cell), context: cg)
             }
             for (i, image) in shown.enumerated() {
                 let rect = CGRect(x: left + CGFloat(i % columns) * (cell + gap),
