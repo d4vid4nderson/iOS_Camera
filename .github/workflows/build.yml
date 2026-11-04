@@ -57,6 +57,10 @@ jobs:
           plutil -p "$plist"
           # Film recipe links (exposures://) need the URL type merged from Config/Info.plist.
           plutil -p "$plist" | grep -q '"exposures"' || { echo "exposures URL scheme missing"; exit 1; }
+          # The camera control (Control Center / Lock Screen) ships inside the app.
+          ext=build/DerivedData/Build/Products/Release-iphoneos/RetroCam.app/PlugIns/FilmExposuresControls.appex
+          plutil -p "$ext/Info.plist"
+          plutil -p "$ext/Info.plist" | grep -q 'com.apple.widgetkit-extension' || { echo "camera control extension missing"; exit 1; }
 
       - name: Upload build log
         if: failure()

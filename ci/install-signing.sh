@@ -4,7 +4,8 @@
 # (identity name, profile name/app ID/team/expiry), never key material.
 #
 # Env: DIST_CERT_P12 (base64 .p12), DIST_CERT_PASSWORD, PROVISIONING_PROFILE (base64
-#      .mobileprovision), TEAM_ID, BUNDLE_ID, RUNNER_TEMP, GITHUB_ENV
+#      .mobileprovision for BUNDLE_ID), PROVISIONING_PROFILE_CONTROLS (the same, for
+#      BUNDLE_ID.controls), TEAM_ID, BUNDLE_ID, RUNNER_TEMP, GITHUB_ENV
 set -euo pipefail
 
 fail() { echo "::error::$*"; exit 1; }
@@ -12,7 +13,6 @@ fail() { echo "::error::$*"; exit 1; }
 KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
 KEYCHAIN_PASS="$(uuidgen)"
 P12="$RUNNER_TEMP/dist.p12"
-PROFILE="$RUNNER_TEMP/profile.mobileprovision"
 PROFILE_PLIST="$RUNNER_TEMP/profile.plist"
 
 # --- Certificate -------------------------------------------------------------
@@ -38,23 +38,44 @@ echo "$IDENTITIES" | grep -q "Apple Distribution" \
 echo "$IDENTITIES" | grep -q "($TEAM_ID)" \
   || fail "The Apple Distribution certificate isn't for team $TEAM_ID."
 
-# --- Provisioning profile ----------------------------------------------------
-printf '%s' "$PROVISIONING_PROFILE" | tr -d '[:space:]' | base64 --decode > "$PROFILE" \
-  || fail "PROVISIONING_PROFILE isn't valid base64. On the Mac run: base64 -i <file>.mobileprovision | pbcopy  and paste the result."
-security cms -D -i "$PROFILE" > "$PROFILE_PLIST" 2>/dev/null \
-  || fail "PROVISIONING_PROFILE isn't a .mobileprovision file."
-pb() { /usr/libexec/PlistBuddy -c "Print :$1" "$PROFILE_PLIST" 2>/dev/null || true; }
-UUID="$(pb UUID)"
-NAME="$(pb Name)"
-APP_ID="$(pb Entitlements:application-identifier)"
-PROFILE_TEAM="$(pb TeamIdentifier:0)"
-EXPIRES="$(pb ExpirationDate)"
-echo "Profile: '$NAME' | app ID $APP_ID | team $PROFILE_TEAM | expires $EXPIRES"
-[ "$APP_ID" = "$TEAM_ID.$BUNDLE_ID" ] \
-  || fail "Profile is for app ID '$APP_ID', expected '$TEAM_ID.$BUNDLE_ID'. Create an App Store profile for $BUNDLE_ID."
-if /usr/libexec/PlistBuddy -c "Print :ProvisionedDevices" "$PROFILE_PLIST" >/dev/null 2>&1; then
-  fail "Profile '$NAME' is a Development or Ad Hoc profile (it lists devices). Create one of type 'App Store Connect'."
-fi
+# --- Provisioning profiles ---------------------------------------------------
+# One App Store profile per bundle: the app, and the Control Center / Lock Screen camera
+# control (an extension with its own bundle ID, so its own profile).
+# install_profile <base64 profile> <expected bundle ID> <secret name> <plist out>
+# Sets INSTALLED_UUID (run in this shell, not $(...), so a failure stops the script
+# with its message shown).
+install_profile() {
+  local b64="$1" bundle="$2" secret="$3" plist="$4"
+  local file="$RUNNER_TEMP/$secret.mobileprovision"
+  printf '%s' "$b64" | tr -d '[:space:]' | base64 --decode > "$file" \
+    || fail "$secret isn't valid base64. On the Mac run: base64 -i <file>.mobileprovision | pbcopy  and paste the result."
+  security cms -D -i "$file" > "$plist" 2>/dev/null \
+    || fail "$secret isn't a .mobileprovision file."
+  pbp() { /usr/libexec/PlistBuddy -c "Print :$1" "$plist" 2>/dev/null || true; }
+  local uuid name app_id team expires
+  uuid="$(pbp UUID)"; name="$(pbp Name)"; app_id="$(pbp Entitlements:application-identifier)"
+  team="$(pbp TeamIdentifier:0)"; expires="$(pbp ExpirationDate)"
+  echo "$secret: '$name' | app ID $app_id | team $team | expires $expires"
+  [ "$app_id" = "$TEAM_ID.$bundle" ] \
+    || fail "$secret is for app ID '$app_id', expected '$TEAM_ID.$bundle'. Create an App Store profile for $bundle."
+  if /usr/libexec/PlistBuddy -c "Print :ProvisionedDevices" "$plist" >/dev/null 2>&1; then
+    fail "$secret ('$name') is a Development or Ad Hoc profile (it lists devices). Create one of type 'App Store Connect'."
+  fi
+  for dir in "$HOME/Library/MobileDevice/Provisioning Profiles" \
+             "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
+    mkdir -p "$dir"
+    cp "$file" "$dir/$uuid.mobileprovision"
+  done
+  rm -f "$file"
+  INSTALLED_UUID="$uuid"
+}
+
+install_profile "$PROVISIONING_PROFILE" "$BUNDLE_ID" PROVISIONING_PROFILE "$PROFILE_PLIST"
+UUID="$INSTALLED_UUID"
+CONTROLS_PLIST="$RUNNER_TEMP/controls-profile.plist"
+install_profile "$PROVISIONING_PROFILE_CONTROLS" "$BUNDLE_ID.controls" PROVISIONING_PROFILE_CONTROLS "$CONTROLS_PLIST"
+CONTROLS_UUID="$INSTALLED_UUID"
+rm -f "$CONTROLS_PLIST"
 
 # --- Entitlements the profile allows ------------------------------------------
 # Sign in with Apple and links that open the app (Associated Domains) need both the
@@ -92,15 +113,11 @@ fi
 plutil -lint "$ENTITLEMENTS" >/dev/null || fail "Couldn't write the entitlements file."
 echo "APP_ENTITLEMENTS=$ENTITLEMENTS" >> "$GITHUB_ENV"
 
-for dir in "$HOME/Library/MobileDevice/Provisioning Profiles" \
-           "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
-  mkdir -p "$dir"
-  cp "$PROFILE" "$dir/$UUID.mobileprovision"
-done
-rm -f "$PROFILE" "$PROFILE_PLIST"
+rm -f "$PROFILE_PLIST"
 
 {
   echo "KEYCHAIN=$KEYCHAIN"
   echo "PROFILE_UUID=$UUID"
+  echo "CONTROLS_PROFILE_UUID=$CONTROLS_UUID"
 } >> "$GITHUB_ENV"
 echo "Signing installed"
