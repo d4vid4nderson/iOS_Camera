@@ -1,5 +1,5 @@
 """The Film Exposures app icon: a 35mm slide mount filling the icon, with a light leak in
-its window drawn as flat diagonal bands (black, the shutter's colour, cream) and the
+its window drawn as flat diagonal bands (black, the shutter's colour, light grey) and the
 mount's orientation dot in the shutter's colour. One icon per shutter finish: copper is
 the main icon, the others are alternate icons the app switches to when you change the
 shutter. Original artwork, drawn entirely in code. No text: the app's name is under the
@@ -36,11 +36,12 @@ def grain(img, amount=7):
 
 # The brand's three colours, as flat hard-edged shapes (no gradients: they turn to mush
 # at small sizes and in iOS's tinted icons): near-black film, a band of light in the
-# shutter's colour, and a cream edge where the light is brightest. Unequal bands
+# shutter's colour, and a light edge where the light is brightest. Unequal bands
 # (30 / 40 / 30) at a steep angle, so the colour reads as one streak of light.
-BLACK, CREAM = (18, 15, 14), (246, 236, 214)
-MOUNT = ((234, 223, 198), (228, 215, 188))           # nearly flat card
-LIP = (90, 72, 52)
+# Neutral greys (the brand's grey / orange / light palette), no warm browns.
+BLACK, CREAM = (18, 18, 18), (242, 242, 242)
+MOUNT = ((236, 236, 236), (224, 224, 224))           # nearly flat card, light grey
+LIP = (64, 64, 66)
 
 # The shutter finishes (RetroCam/ShutterFinish.swift), each as a mid tone so the three
 # bands still separate in tinted mode. Copper is the main icon; the rest are alternates.
@@ -59,7 +60,7 @@ def stripes(w, h, light, dark=BLACK, edge=CREAM):
     return img
 
 
-def icon(light=FINISHES['Copper'], mount=MOUNT, edge_tone=(180, 160, 125), lip_tone=LIP,
+def icon(light=FINISHES['Copper'], mount=MOUNT, edge_tone=(150, 150, 150), lip_tone=LIP,
          dark=BLACK, edge=CREAM, dot_tone=None, texture=6):
     """A 35mm slide mount filling the icon (iOS's rounded corners are the mount's), the
     window centred, and the mount's orientation dot in the corner of the top margin."""
@@ -85,7 +86,7 @@ def icon(light=FINISHES['Copper'], mount=MOUNT, edge_tone=(180, 160, 125), lip_t
 
 def dark_icon(light=FINISHES['Copper']):
     """For iOS dark mode: a near-black mount, as on the website, same window and dot."""
-    return icon(light, mount=((30, 27, 25), (22, 20, 18)), edge_tone=(0, 0, 0), lip_tone=(6, 5, 4), texture=5)
+    return icon(light, mount=((32, 32, 34), (22, 22, 24)), edge_tone=(0, 0, 0), lip_tone=(6, 6, 6), texture=5)
 
 
 def tinted_icon():
@@ -116,7 +117,7 @@ def og_image(main):
     """The link preview (1200 x 630): the icon and the name on the website's near-black."""
     from PIL import ImageFont
     W, H = 1200, 630
-    img = Image.new('RGB', (W, H), (15, 13, 12))
+    img = Image.new('RGB', (W, H), (18, 18, 18))
     ic = rounded(main, 300)
     img.paste(ic, (120, (H - 300) // 2), ic)
     d = ImageDraw.Draw(img)
@@ -125,7 +126,7 @@ def og_image(main):
         mono = ImageFont.truetype('DejaVuSansMono-Bold.ttf', 26)
     except OSError:
         bold = mono = ImageFont.load_default()
-    d.text((480, 232), 'Film Exposures', font=bold, fill=(242, 237, 228))
+    d.text((480, 232), 'Film Exposures', font=bold, fill=(242, 242, 242))
     d.text((482, 326), 'A FILM CAMERA FOR YOUR IPHONE', font=mono, fill=ORANGE)
     return img
 
@@ -149,8 +150,12 @@ CONTENTS = """{
 
 if __name__ == '__main__':
     assets = ROOT / 'RetroCam/Assets.xcassets'
+    import sys
+    # Copper is the main icon (AppIcon); each other finish is an alternate icon. The
+    # alternates keep their existing artwork unless asked: python3 make_icon.py --all
     for name, colour in FINISHES.items():
-        # Copper is the main icon (AppIcon); each other finish is an alternate icon.
+        if name != 'Copper' and '--all' not in sys.argv:
+            continue
         icon_set(assets / ('AppIcon.appiconset' if name == 'Copper' else f'AppIcon-{name}.appiconset'), colour)
     main = icon()
     public = ROOT / 'server/public'

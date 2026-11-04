@@ -7,6 +7,19 @@ private extension Font {
     }
 }
 
+/// The brand's palette: neutral greys, orange and a light grey (no warm browns). Shared by
+/// the share cards, the film cards and the profile link preview.
+enum Brand {
+    static let dark = UIColor(white: 0.071, alpha: 1)        // #121212
+    static let panel = UIColor(white: 0.141, alpha: 1)       // #242424
+    static let ink = UIColor(white: 0.067, alpha: 1)         // #111111
+    static let muted = UIColor(red: 0.557, green: 0.557, blue: 0.576, alpha: 1)   // #8E8E93
+    static let mutedOnLight = UIColor(red: 0.43, green: 0.43, blue: 0.45, alpha: 1)
+    static let light = UIColor(white: 0.949, alpha: 1)       // #F2F2F2
+    static let paper = UIColor(white: 0.957, alpha: 1)       // #F4F4F4
+    static let orange = UIColor(red: 0.91, green: 0.463, blue: 0.18, alpha: 1)    // #E8762E
+}
+
 /// How a share card (a profile's or a roll's) looks: LIGHT (cream paper, the original),
 /// DARK (the app's near-black), or SLIDE (each photo in a cream slide mount on near-black,
 /// like the SLIDE border). Picked when sharing; remembered for next time.
@@ -20,15 +33,15 @@ enum CardStyle: String, CaseIterable, Identifiable {
 
     var background: UIColor {
         switch self {
-        case .light: return UIColor(red: 0.961, green: 0.953, blue: 0.937, alpha: 1)
-        case .dark, .slide: return UIColor(red: 0.059, green: 0.051, blue: 0.047, alpha: 1)
+        case .light: return Brand.paper
+        case .dark, .slide: return Brand.dark
         }
     }
     var ink: UIColor {
-        self == .light ? UIColor(white: 0.067, alpha: 1) : UIColor(red: 0.95, green: 0.93, blue: 0.89, alpha: 1)
+        self == .light ? Brand.ink : Brand.light
     }
     var muted: UIColor {
-        self == .light ? UIColor(red: 0.50, green: 0.486, blue: 0.463, alpha: 1) : UIColor(red: 0.62, green: 0.59, blue: 0.55, alpha: 1)
+        self == .light ? Brand.mutedOnLight : Brand.muted
     }
     /// Behind an empty grid, and a headshot without a photo.
     var placeholder: UIColor {
@@ -36,12 +49,12 @@ enum CardStyle: String, CaseIterable, Identifiable {
     }
     var avatarFill: UIColor { self == .light ? UIColor(white: 0.86, alpha: 1) : UIColor(white: 0.22, alpha: 1) }
 
-    private static let mount = UIColor(red: 0.925, green: 0.89, blue: 0.81, alpha: 1)
-    private static let mountShade = UIColor(red: 0.866, green: 0.82, blue: 0.714, alpha: 1)
+    private static let mount = UIColor(white: 0.93, alpha: 1)
+    private static let mountShade = UIColor(white: 0.84, alpha: 1)
 
-    private static let mountInk = UIColor(red: 0.227, green: 0.176, blue: 0.122, alpha: 1)
+    private static let mountInk = UIColor(white: 0.25, alpha: 1)
 
-    /// A cream slide mount filling `rect` (a light-to-dark sweep, rounded corners, an
+    /// A light grey slide mount filling `rect` (a light-to-dark sweep, rounded corners, an
     /// optional label printed across the wider top band). Returns the window inside it.
     private func drawMount(in rect: CGRect, label: String? = nil, context cg: CGContext) -> CGRect {
         let side = min(rect.width, rect.height) * 0.11
@@ -82,25 +95,52 @@ enum CardStyle: String, CaseIterable, Identifiable {
         cg.restoreGState()
     }
 
-    /// Nothing to show yet: the Film Exposures icon, large, on a soft panel (LIGHT, DARK)
-    /// or in the window of a labelled slide mount (SLIDE).
+    /// Nothing to show yet: the brand's stripe (black, orange, light grey, as in the icon)
+    /// filling the panel, with the orange dot and the FILM EXPOSURES wordmark; on SLIDE, the
+    /// stripe sits in the window of a labelled mount.
     func drawEmpty(in rect: CGRect, context cg: CGContext) {
-        var area = rect
-        if self == .slide {
-            area = drawMount(in: rect, label: "FILM EXPOSURES", context: cg)
-            UIColor(red: 0.09, green: 0.08, blue: 0.07, alpha: 1).setFill()
-            UIBezierPath(roundedRect: area, cornerRadius: min(area.width, area.height) * 0.03).fill()
-        } else {
-            placeholder.setFill()
-            UIBezierPath(roundedRect: rect, cornerRadius: 12).fill()
+        let area = self == .slide ? drawMount(in: rect, label: "FILM EXPOSURES", context: cg) : rect
+        let radius = self == .slide ? min(area.width, area.height) * 0.03 : 14
+        let panel = UIBezierPath(roundedRect: area, cornerRadius: radius)
+        cg.saveGState()
+        panel.addClip()
+        Brand.ink.setFill()
+        cg.fill(area)
+        // The orange band and the light edge: the icon's steep diagonal, across the panel.
+        let w = area.width, h = area.height, x = area.minX, y = area.minY
+        func band(_ bottom: CGFloat, _ top: CGFloat, _ topEnd: CGFloat, _ bottomEnd: CGFloat, _ colour: UIColor) {
+            let path = UIBezierPath()
+            path.move(to: CGPoint(x: x + w * bottom, y: y + h))
+            path.addLine(to: CGPoint(x: x + w * top, y: y))
+            path.addLine(to: CGPoint(x: x + w * topEnd, y: y))
+            path.addLine(to: CGPoint(x: x + w * bottomEnd, y: y + h))
+            path.close()
+            colour.setFill()
+            path.fill()
         }
-        guard let logo = UIImage(named: "CardLogo") else { return }
-        let side = min(area.width, area.height) * 0.62
-        let logoRect = CGRect(x: area.midX - side / 2, y: area.midY - side / 2, width: side, height: side)
-        UIGraphicsGetCurrentContext()?.saveGState()
-        UIBezierPath(roundedRect: logoRect, cornerRadius: side * 0.225).addClip()
-        logo.draw(in: logoRect)
-        UIGraphicsGetCurrentContext()?.restoreGState()
+        band(0.40, 0.62, 1.2, 1.2, Brand.light)
+        band(0.40, 0.62, 0.80, 0.58, Brand.orange)
+        cg.restoreGState()
+        if self == .dark {
+            // On the dark card the black panel needs an edge.
+            Brand.panel.setStroke()
+            panel.lineWidth = 2
+            panel.stroke()
+        }
+        // The dot, and (outside the mount, which already carries the name) the wordmark.
+        let dot = min(w, h) * 0.06
+        Brand.orange.setFill()
+        UIBezierPath(ovalIn: CGRect(x: x + dot * 0.9, y: y + dot * 0.9, width: dot, height: dot)).fill()
+        if self != .slide {
+            let film = UIFont.systemFont(ofSize: h * 0.13, weight: .heavy)
+            let exposures = UIFont.monospacedSystemFont(ofSize: h * 0.06, weight: .bold)
+            let bottom = y + h - h * 0.07
+            FilmCodeCard.draw("EXPOSURES", font: exposures, color: Brand.orange,
+                              at: CGPoint(x: x + dot * 0.9, y: bottom - exposures.lineHeight), kern: h * 0.004)
+            FilmCodeCard.draw("FILM", font: film, color: Brand.light,
+                              at: CGPoint(x: x + dot * 0.9 - film.pointSize * 0.04, y: bottom - exposures.lineHeight - film.lineHeight + film.pointSize * 0.12),
+                              kern: -film.pointSize * 0.02)
+        }
     }
 
     /// The link's code: dark on the card on LIGHT; on a light tile otherwise, so every
@@ -110,7 +150,7 @@ enum CardStyle: String, CaseIterable, Identifiable {
             FilmCodeCard.drawCode(modules, in: rect, ink: ink, paper: background, context: cg)
             return
         }
-        let paper = UIColor(red: 0.95, green: 0.93, blue: 0.89, alpha: 1)
+        let paper = Brand.light
         paper.setFill()
         UIBezierPath(roundedRect: rect.insetBy(dx: -14, dy: -14), cornerRadius: 18).fill()
         FilmCodeCard.drawCode(modules, in: rect, ink: UIColor(white: 0.067, alpha: 1), paper: paper, context: cg)

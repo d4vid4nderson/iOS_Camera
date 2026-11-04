@@ -687,7 +687,7 @@ struct ContentView: View {
                             .accessibilityLabel("Edited")
                     }
                 }
-                .foregroundStyle(selected ? accent : Color(red: 0.949, green: 0.941, blue: 0.925))
+                .foregroundStyle(selected ? accent : Color(white: 0.949))
                 Text(stock.blurb)
                     .font(.system(size: 10.5))
                     .foregroundStyle(Color(white: 0.55))
