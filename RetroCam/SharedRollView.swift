@@ -266,7 +266,7 @@ struct SharedRollView: View {
                 buttons()
             }
             .padding(18)
-            .background(RoundedRectangle(cornerRadius: 20).fill(ProfileStyle.card))
+            .background(RoundedRectangle(cornerRadius: 20).fill(ProfileStyle.background))
             .overlay(RoundedRectangle(cornerRadius: 20).stroke(ProfileStyle.divider, lineWidth: 1))
             .padding(.horizontal, 22)
         }
@@ -356,7 +356,7 @@ struct SharedRollView: View {
                 cardButton("Not now", quiet: true) { withAnimation(.snappy(duration: 0.15)) { askingToSignIn = false } }
             }
             .padding(18)
-            .background(RoundedRectangle(cornerRadius: 20).fill(ProfileStyle.card))
+            .background(RoundedRectangle(cornerRadius: 20).fill(ProfileStyle.background))
             .overlay(RoundedRectangle(cornerRadius: 20).stroke(ProfileStyle.divider, lineWidth: 1))
             .padding(.horizontal, 22)
         }

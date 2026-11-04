@@ -487,7 +487,7 @@ struct RollViewer: View {
                 }
             }
             .padding(18)
-            .background(RoundedRectangle(cornerRadius: 20).fill(ProfileStyle.card))
+            .background(RoundedRectangle(cornerRadius: 20).fill(ProfileStyle.background))
             .overlay(RoundedRectangle(cornerRadius: 20).stroke(ProfileStyle.divider, lineWidth: 1))
             .padding(.horizontal, 22)
             .padding(.top, 80)
@@ -529,7 +529,7 @@ struct RollViewer: View {
                 }
             }
             .padding(18)
-            .background(RoundedRectangle(cornerRadius: 20).fill(ProfileStyle.card))
+            .background(RoundedRectangle(cornerRadius: 20).fill(ProfileStyle.background))
             .overlay(RoundedRectangle(cornerRadius: 20).stroke(ProfileStyle.divider, lineWidth: 1))
             .padding(.horizontal, 22)
         }
@@ -553,7 +553,7 @@ struct RollViewer: View {
                 cardButton("Keep waiting", destructive: false, quiet: true, action: close)
             }
             .padding(18)
-            .background(RoundedRectangle(cornerRadius: 20).fill(ProfileStyle.card))
+            .background(RoundedRectangle(cornerRadius: 20).fill(ProfileStyle.background))
             .overlay(RoundedRectangle(cornerRadius: 20).stroke(ProfileStyle.divider, lineWidth: 1))
             .padding(.horizontal, 22)
         }
@@ -647,7 +647,7 @@ struct RollViewer: View {
                 }
             }
             .padding(18)
-            .background(RoundedRectangle(cornerRadius: 20).fill(ProfileStyle.card))
+            .background(RoundedRectangle(cornerRadius: 20).fill(ProfileStyle.background))
             .overlay(RoundedRectangle(cornerRadius: 20).stroke(ProfileStyle.divider, lineWidth: 1))
             .padding(.horizontal, 22)
         }
