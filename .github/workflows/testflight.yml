@@ -45,11 +45,15 @@ jobs:
           PROVISIONING_PROFILE_CONTROLS: ${{ secrets.PROVISIONING_PROFILE_CONTROLS }}
         run: |
           missing=0
-          for v in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8 DIST_CERT_P12 DIST_CERT_PASSWORD PROVISIONING_PROFILE PROVISIONING_PROFILE_CONTROLS; do
+          for v in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8 DIST_CERT_P12 DIST_CERT_PASSWORD PROVISIONING_PROFILE; do
             if [ -z "${!v}" ]; then echo "::error::Missing repository secret $v"; missing=1; fi
           done
-          if [ -z "$PROVISIONING_PROFILE_CONTROLS" ]; then
-            echo "::error::The camera control is its own extension and needs its own App Store profile. developer.apple.com -> Identifiers -> + -> App IDs -> com.davidanderson.retrocam.controls; then Profiles -> + -> App Store Connect -> that App ID -> your distribution certificate. Download it, run: base64 -i <file>.mobileprovision | pbcopy  and save it as the PROVISIONING_PROFILE_CONTROLS secret."
+          # The camera control is optional: without its profile the build leaves it out.
+          if [ -n "$PROVISIONING_PROFILE_CONTROLS" ]; then
+            echo "WITH_CONTROLS=true" >> "$GITHUB_ENV"
+          else
+            echo "WITH_CONTROLS=false" >> "$GITHUB_ENV"
+            echo "::warning::Building without the Lock Screen / Control Center camera control (no PROVISIONING_PROFILE_CONTROLS secret). To include it: the camera control is its own extension and needs its own App Store profile. developer.apple.com -> Identifiers -> + -> App IDs -> com.davidanderson.retrocam.controls; then Profiles -> + -> App Store Connect -> that App ID -> your distribution certificate. Download it, run: base64 -i <file>.mobileprovision | pbcopy  and save it as the PROVISIONING_PROFILE_CONTROLS secret."
           fi
           exit $missing
 
@@ -85,6 +89,10 @@ jobs:
           PROVISIONING_PROFILE: ${{ secrets.PROVISIONING_PROFILE }}
           PROVISIONING_PROFILE_CONTROLS: ${{ secrets.PROVISIONING_PROFILE_CONTROLS }}
         run: ci/install-signing.sh
+
+      - name: Leave out the camera control
+        if: env.WITH_CONTROLS != 'true'
+        run: ci/without-controls.sh
 
       - name: Archive (signed)
         run: |
@@ -123,7 +131,7 @@ jobs:
             <key>provisioningProfiles</key>
             <dict>
               <key>${BUNDLE_ID}</key><string>${PROFILE_UUID}</string>
-              <key>${BUNDLE_ID}.controls</key><string>${CONTROLS_PROFILE_UUID}</string>
+              $( [ "$WITH_CONTROLS" = true ] && echo "<key>${BUNDLE_ID}.controls</key><string>${CONTROLS_PROFILE_UUID}</string>" )
             </dict>
             <key>manageAppVersionAndBuildNumber</key><false/>
             <key>uploadSymbols</key><true/>

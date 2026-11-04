@@ -4,8 +4,8 @@
 # (identity name, profile name/app ID/team/expiry), never key material.
 #
 # Env: DIST_CERT_P12 (base64 .p12), DIST_CERT_PASSWORD, PROVISIONING_PROFILE (base64
-#      .mobileprovision for BUNDLE_ID), PROVISIONING_PROFILE_CONTROLS (the same, for
-#      BUNDLE_ID.controls), TEAM_ID, BUNDLE_ID, RUNNER_TEMP, GITHUB_ENV
+#      .mobileprovision for BUNDLE_ID), PROVISIONING_PROFILE_CONTROLS (optional: the same,
+#      for BUNDLE_ID.controls; without it the camera control is left out), TEAM_ID, BUNDLE_ID, RUNNER_TEMP, GITHUB_ENV
 set -euo pipefail
 
 fail() { echo "::error::$*"; exit 1; }
@@ -72,10 +72,15 @@ install_profile() {
 
 install_profile "$PROVISIONING_PROFILE" "$BUNDLE_ID" PROVISIONING_PROFILE "$PROFILE_PLIST"
 UUID="$INSTALLED_UUID"
-CONTROLS_PLIST="$RUNNER_TEMP/controls-profile.plist"
-install_profile "$PROVISIONING_PROFILE_CONTROLS" "$BUNDLE_ID.controls" PROVISIONING_PROFILE_CONTROLS "$CONTROLS_PLIST"
-CONTROLS_UUID="$INSTALLED_UUID"
-rm -f "$CONTROLS_PLIST"
+CONTROLS_UUID=""
+if [ -n "${PROVISIONING_PROFILE_CONTROLS:-}" ]; then
+  CONTROLS_PLIST="$RUNNER_TEMP/controls-profile.plist"
+  install_profile "$PROVISIONING_PROFILE_CONTROLS" "$BUNDLE_ID.controls" PROVISIONING_PROFILE_CONTROLS "$CONTROLS_PLIST"
+  CONTROLS_UUID="$INSTALLED_UUID"
+  rm -f "$CONTROLS_PLIST"
+else
+  echo "No PROVISIONING_PROFILE_CONTROLS: the camera control is left out of this build."
+fi
 
 # --- Entitlements the profile allows ------------------------------------------
 # Sign in with Apple and links that open the app (Associated Domains) need both the
