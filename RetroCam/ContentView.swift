@@ -402,8 +402,25 @@ struct ContentView: View {
         case .grain: return grainText
         case .border:
             let border = camera.border == .none || camera.border == .slide ? camera.border.label : "\(camera.border.label) \(borderWidthText)"
-            return "\(camera.format.label) · \(border)"
+            return "\(camera.format.label) · \(camera.megapixels(for: camera.format)) MP · \(border)"
         }
+    }
+
+    /// A format chip: its name, and under it how many megapixels it comes out at on this
+    /// iPhone with the current lens (bigger formats keep more, like bigger film).
+    private func formatChip(_ format: FrameFormat, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 2) {
+                Text(format.label).font(.mono(12, .bold))
+                Text("\(camera.megapixels(for: format)) MP").font(.mono(9, .semibold)).opacity(0.7)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(selected ? accent.opacity(0.18) : Color(white: 0.17)))
+            .overlay(Capsule().stroke(selected ? accent : .clear, lineWidth: 1.2))
+            .foregroundStyle(selected ? accent : .white)
+        }
+        .buttonStyle(.plain)
     }
 
     private func chip(_ text: String, selected: Bool, action: @escaping () -> Void) -> some View {
@@ -565,8 +582,8 @@ struct ContentView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(FrameFormat.allCases, id: \.self) { format in
-                        chip(format.label, selected: format == camera.format) { camera.selectFormat(format) }
-                            .accessibilityLabel("\(format.label), \(format.ratioText)")
+                        formatChip(format, selected: format == camera.format) { camera.selectFormat(format) }
+                            .accessibilityLabel("\(format.label), \(format.ratioText), \(camera.megapixels(for: format)) megapixels")
                     }
                 }
                 .padding(.horizontal, Self.scrollInset)
