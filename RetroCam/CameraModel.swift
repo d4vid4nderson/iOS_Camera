@@ -146,6 +146,8 @@ final class CameraModel: NSObject, ObservableObject {
     }
     /// Lenses this phone can offer for the current camera side (discovered at runtime).
     @Published private(set) var lenses: [LensOption] = []
+    /// The front (selfie) camera is in use; switched from the LENS panel.
+    @Published private(set) var isFrontCamera = false
     @Published private(set) var lens: LensOption?
     /// The roll in the camera. Saved on every change, so it survives quitting the app.
     @Published private(set) var roll = Roll.load() {
@@ -548,6 +550,8 @@ final class CameraModel: NSObject, ObservableObject {
             } catch {
                 DispatchQueue.main.async { self.message = error.localizedDescription }
             }
+            let front = self.position == .front
+            DispatchQueue.main.async { self.isFrontCamera = front }
             self.session.commitConfiguration()
             // After the commit: the new camera's connections only exist once the
             // configuration is committed. Setting rotation/mirroring before that
