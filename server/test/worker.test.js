@@ -90,6 +90,10 @@ test('a roll uploads, publishes, shows and unshares', async () => {
   assert.match(page, /og:image/);
   assert.match(page, new RegExp(`exposures://r/${id}`), 'opens in the app');
   assert.doesNotMatch(page, /frame-01\.jpg/, 'the web page is a teaser, not the roll');
+  const one = await (await call(e, 'GET', `/r/${id}?frame=2`)).text();
+  assert.match(one, new RegExp(`og:image" content="[^"]*/r/${id}/frame-02\\.jpg`), 'a frame link previews that frame');
+  assert.match(one, /<h1>Frame 2 of /);
+  assert.doesNotMatch(await (await call(e, 'GET', `/r/${id}?frame=9`)).text(), /frame-09/, 'frames that are not there fall back to the card');
   assert.match(page, /class="store-badge soon"><img src="\/app-store-badge\.svg"[^>]*><span>Coming soon/, 'the badge, unlinked, until the app is listed');
   const meta = await (await call(e, 'GET', `/r/${id}/roll.json`)).json();
   assert.equal(meta.frames.length, 2);

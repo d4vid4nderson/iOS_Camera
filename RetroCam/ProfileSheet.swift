@@ -736,8 +736,8 @@ struct ProfileSheet: View {
             // So the link you're about to send shows a fresh preview.
             await RollShare.uploadProfilePreview()
             makingCard = false
-            sharing = ShareItems(items: [me.url], activities: SendInAppActivity.forProfile(me.id),
-                                 card: content.map { c in CardShare(link: me.url) { ProfileCard.render(c, style: $0) } })
+            sharing = ShareItems(items: [ShareCaption.text(.profile, link: me.url)], activities: SendInAppActivity.forProfile(me.id),
+                                 card: content.map { c in CardShare(link: me.url, kind: .profile) { ProfileCard.render(c, style: $0) } })
         }
     }
 

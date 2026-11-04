@@ -25,7 +25,7 @@ enum FilmShare {
         let photo = profile.filmCardsUsePhoto ? RollStore.latestFrame(filmID: film.id) : nil
         let sharer = profile.showOnCards && !profile.isEmpty
             ? FilmCodeCard.Sharer(name: profile.name, avatar: profile.photo) : nil
-        return CardShare(link: url) { style in
+        return CardShare(link: url, kind: .film) { style in
             FilmCodeCard.render(film: film, url: url, photo: photo, sharer: sharer, style: style)
         }
     }

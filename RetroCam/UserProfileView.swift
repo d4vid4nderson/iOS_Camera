@@ -333,8 +333,8 @@ struct UserProfileView: View {
         Task {
             let content = await ProfileCard.content(for: profile)
             makingCard = false
-            sharing = ShareItems(items: [profile.url], activities: SendInAppActivity.forProfile(profile.id),
-                                 card: CardShare(link: profile.url) { ProfileCard.render(content, style: $0) })
+            sharing = ShareItems(items: [ShareCaption.text(.profile, link: profile.url)], activities: SendInAppActivity.forProfile(profile.id),
+                                 card: CardShare(link: profile.url, kind: .profile) { ProfileCard.render(content, style: $0) })
         }
     }
 

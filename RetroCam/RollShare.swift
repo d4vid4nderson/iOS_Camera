@@ -171,6 +171,16 @@ enum RollShare {
         return record
     }
 
+    /// A link to one frame of a shared roll (its page shows that frame), the roll's link
+    /// if that frame isn't up yet, or nil when the roll isn't shared.
+    static func frameLink(roll: Int, frame: Int) -> URL? {
+        guard let record = record(for: roll) else { return nil }
+        guard let index = record.frames?.firstIndex(of: frame),
+              var parts = URLComponents(url: record.url, resolvingAgainstBaseURL: false) else { return record.url }
+        parts.queryItems = [URLQueryItem(name: "frame", value: String(index + 1))]
+        return parts.url ?? record.url
+    }
+
     private static func save(_ record: Record, roll: Int) {
         if let data = try? JSONEncoder().encode(record) {
             try? data.write(to: recordURL(roll), options: .atomic)
