@@ -64,7 +64,7 @@ struct WelcomeView: View {
                 .font(.mono(12)).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             VStack(alignment: .leading, spacing: 10) {
-                point("person.crop.circle", "Your profile: a @handle, your name and photo.")
+                point("person.crop.circle", "Your profile: a @username, your name and photo.")
                 point("person.2", "Share rolls with friends, your followers or everyone.")
                 point("heart", "Follow photographers and like their frames.")
             }

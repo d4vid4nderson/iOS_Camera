@@ -971,7 +971,7 @@ async function updateMe(request, env, url) {
       const handle = body.handle.trim().replace(/^@/, '').toLowerCase();
       if (handle !== user.handle) {
         if (!validHandle(handle)) return json(400, { error: 'handle', reason: 'Use 3 to 20 letters, numbers, _ or .' });
-        if (!(await claimHandle(env, handle, user.id))) return json(409, { error: 'handle', reason: 'That handle is taken.' });
+        if (!(await claimHandle(env, handle, user.id))) return json(409, { error: 'handle', reason: 'That username is taken.' });
         if (user.handle) {
           await env.ROLLS.delete(`handles/${user.handle}`);
           await env.ROLLS.put(`handle-history/${user.handle}`, user.id);
@@ -1551,7 +1551,7 @@ async function follow(request, env, url, id, on, now) {
       await env.ROLLS.delete([`following/${user.id}/${id}`, `followers/${id}/${user.id}`, `requests/${id}/${user.id}`]);
       return json(200, { status: 'none' });
     }
-    if (!user.handle) return json(409, { error: 'handle', reason: 'Choose a handle first, so people know who is asking.' });
+    if (!user.handle) return json(409, { error: 'handle', reason: 'Choose a username first, so people know who is asking.' });
     if (await blockedEitherWay(env, user.id, id)) return json(404, { error: 'no such person' });
     if (await following(env, user.id, id)) return json(200, { status: 'following' });
     // Every follow is a request that the other person approves.
