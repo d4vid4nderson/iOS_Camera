@@ -1,11 +1,5 @@
 import SwiftUI
 
-private extension Font {
-    static func mono(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
-        .system(size: size, weight: weight, design: .monospaced)
-    }
-}
-
 /// Someone's profile: their headshot, name and public rolls. Tap a roll to look through it
 /// (and like its frames). Opened from a roll's sharer, a profile link, or your own profile.
 struct UserProfileView: View {
@@ -34,20 +28,25 @@ struct UserProfileView: View {
 
     var body: some View {
         ZStack {
-            Color(white: 0.06).ignoresSafeArea()
+            ProfileStyle.background.ignoresSafeArea()
             VStack(alignment: .leading, spacing: 16) {
                 header
                 if RollShare.isBlocked(uid) {
-                    centered("YOU BLOCKED THIS PERSON")
+                    centered("hand.raised", "You blocked this person")
                 } else if let profile {
                     if profile.rolls.isEmpty {
-                        centered(isMe ? "NO SHARED ROLLS YET\nCHOOSE WHO SEES A ROLL FROM YOUR PROFILE"
-                                 : followStatus == "following" ? "NO ROLLS TO SHOW YET" : "NO PUBLIC ROLLS YET\nFOLLOW TO SEE ROLLS FOR FOLLOWERS")
+                        if isMe {
+                            centered("photo.stack", "No shared rolls yet", "Choose who sees a roll from your profile.")
+                        } else if followStatus == "following" {
+                            centered("photo.stack", "No rolls to show yet")
+                        } else {
+                            centered("photo.stack", "No public rolls yet", "Follow to see the rolls they share with followers.")
+                        }
                     } else {
                         grid(profile)
                     }
                 } else if let failure {
-                    centered(failure.uppercased())
+                    centered("exclamationmark.triangle", "Couldn't load this profile", failure)
                 } else {
                     Spacer()
                     ProgressView().frame(maxWidth: .infinity)
@@ -77,60 +76,70 @@ struct UserProfileView: View {
     // MARK: Header
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top) {
-                Text(isMe ? "YOUR PROFILE" : "PROFILE").font(.mono(10, .semibold)).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .center) {
+                Text(isMe ? "Your profile" : "Profile").font(.system(size: 17, weight: .semibold)).foregroundStyle(.white)
                 Spacer()
-                Button { dismiss() } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .bold))
-                        .frame(width: 34, height: 34)
-                        .background(Circle().fill(Color(white: 0.16)))
+                if let profile, !isMe {
+                    moreMenu(profile)
                 }
-                .foregroundStyle(.white)
-                .accessibilityLabel("Close")
+                CloseCircle { dismiss() }
             }
-            HStack(spacing: 14) {
+            HStack(spacing: 16) {
                 avatar
                 VStack(alignment: .leading, spacing: 4) {
-                    Text((profile?.name ?? (profile == nil ? " " : "FILM EXPOSURES PHOTOGRAPHER")).uppercased())
-                        .font(.mono(16, .bold)).foregroundStyle(accent).lineLimit(1)
+                    Text(profile?.name.flatMap { $0.isEmpty ? nil : $0 } ?? (profile == nil ? " " : "Film Exposures photographer"))
+                        .font(.system(size: 22, weight: .bold)).foregroundStyle(.white)
+                        .lineLimit(1).minimumScaleFactor(0.7)
                     if let handle = profile?.handle {
-                        Text("@\(handle)").font(.mono(11, .semibold)).foregroundStyle(.white).lineLimit(1)
+                        Text("@\(handle)").font(.system(size: 15, weight: .semibold)).foregroundStyle(accent).lineLimit(1)
                     }
-                    if let profile {
-                        if profile.relation?.followsYou == true && !isMe {
-                            Text("FOLLOWS YOU").font(.mono(9, .bold)).foregroundStyle(accent)
-                        }
+                    if let profile, profile.relation?.followsYou == true, !isMe {
+                        Text("Follows you").font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
                     }
                 }
                 Spacer(minLength: 0)
             }
             if let profile {
                 stats(profile)
-                HStack(spacing: 8) {
+                HStack(spacing: 10) {
                     if !isMe && account.isSignedIn && profile.relation != nil {
-                        FollowButton(id: uid, status: $followStatus, accent: accent, onError: { note = $0 })
+                        FollowButton(id: uid, status: $followStatus, accent: accent, onError: { note = $0 }, big: true)
                     }
                     if profile.relation?.askedYou == true && !isMe {
-                        chip("APPROVE", selected: true) { approve() }
+                        PillButton(text: "Approve", filled: true, accent: accent) { approve() }
                     }
-                    chip(makingCard ? "MAKING CARD…" : "SHARE PROFILE", selected: isMe || !account.isSignedIn) { shareProfile(profile) }
-                        .disabled(makingCard)
-                    Spacer(minLength: 0)
-                    if !isMe {
-                        if account.isSignedIn {
-                            chip("REPORT", selected: false) { withAnimation(.snappy(duration: 0.15)) { reporting = true } }
-                        }
-                        chip("BLOCK", selected: false) { withAnimation(.snappy(duration: 0.15)) { confirmingBlock = true } }
+                    PillButton(text: makingCard ? "Making card…" : "Share profile", filled: isMe || !account.isSignedIn, accent: accent) {
+                        shareProfile(profile)
                     }
+                    .disabled(makingCard)
                 }
                 if let note {
-                    Text(note).font(.mono(10, .semibold)).foregroundStyle(accent)
-                        .fixedSize(horizontal: false, vertical: true)
+                    NoteText(text: note, accent: accent)
                 }
             }
         }
+    }
+
+    /// Report and Block, tucked behind "…" so the profile isn't a row of buttons.
+    private func moreMenu(_ profile: RollShare.RemoteProfile) -> some View {
+        Menu {
+            if account.isSignedIn {
+                Button { withAnimation(.snappy(duration: 0.15)) { reporting = true } } label: {
+                    Label("Report", systemImage: "flag")
+                }
+            }
+            Button(role: .destructive) { withAnimation(.snappy(duration: 0.15)) { confirmingBlock = true } } label: {
+                Label("Block", systemImage: "hand.raised")
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 15, weight: .bold))
+                .frame(width: 34, height: 34)
+                .background(Circle().fill(Color(white: 0.16)))
+                .foregroundStyle(.white)
+        }
+        .accessibilityLabel("More: report or block")
     }
 
     private func approve() {
@@ -139,7 +148,7 @@ struct UserProfileView: View {
                 try await Social.answer(uid, accept: true)
                 await load()
             } catch {
-                note = error.localizedDescription.uppercased()
+                note = error.localizedDescription
             }
         }
     }
@@ -147,10 +156,10 @@ struct UserProfileView: View {
     @ViewBuilder private var avatar: some View {
         if let url = profile?.avatar {
             AsyncImage(url: url) { image in image.resizable().scaledToFill() } placeholder: { Color(white: 0.18) }
-                .frame(width: 72, height: 72)
+                .frame(width: 88, height: 88)
                 .clipShape(Circle())
         } else {
-            ProfileAvatar(photo: nil, size: 72)
+            ProfileAvatar(photo: nil, size: 88)
         }
     }
 
@@ -159,10 +168,10 @@ struct UserProfileView: View {
     /// and following open the lists.
     private func stats(_ profile: RollShare.RemoteProfile) -> some View {
         HStack(spacing: 8) {
-            stat(profile.rolls.count, profile.rolls.count == 1 ? "ROLL" : "ROLLS") { showRolls() }
-            stat(frameCount(profile), frameCount(profile) == 1 ? "FRAME" : "FRAMES") { showRolls() }
-            stat(profile.followers, "FOLLOWERS") { if account.isSignedIn { listing = PeopleListRef(which: "followers") } }
-            stat(profile.following, "FOLLOWING") { if account.isSignedIn { listing = PeopleListRef(which: "following") } }
+            stat(profile.rolls.count, profile.rolls.count == 1 ? "Roll" : "Rolls") { showRolls() }
+            stat(frameCount(profile), frameCount(profile) == 1 ? "Frame" : "Frames") { showRolls() }
+            stat(profile.followers, "Followers") { if account.isSignedIn { listing = PeopleListRef(which: "followers") } }
+            stat(profile.following, "Following") { if account.isSignedIn { listing = PeopleListRef(which: "following") } }
         }
     }
 
@@ -170,13 +179,13 @@ struct UserProfileView: View {
         Button(action: action) {
             VStack(spacing: 3) {
                 Text(value.map(String.init) ?? "–")
-                    .font(.mono(20, .bold)).foregroundStyle(.white)
+                    .font(.system(size: 22, weight: .bold)).foregroundStyle(.white)
                     .contentTransition(.numericText())
-                Text(label).font(.mono(9, .semibold)).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
+                Text(label).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-            .background(RoundedRectangle(cornerRadius: 12).fill(Color(white: 0.11)))
+            .padding(.vertical, 12)
+            .background(RoundedRectangle(cornerRadius: 12).fill(ProfileStyle.card))
             .contentShape(RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)
@@ -191,11 +200,10 @@ struct UserProfileView: View {
         profile.rolls.reduce(0) { $0 + $1.frames }
     }
 
-    private func centered(_ text: String) -> some View {
+    private func centered(_ icon: String, _ title: String, _ detail: String? = nil) -> some View {
         VStack {
             Spacer()
-            Text(text).font(.mono(11, .bold)).foregroundStyle(.secondary)
-                .multilineTextAlignment(.center).frame(maxWidth: .infinity)
+            EmptyState(icon: icon, title: title, detail: detail)
             Spacer()
         }
     }
@@ -228,13 +236,13 @@ struct UserProfileView: View {
                                             .padding(6)
                                             .background(Circle().fill(Color.black.opacity(0.6)))
                                             .padding(6)
-                                            .accessibilityLabel(audience.label)
+                                            .accessibilityLabel(audience.title)
                                     }
                                 }
-                            Text(roll.title.uppercased())
-                                .font(.mono(11, .bold)).foregroundStyle(.white).lineLimit(1)
-                            Text([String(roll.frames) + " FRAMES", roll.film].compactMap { $0 }.joined(separator: " · "))
-                                .font(.mono(9)).foregroundStyle(.secondary).lineLimit(1)
+                            Text(roll.title)
+                                .font(.system(size: 14, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
+                            Text([String(roll.frames) + (roll.frames == 1 ? " frame" : " frames"), roll.film].compactMap { $0 }.joined(separator: " · "))
+                                .font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
                         }
                     }
                     .buttonStyle(.plain)
@@ -256,20 +264,20 @@ struct UserProfileView: View {
             Color.black.opacity(0.6).ignoresSafeArea()
                 .onTapGesture { withAnimation(.snappy(duration: 0.15)) { confirmingBlock = false } }
             VStack(alignment: .leading, spacing: 10) {
-                Text("BLOCK \(who.uppercased())?").font(.mono(15, .bold)).foregroundStyle(accent)
+                Text("Block \(who)?").font(.system(size: 20, weight: .bold)).foregroundStyle(.white)
                 Text("You won't see their profile or rolls they share. Following ends both ways, and they can't find you, follow you or share with you.")
-                    .font(.mono(10)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                cardButton("BLOCK", destructive: true) {
+                    .font(.system(size: 14)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                cardButton("Block", destructive: true) {
                     RollShare.block(uid)
                     if account.isSignedIn { Task { try? await Social.block(uid, true) } }
                     confirmingBlock = false
                     dismiss()
                 }
-                cardButton("CANCEL") { withAnimation(.snappy(duration: 0.15)) { confirmingBlock = false } }
+                cardButton("Cancel", quiet: true) { withAnimation(.snappy(duration: 0.15)) { confirmingBlock = false } }
             }
             .padding(18)
-            .background(RoundedRectangle(cornerRadius: 18).fill(Color(white: 0.11)))
-            .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color(white: 0.2), lineWidth: 1))
+            .background(RoundedRectangle(cornerRadius: 18).fill(ProfileStyle.card))
+            .overlay(RoundedRectangle(cornerRadius: 18).stroke(ProfileStyle.divider, lineWidth: 1))
             .padding(.horizontal, 22)
         }
         .transition(.opacity)
@@ -282,41 +290,41 @@ struct UserProfileView: View {
             Color.black.opacity(0.6).ignoresSafeArea()
                 .onTapGesture { withAnimation(.snappy(duration: 0.15)) { reporting = false } }
             VStack(alignment: .leading, spacing: 10) {
-                Text("REPORT THIS PERSON").font(.mono(15, .bold)).foregroundStyle(accent)
+                Text("Report this person").font(.system(size: 20, weight: .bold)).foregroundStyle(.white)
                 Text("Tell us what's wrong. We review every report, and accounts that break the rules are removed.")
-                    .font(.mono(10)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    .font(.system(size: 14)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 ForEach(["They may be under 13", "Pretending to be someone", "Hate or harassment", "Spam", "Something else"], id: \.self) { reason in
-                    cardButton(reason.uppercased()) {
+                    cardButton(reason) {
                         reporting = false
                         Task {
                             do {
                                 try await Social.report(uid, reason: reason)
-                                note = "THANKS. WE'LL TAKE A LOOK"
+                                note = "Thanks. We'll take a look."
                             } catch {
-                                note = error.localizedDescription.uppercased()
+                                note = error.localizedDescription
                             }
                         }
                     }
                 }
-                cardButton("CANCEL") { withAnimation(.snappy(duration: 0.15)) { reporting = false } }
+                cardButton("Cancel", quiet: true) { withAnimation(.snappy(duration: 0.15)) { reporting = false } }
             }
             .padding(18)
-            .background(RoundedRectangle(cornerRadius: 18).fill(Color(white: 0.11)))
-            .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color(white: 0.2), lineWidth: 1))
+            .background(RoundedRectangle(cornerRadius: 18).fill(ProfileStyle.card))
+            .overlay(RoundedRectangle(cornerRadius: 18).stroke(ProfileStyle.divider, lineWidth: 1))
             .padding(.horizontal, 22)
         }
         .transition(.opacity)
     }
 
-    private func cardButton(_ text: String, destructive: Bool = false, action: @escaping () -> Void) -> some View {
+    /// A full-width choice on the block and report cards: red to block, plain grey text to cancel.
+    private func cardButton(_ text: String, destructive: Bool = false, quiet: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(text)
-                .font(.mono(11, .bold))
+                .font(.system(size: 15, weight: .semibold))
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 11)
-                .background(Capsule().fill(destructive ? Color.red.opacity(0.16) : Color.clear))
-                .overlay(Capsule().stroke(destructive ? Color.red.opacity(0.6) : Color.clear, lineWidth: 1))
-                .foregroundStyle(destructive ? Color(red: 1, green: 0.45, blue: 0.4) : Color(white: 0.55))
+                .padding(.vertical, 12)
+                .background(Capsule().fill(quiet ? Color.clear : destructive ? Color.red.opacity(0.16) : ProfileStyle.button))
+                .foregroundStyle(destructive ? ProfileStyle.destructive : quiet ? Color(white: 0.6) : .white)
         }
         .buttonStyle(.plain)
     }
@@ -330,19 +338,6 @@ struct UserProfileView: View {
             sharing = ShareItems(items: [profile.url], activities: SendInAppActivity.forProfile(profile.id),
                                  card: CardShare(link: profile.url) { ProfileCard.render(content, style: $0) })
         }
-    }
-
-    private func chip(_ text: String, selected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(text)
-                .font(.mono(10, .bold))
-                .lineLimit(1)
-                .padding(.horizontal, 10).padding(.vertical, 7)
-                .background(Capsule().fill(selected ? accent.opacity(0.18) : Color(white: 0.15)))
-                .overlay(Capsule().stroke(selected ? accent : .clear, lineWidth: 1))
-                .foregroundStyle(selected ? accent : .white)
-        }
-        .buttonStyle(.plain)
     }
 
     private func load() async {

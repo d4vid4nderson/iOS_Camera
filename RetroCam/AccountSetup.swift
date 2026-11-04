@@ -35,18 +35,15 @@ struct AccountSetup: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(step == .age ? "STEP 1 OF 3" : step == .handle ? "STEP 2 OF 3" : "STEP 3 OF 3").font(.mono(9, .semibold)).foregroundStyle(.secondary)
+            FieldLabel(step == .age ? "Step 1 of 3" : step == .handle ? "Step 2 of 3" : "Step 3 of 3")
             switch step {
             case .age: ageStep
             case .handle: handleStep
             case .photo: photoStep
             }
-            if let note {
-                Text(note).font(.mono(10, .semibold)).foregroundStyle(accent)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Button("SIGN OUT") { Task { await account.signOut() } }
-                .font(.mono(10, .bold)).foregroundStyle(Color(white: 0.55))
+            if let note { NoteText(text: note, accent: accent) }
+            Button("Sign out") { Task { await account.signOut() } }
+                .font(.system(size: 15, weight: .medium)).foregroundStyle(Color(white: 0.55))
                 .padding(.top, 6)
         }
         .onAppear {
@@ -80,16 +77,14 @@ struct AccountSetup: View {
 
     private var ageStep: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("YOUR DATE OF BIRTH").font(.mono(15, .bold)).foregroundStyle(accent)
-            Text("We ask everyone before they make a profile. It isn't shown on your profile or saved with your account.")
-                .font(.mono(10)).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            title("Your date of birth")
+            FootnoteText("We ask everyone before they make a profile. It isn't shown on your profile or saved with your account.")
             DatePicker("Date of birth", selection: $born, in: ...Date(), displayedComponents: .date)
                 .datePickerStyle(.wheel)
                 .labelsHidden()
                 .frame(maxWidth: .infinity)
                 .onChange(of: born) { _, _ in bornPicked = true }
-            primary(working ? "CHECKING…" : "CONTINUE", enabled: bornPicked && !working, action: saveAge)
+            primary(working ? "Checking…" : "Continue", enabled: bornPicked && !working, action: saveAge)
         }
     }
 
@@ -103,7 +98,7 @@ struct AccountSetup: View {
                 case .tooYoung: onRefused()
                 }
             } catch {
-                note = error.localizedDescription.uppercased()
+                note = error.localizedDescription
             }
             working = false
         }
@@ -113,23 +108,21 @@ struct AccountSetup: View {
 
     private var handleStep: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("PICK YOUR USERNAME").font(.mono(15, .bold)).foregroundStyle(accent)
-            Text("It's how people find you and know who's asking to follow them. Letters, numbers, _ and . (3 to 20).")
-                .font(.mono(10)).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            field("@", prompt: "yourname", text: $handle)
+            title("Pick your username")
+            FootnoteText("It's how people find you and know who's asking to follow them. Letters, numbers, _ and . (3 to 20).")
+            ProfileField(prefix: "@", prompt: "yourname", text: $handle)
                 .onChange(of: handle) { _, new in
                     let cleaned = String(new.lowercased().filter { $0.isLetter || $0.isNumber || $0 == "_" || $0 == "." }.prefix(20))
                     if cleaned != new { handle = cleaned }
                 }
-            VStack(alignment: .leading, spacing: 6) {
-                Text("NAME").font(.mono(9, .semibold)).foregroundStyle(.secondary)
-                field(nil, prompt: "YOUR NAME", text: $name)
+            VStack(alignment: .leading, spacing: 8) {
+                FieldLabel("Name")
+                ProfileField(prompt: "Your name", text: $name, capitalization: .words)
                     .onChange(of: name) { _, new in
                         if new.count > Profile.maxNameLength { name = String(new.prefix(Profile.maxNameLength)) }
                     }
             }
-            primary(working ? "CHECKING…" : "CONTINUE", enabled: handle.count >= 3 && !working, action: saveHandle)
+            primary(working ? "Checking…" : "Continue", enabled: handle.count >= 3 && !working, action: saveHandle)
         }
     }
 
@@ -145,7 +138,7 @@ struct AccountSetup: View {
                 await account.syncProfile(profile, avatarChanged: false)
                 step = .photo
             } catch {
-                note = error.localizedDescription.uppercased()
+                note = error.localizedDescription
             }
             working = false
         }
@@ -159,37 +152,31 @@ struct AccountSetup: View {
 
     private var photoStep: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("ADD YOUR PHOTO").font(.mono(15, .bold)).foregroundStyle(accent)
+            title("Add your photo")
             HStack(spacing: 16) {
                 ProfileAvatar(photo: photo, size: 96)
                     .overlay { if working { ProgressView() } }
                 VStack(alignment: .leading, spacing: 3) {
-                    if let handle = account.me?.handle {
-                        Text("@\(handle)").font(.mono(13, .bold)).foregroundStyle(.white)
-                    }
                     if !name.isEmpty {
-                        Text(name.uppercased()).font(.mono(10)).foregroundStyle(.secondary)
+                        Text(name).font(.system(size: 20, weight: .bold)).foregroundStyle(.white).lineLimit(1)
+                    }
+                    if let handle = account.me?.handle {
+                        Text("@\(handle)").font(.mono(14, .bold)).foregroundStyle(accent).lineLimit(1)
                     }
                 }
             }
-            Text(providerPhotos.isEmpty
+            FootnoteText(providerPhotos.isEmpty
                  ? "Choose one from your photos. It shows on your profile and next to your likes."
                  : "Use the photo from your sign-in, or choose one from your photos.")
-                .font(.mono(10)).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
             ForEach(providerPhotos, id: \.self) { provider in
-                secondary("USE MY \(provider.uppercased()) PHOTO") { useProviderPhoto(provider) }
+                secondary("Use my \(provider.capitalized) photo") { useProviderPhoto(provider) }
             }
             PhotosPicker(selection: $pickerItem, matching: .images) {
-                Text(photo == nil ? "CHOOSE FROM PHOTOS" : "CHOOSE ANOTHER")
-                    .font(.mono(11, .bold))
-                    .frame(maxWidth: .infinity).padding(.vertical, 12)
-                    .background(Capsule().fill(Color(white: 0.16)))
-                    .foregroundStyle(.white)
+                PillLabel(text: photo == nil ? "Choose from photos" : "Choose another", accent: accent)
             }
             .buttonStyle(.plain)
             .disabled(working)
-            primary(photo == nil ? "SKIP FOR NOW" : "DONE", enabled: !working, action: onDone)
+            primary(photo == nil ? "Skip for now" : "Done", enabled: !working, action: onDone)
         }
     }
 
@@ -201,7 +188,7 @@ struct AccountSetup: View {
                 try await account.useProviderPhoto(provider)
                 photo = Profile.load().photo
             } catch {
-                note = error.localizedDescription.uppercased()
+                note = error.localizedDescription
             }
             working = false
         }
@@ -209,41 +196,18 @@ struct AccountSetup: View {
 
     // MARK: Pieces
 
-    private func field(_ prefix: String?, prompt: String, text: Binding<String>) -> some View {
-        HStack(spacing: 2) {
-            if let prefix { Text(prefix).font(.mono(14, .semibold)).foregroundStyle(.secondary) }
-            TextField("", text: text, prompt: Text(prompt).foregroundStyle(Color(white: 0.4)))
-                .font(.mono(14, .semibold))
-                .foregroundStyle(.white)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-        }
-        .padding(.horizontal, 14).padding(.vertical, 11)
-        .background(Capsule().fill(Color(white: 0.16)))
+    private func title(_ text: String) -> some View {
+        Text(text).font(.system(size: 22, weight: .bold)).foregroundStyle(.white)
     }
 
     private func primary(_ text: String, enabled: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(text)
-                .font(.mono(11, .bold))
-                .frame(maxWidth: .infinity).padding(.vertical, 12)
-                .background(Capsule().fill(accent.opacity(enabled ? 0.18 : 0.08)))
-                .overlay(Capsule().stroke(accent.opacity(enabled ? 1 : 0.4), lineWidth: 1))
-                .foregroundStyle(enabled ? accent : accent.opacity(0.5))
-        }
-        .buttonStyle(.plain)
-        .disabled(!enabled)
+        PillButton(text: text, filled: true, accent: accent, action: action)
+            .disabled(!enabled)
+            .opacity(enabled ? 1 : 0.4)
     }
 
     private func secondary(_ text: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(text)
-                .font(.mono(11, .bold))
-                .frame(maxWidth: .infinity).padding(.vertical, 12)
-                .background(Capsule().fill(Color(white: 0.16)))
-                .foregroundStyle(.white)
-        }
-        .buttonStyle(.plain)
-        .disabled(working)
+        PillButton(text: text, accent: accent, action: action)
+            .disabled(working)
     }
 }
