@@ -113,7 +113,7 @@ struct AccountSetup: View {
 
     private var handleStep: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("PICK YOUR HANDLE").font(.mono(15, .bold)).foregroundStyle(accent)
+            Text("PICK YOUR USERNAME").font(.mono(15, .bold)).foregroundStyle(accent)
             Text("It's how people find you and know who's asking to follow them. Letters, numbers, _ and . (3 to 20).")
                 .font(.mono(10)).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

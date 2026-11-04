@@ -378,7 +378,7 @@ struct SocialView: View {
                     }
                 }
                 if account.me?.handle == nil {
-                    Text("Choose a @handle on your profile so people can find you and you can follow them.")
+                    Text("Choose a @username in EDIT PROFILE so people can find you and you can follow them.")
                         .font(.mono(10)).foregroundStyle(accent)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -620,7 +620,7 @@ struct SocialView: View {
         }
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-            TextField("", text: $query, prompt: Text("@HANDLE, NAME OR PROFILE LINK").foregroundStyle(Color(white: 0.4)))
+            TextField("", text: $query, prompt: Text("@USERNAME, NAME OR PROFILE LINK").foregroundStyle(Color(white: 0.4)))
                 .font(.mono(14, .semibold))
                 .foregroundStyle(.white)
                 .textInputAutocapitalization(.never)
@@ -675,7 +675,7 @@ struct SocialView: View {
                     } else if everyone.isEmpty {
                         Text("NOBODY TO SHOW YET").font(.mono(10)).foregroundStyle(.secondary).padding(.top, 8)
                     }
-                    Text("Only people who chose a @handle and left FIND ME IN SEARCH on are listed.")
+                    Text("Only people who chose a @username and left FIND ME IN SEARCH on are listed.")
                         .font(.mono(9)).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 8).padding(.bottom, 16)
@@ -923,7 +923,7 @@ struct HandleEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("HANDLE").font(.mono(9, .semibold)).foregroundStyle(.secondary)
+            Text("Username").font(.system(size: 13, weight: .semibold)).foregroundStyle(.secondary)
             HStack(spacing: 8) {
                 HStack(spacing: 2) {
                     Text("@").font(.mono(14, .semibold)).foregroundStyle(.secondary)
@@ -950,13 +950,13 @@ struct HandleEditor: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             HStack(spacing: 6) {
-                Text("FIND ME IN SEARCH").font(.mono(9, .semibold)).foregroundStyle(.secondary)
+                Text("Find me in search").font(.system(size: 15)).foregroundStyle(.white)
                 Spacer()
                 SocialChip(text: "ON", selected: account.me?.discoverable != false, accent: accent) { setDiscoverable(true) }
                 SocialChip(text: "OFF", selected: account.me?.discoverable == false, accent: accent) { setDiscoverable(false) }
             }
-            Text("People find you by your @handle or name, and need one to follow you. Every follow is a request you approve.")
-                .font(.mono(9)).foregroundStyle(.secondary)
+            Text("People find you by your @username or name. Every follow is a request you approve.")
+                .font(.system(size: 13)).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .onAppear { draft = account.me?.handle ?? "" }
@@ -1219,7 +1219,7 @@ struct SendSheet: View {
             }
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField("", text: $query, prompt: Text("@HANDLE OR NAME").foregroundStyle(Color(white: 0.4)))
+                TextField("", text: $query, prompt: Text("@USERNAME OR NAME").foregroundStyle(Color(white: 0.4)))
                     .font(.mono(13, .semibold)).foregroundStyle(.white)
                     .textInputAutocapitalization(.never).autocorrectionDisabled()
             }

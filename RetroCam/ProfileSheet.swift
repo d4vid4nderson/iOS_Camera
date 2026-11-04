@@ -40,6 +40,8 @@ struct ProfileSheet: View {
     @State private var listing: ProfileListRef?
     /// Picking a handle and photo after signing in (stays up until you finish the photo step).
     @State private var settingUp = false
+    /// The EDIT PROFILE sheet: photo, name, username, card options and the account.
+    @State private var editing = false
     /// The audience a roll was going to get when the rules had to be agreed to first.
     @State private var pendingAudience: (Audience, [String]) = (.everyone, [])
 
@@ -47,9 +49,9 @@ struct ProfileSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 HStack {
-                    Text("YOUR PROFILE").font(.mono(10, .semibold)).foregroundStyle(.secondary)
+                    Text("Profile").font(.system(size: 17, weight: .semibold)).foregroundStyle(.white)
                     Spacer()
-                    Button("DONE") { save(); dismiss() }.font(.mono(11, .bold)).foregroundStyle(accent)
+                    Button("Done") { save(); dismiss() }.font(.system(size: 16, weight: .semibold)).foregroundStyle(accent)
                 }
 
                 if needsSignIn {
@@ -63,92 +65,22 @@ struct ProfileSheet: View {
                         loadRolls()
                     }
                 } else {
-                HStack(alignment: .top, spacing: 16) {
-                    ProfileAvatar(photo: profile.photo, size: 96)
-                        .overlay { if working { ProgressView() } }
-                    Spacer(minLength: 0)
-                    if ShareLinks.isConfigured, let me = account.me, account.isSignedIn {
-                        signInCorner(me)
+                    profileHeader
+                    if ShareLinks.isConfigured {
+                        accountSection
+                    } else {
+                        // No share server: the profile is only the name and photo on cards.
+                        editFields
                     }
-                }
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        PhotosPicker(selection: $pickerItem, matching: .images) {
-                            chipText(profile.photo == nil ? "CHOOSE HEADSHOT" : "CHANGE PHOTO", selected: true)
-                        }
-                        .buttonStyle(.plain)
-                        ForEach(providerPhotos, id: \.self) { provider in
-                            chip("USE \(provider.uppercased()) PHOTO", selected: false) { useProviderPhoto(provider) }
-                        }
-                        if profile.photo != nil {
-                            chip("REMOVE PHOTO", selected: false) {
-                                Profile.removeHeadshot()
-                                profile.photo = nil
-                                onChange(profile)
-                                syncAccount(avatarChanged: true)
-                            }
-                        }
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("NAME").font(.mono(9, .semibold)).foregroundStyle(.secondary)
-                    TextField("", text: $nameDraft,
-                              prompt: Text("YOUR NAME OR @HANDLE").foregroundStyle(Color(white: 0.4)))
-                        .font(.mono(14, .semibold))
-                        .foregroundStyle(.white)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .submitLabel(.done)
-                        .onSubmit(save)
-                        .padding(.horizontal, 14).padding(.vertical, 11)
-                        .background(Capsule().fill(Color(white: 0.16)))
-                        .onChange(of: nameDraft) { _, new in
-                            if new.count > Profile.maxNameLength { nameDraft = String(new.prefix(Profile.maxNameLength)) }
-                        }
-                }
-
-                if ShareLinks.isConfigured {
-                    accountSection
-                }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("ON SHARE CARDS").font(.mono(9, .semibold)).foregroundStyle(.secondary)
-                    HStack(spacing: 6) {
-                        chip("SHOW", selected: profile.showOnCards) { setShow(true) }
-                        chip("HIDE", selected: !profile.showOnCards) { setShow(false) }
-                    }
-                }
-                }
-
-                if !needsSignIn {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("FILM CARDS SHOW").font(.mono(9, .semibold)).foregroundStyle(.secondary)
-                    HStack(spacing: 6) {
-                        chip("MY LATEST FRAME", selected: profile.filmCardsUsePhoto) { setPhotoCards(true) }
-                        chip("TONE SCALE", selected: !profile.filmCardsUsePhoto) { setPhotoCards(false) }
-                    }
-                    Text("A frame you shot on the film, when there is one; otherwise its tone scale.")
-                        .font(.mono(9)).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                }
-
-                if ShareLinks.isConfigured {
-                    accountFooter
-                } else {
-                    Text("Kept on this phone. Your photo and name only appear on film and roll cards you share.")
-                        .font(.mono(10)).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 // The website's policies and support form (App Review asks for these in the app).
                 HStack(spacing: 16) {
-                    Link("PRIVACY", destination: URL(string: "https://filmexposures.com/privacy")!)
-                    Link("TERMS", destination: URL(string: "https://filmexposures.com/terms")!)
-                    Link("SUPPORT", destination: URL(string: "https://filmexposures.com/support")!)
+                    Link("Privacy", destination: URL(string: "https://filmexposures.com/privacy")!)
+                    Link("Terms", destination: URL(string: "https://filmexposures.com/terms")!)
+                    Link("Support", destination: URL(string: "https://filmexposures.com/support")!)
                 }
-                .font(.mono(9, .semibold))
+                .font(.system(size: 13, weight: .medium))
                 .tint(Color(white: 0.55))
                 .padding(.top, 6)
             }
@@ -164,6 +96,7 @@ struct ProfileSheet: View {
         .sheet(item: $sharing) { item in
             ShareSheetView(item: item)
         }
+        .sheet(isPresented: $editing, onDismiss: save) { editProfile }
         .fullScreenCover(item: $socialTab) { ref in
             SocialView(camera: camera, accent: accent, tab: ref.tab)
         }
@@ -213,85 +146,245 @@ struct ProfileSheet: View {
         }
     }
 
-    // MARK: Account and public rolls
+    // MARK: Profile header and EDIT PROFILE
 
-    @ViewBuilder private var accountSection: some View {
+    /// Who you are, at a glance: headshot, name, @username, and the way into editing them.
+    private var profileHeader: some View {
+        HStack(alignment: .center, spacing: 16) {
+            ProfileAvatar(photo: profile.photo, size: 88)
+                .overlay { if working { ProgressView() } }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(profile.name.isEmpty ? "Add your name" : profile.name)
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(profile.name.isEmpty ? Color(white: 0.5) : .white)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                if let username = account.me?.handle, account.isSignedIn {
+                    Text("@\(username)").font(.mono(13, .bold)).foregroundStyle(accent).lineLimit(1)
+                }
+                Button { editing = true } label: {
+                    Text("Edit profile").font(.system(size: 14, weight: .semibold))
+                        .padding(.horizontal, 14).padding(.vertical, 7)
+                        .background(Capsule().fill(Color(white: 0.17)))
+                        .foregroundStyle(.white)
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 6)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// EDIT PROFILE: everything you change about yourself, in one place.
+    private var editProfile: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                HStack {
+                    Text("Edit profile").font(.system(size: 17, weight: .semibold)).foregroundStyle(.white)
+                    Spacer()
+                    Button("Done") { save(); editing = false }.font(.system(size: 16, weight: .semibold)).foregroundStyle(accent)
+                }
+                editFields
+                if ShareLinks.isConfigured, let me = account.me, account.isSignedIn {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Signed in with").font(.system(size: 13, weight: .semibold)).foregroundStyle(.secondary)
+                        HStack(spacing: 8) {
+                            HStack(spacing: 5) {
+                                if me.has("apple") { Image(systemName: "apple.logo").font(.system(size: 12, weight: .semibold)) }
+                                Text(signInsLine(me)).font(.mono(11, .bold))
+                            }
+                            .foregroundStyle(.white)
+                            Spacer()
+                            chip("SIGN OUT", selected: false) { editing = false; Task { await account.signOut() } }
+                        }
+                    }
+                    accountFooter
+                }
+            }
+            .padding(20)
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .presentationDetents([.large])
+        .presentationBackground(Color(white: 0.09))
+        .preferredColorScheme(.dark)
+    }
+
+    /// The fields EDIT PROFILE changes: photo, name, @username (and search), and what cards show.
+    @ViewBuilder private var editFields: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Photo").font(.system(size: 13, weight: .semibold)).foregroundStyle(.secondary)
+            HStack(alignment: .center, spacing: 16) {
+                ProfileAvatar(photo: profile.photo, size: 72)
+                    .overlay { if working { ProgressView() } }
+                VStack(alignment: .leading, spacing: 6) {
+                    PhotosPicker(selection: $pickerItem, matching: .images) {
+                        chipText(profile.photo == nil ? "CHOOSE PHOTO" : "CHANGE PHOTO", selected: true)
+                    }
+                    .buttonStyle(.plain)
+                    ForEach(providerPhotos, id: \.self) { provider in
+                        chip("USE \(provider.uppercased()) PHOTO", selected: false) { useProviderPhoto(provider) }
+                    }
+                    if profile.photo != nil {
+                        chip("REMOVE PHOTO", selected: false) {
+                            Profile.removeHeadshot()
+                            profile.photo = nil
+                            onChange(profile)
+                            syncAccount(avatarChanged: true)
+                        }
+                    }
+                }
+            }
+        }
+
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Name").font(.system(size: 13, weight: .semibold)).foregroundStyle(.secondary)
+            TextField("", text: $nameDraft,
+                      prompt: Text("Your name").foregroundStyle(Color(white: 0.4)))
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(.white)
+                .textInputAutocapitalization(.words)
+                .autocorrectionDisabled()
+                .submitLabel(.done)
+                .onSubmit(save)
+                .padding(.horizontal, 14).padding(.vertical, 11)
+                .background(Capsule().fill(Color(white: 0.16)))
+                .onChange(of: nameDraft) { _, new in
+                    if new.count > Profile.maxNameLength { nameDraft = String(new.prefix(Profile.maxNameLength)) }
+                }
+        }
+
+        if ShareLinks.isConfigured, account.isSignedIn {
+            HandleEditor(accent: accent)
+        }
+
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Name and photo on cards").font(.system(size: 13, weight: .semibold)).foregroundStyle(.secondary)
+            HStack(spacing: 6) {
+                chip("SHOW", selected: profile.showOnCards) { setShow(true) }
+                chip("HIDE", selected: !profile.showOnCards) { setShow(false) }
+            }
+            Text("Shown on your profile and on the cards you share.")
+                .font(.system(size: 13)).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Film cards show").font(.system(size: 13, weight: .semibold)).foregroundStyle(.secondary)
+            HStack(spacing: 6) {
+                chip("MY LATEST FRAME", selected: profile.filmCardsUsePhoto) { setPhotoCards(true) }
+                chip("TONE SCALE", selected: !profile.filmCardsUsePhoto) { setPhotoCards(false) }
+            }
+            Text("A frame you shot on the film, or its tone scale.")
+                .font(.system(size: 13)).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+
         if let note {
             Text(note).font(.mono(10, .semibold)).foregroundStyle(accent)
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
+
+    // MARK: Account and public rolls
+
+    @ViewBuilder private var accountSection: some View {
+        if let note {
+            Text(note).font(.system(size: 13, weight: .semibold)).foregroundStyle(accent)
+                .fixedSize(horizontal: false, vertical: true)
+        }
         if let me = account.me, account.isSignedIn {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("PUBLIC PROFILE").font(.mono(9, .semibold)).foregroundStyle(.secondary)
-                // Your numbers, for you: rolls you could share, and who you follow and who follows you.
-                HStack(spacing: 14) {
-                    stat(shareableRolls, shareableRolls == 1 ? "ROLL TO SHARE" : "ROLLS TO SHARE")
-                    Button { listing = ProfileListRef(which: "following", user: me.id) } label: {
-                        stat(follows?.following, "FOLLOWING")
-                    }
-                    .buttonStyle(.plain)
-                    Button { listing = ProfileListRef(which: "followers", user: me.id) } label: {
-                        stat(follows?.followers, "FOLLOWERS")
-                    }
-                    .buttonStyle(.plain)
+            // Your numbers: rolls you could share, whom you follow and who follows you.
+            HStack(spacing: 8) {
+                stat(shareableRolls, shareableRolls == 1 ? "Roll" : "Rolls")
+                Button { listing = ProfileListRef(which: "following", user: me.id) } label: {
+                    stat(follows?.following, "Following")
                 }
-                .task(id: me.id) {
-                    if let mine = try? await RollShare.fetchProfile(id: me.id) {
-                        follows = (mine.followers ?? 0, mine.following ?? 0)
-                    }
+                .buttonStyle(.plain)
+                Button { listing = ProfileListRef(which: "followers", user: me.id) } label: {
+                    stat(follows?.followers, "Followers")
                 }
-                HStack(spacing: 6) {
-                    chip("VIEW MY PROFILE", selected: true) { viewingMine = IncomingUser(id: me.id) }
-                    chip(makingCard ? "MAKING CARD…" : "SHARE PROFILE", selected: false) { shareProfile(me) }
-                        .disabled(makingCard)
+                .buttonStyle(.plain)
+            }
+            .task(id: me.id) {
+                if let mine = try? await RollShare.fetchProfile(id: me.id) {
+                    follows = (mine.followers ?? 0, mine.following ?? 0)
                 }
-                Text(profile.showOnCards
-                     ? "Your name and headshot show on your profile."
-                     : "Your name and headshot are hidden, here and on cards. Choose SHOW under ON SHARE CARDS to put them on your profile.")
-                    .font(.mono(9)).foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 10) {
+                bigButton("View profile", filled: true) { viewingMine = IncomingUser(id: me.id) }
+                bigButton(makingCard ? "Making card…" : "Share profile", filled: false) { shareProfile(me) }
+                    .disabled(makingCard)
+            }
+            if !profile.showOnCards {
+                Text("Your name and photo are hidden. Turn them on in Edit profile.")
+                    .font(.system(size: 13)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            HandleEditor(accent: accent)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("PEOPLE").font(.mono(9, .semibold)).foregroundStyle(.secondary)
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        chip("FOLLOWING", selected: true) { socialTab = SocialTabRef(tab: .feed) }
-                        chip("BROWSE ROLLS", selected: false) { socialTab = SocialTabRef(tab: .browse) }
-                        chip("SHARED WITH YOU", selected: false) { socialTab = SocialTabRef(tab: .shared) }
-                        chip("REQUESTS", selected: false) { socialTab = SocialTabRef(tab: .requests) }
-                        chip("FIND PEOPLE", selected: false) { socialTab = SocialTabRef(tab: .find) }
-                    }
+            // People: a short list, each row one place to go.
+            VStack(alignment: .leading, spacing: 0) {
+                sectionTitle("People")
+                VStack(spacing: 0) {
+                    peopleRow("person.2", "Following", tab: .feed)
+                    peopleRow("square.grid.2x2", "Browse rolls", tab: .browse)
+                    peopleRow("tray", "Shared with you", tab: .shared)
+                    peopleRow("person.badge.clock", "Requests", tab: .requests)
+                    peopleRow("magnifyingglass", "Find people", tab: .find, last: true)
                 }
+                .background(RoundedRectangle(cornerRadius: 14).fill(Color(white: 0.13)))
             }
 
             VStack(alignment: .leading, spacing: 10) {
-                Text("YOUR ROLLS").font(.mono(9, .semibold)).foregroundStyle(.secondary)
+                sectionTitle("Your rolls")
                 if myRolls.isEmpty {
-                    Text("Rolls show up here once you've shot a frame.")
-                        .font(.mono(10)).foregroundStyle(.secondary)
+                    Text("Your rolls show up here once you've shot a frame.")
+                        .font(.system(size: 14)).foregroundStyle(.secondary)
                 } else {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 14) {
                         ForEach(myRolls, id: \.number) { roll in rollTile(roll) }
                     }
+                    Text("Tap the badge on a roll to choose who sees it.")
+                        .font(.system(size: 13)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                ForEach(Audience.choices) { audience in
-                    HStack(alignment: .top, spacing: 6) {
-                        Image(systemName: audience.icon).frame(width: 14)
-                            .foregroundStyle(audience.isShared ? accent : .secondary)
-                        Text("\(audience.label): \(audience.detail)")
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .font(.mono(9)).foregroundStyle(.secondary)
-                }
-                Text("Tap a roll's badge to choose. Making a roll private takes it off the server, and links to it stop working.")
-                    .font(.mono(9)).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
-
         }
+    }
+
+    private func sectionTitle(_ text: String) -> some View {
+        Text(text).font(.system(size: 17, weight: .semibold)).foregroundStyle(.white)
+            .padding(.bottom, 8)
+    }
+
+    /// One row in the People list: an icon, a label and a chevron.
+    private func peopleRow(_ icon: String, _ label: String, tab: SocialView.Tab, last: Bool = false) -> some View {
+        Button { socialTab = SocialTabRef(tab: tab) } label: {
+            HStack(spacing: 12) {
+                Image(systemName: icon).font(.system(size: 16, weight: .medium)).foregroundStyle(accent)
+                    .frame(width: 24)
+                Text(label).font(.system(size: 16)).foregroundStyle(.white)
+                Spacer()
+                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color(white: 0.4))
+            }
+            .padding(.horizontal, 14).padding(.vertical, 13)
+            .contentShape(Rectangle())
+            .overlay(alignment: .bottom) {
+                if !last { Rectangle().fill(Color(white: 0.2)).frame(height: 0.5).padding(.leading, 50) }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// A full-width rounded button: filled orange, or a quiet grey.
+    private func bigButton(_ text: String, filled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(text)
+                .font(.system(size: 15, weight: .semibold))
+                .frame(maxWidth: .infinity).padding(.vertical, 12)
+                .background(Capsule().fill(filled ? accent : Color(white: 0.17)))
+                .foregroundStyle(filled ? .black : .white)
+        }
+        .buttonStyle(.plain)
     }
 
     /// At the end of the profile: other ways to sign in, and deleting the account.
@@ -301,7 +394,7 @@ struct ProfileSheet: View {
                 .filter { $0.1 && !me.has($0.0) }.map { $0.0 }
             if !others.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("ADD A SIGN-IN").font(.mono(9, .semibold)).foregroundStyle(.secondary)
+                    Text("Add a sign-in").font(.system(size: 13, weight: .semibold)).foregroundStyle(.secondary)
                     ForEach(others, id: \.self) { provider in
                         if provider == "apple" {
                             AppleSignInButton(onError: { note = $0.uppercased() })
@@ -315,7 +408,7 @@ struct ProfileSheet: View {
             // Last, on its own: deleting the account (App Review wants it easy to find, not prominent).
             VStack(alignment: .leading, spacing: 8) {
                 Divider().overlay(Color(white: 0.2)).padding(.bottom, 4)
-                Text("ACCOUNT").font(.mono(9, .semibold)).foregroundStyle(.secondary)
+                Text("Account").font(.system(size: 13, weight: .semibold)).foregroundStyle(.secondary)
                 Button {
                     if confirmDeleteAccount { deleteAccount() } else { confirmDeleteAccount = true }
                 } label: {
@@ -327,8 +420,8 @@ struct ProfileSheet: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(account.working)
-                Text("Deletes your profile, your likes and every roll you shared while signed in from the server. Your rolls stay on this phone.")
-                    .font(.mono(9)).foregroundStyle(.secondary)
+                Text("Deletes your profile, likes and shared rolls from the server. Your rolls stay on this phone.")
+                    .font(.system(size: 13)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 if confirmDeleteAccount {
                     Button("CANCEL") { confirmDeleteAccount = false }
@@ -344,10 +437,12 @@ struct ProfileSheet: View {
     }
 
     private func stat(_ value: Int?, _ label: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(value.map(String.init) ?? "–").font(.mono(15, .bold)).foregroundStyle(.white)
-            Text(label).font(.mono(8, .semibold)).foregroundStyle(.secondary)
+        VStack(spacing: 2) {
+            Text(value.map(String.init) ?? "–").font(.system(size: 22, weight: .bold)).foregroundStyle(.white)
+            Text(label).font(.system(size: 12)).foregroundStyle(.secondary)
         }
+        .frame(maxWidth: .infinity).padding(.vertical, 12)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color(white: 0.13)))
         .accessibilityElement(children: .combine)
     }
 
@@ -411,20 +506,6 @@ struct ProfileSheet: View {
                 note = error.localizedDescription.uppercased()
             }
             working = false
-        }
-    }
-
-    /// Your account, in the top corner across from your headshot: how you're signed in,
-    /// and signing out.
-    private func signInCorner(_ me: Account.Me) -> some View {
-        VStack(alignment: .trailing, spacing: 6) {
-            Text("SIGNED IN WITH").font(.mono(9, .semibold)).foregroundStyle(.secondary)
-            HStack(spacing: 5) {
-                if me.has("apple") { Image(systemName: "apple.logo").font(.system(size: 12, weight: .semibold)) }
-                Text(signInsLine(me)).font(.mono(11, .bold))
-            }
-            .foregroundStyle(.white)
-            chip("SIGN OUT", selected: false) { Task { await account.signOut() } }
         }
     }
 
