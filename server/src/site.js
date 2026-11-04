@@ -507,6 +507,17 @@ export function homeBody(store) {
 </ol>
 </section>
 
+<section class="section" id="films">
+<p class="eyebrow">The films</p>
+<h2>Seven black &amp; white, seven color.</h2>
+<p class="muted">Tap a film to see what it does to the same photo.</p>
+<p class="shelf">Black &amp; white</p>
+<div class="films">${bw}</div>
+<p class="shelf">Color</p>
+<div class="films">${color}</div>
+${filmViewer()}
+</section>
+
 <section class="section" id="inside">
 <p class="eyebrow">Inside the app</p>
 <h2>Rolls, people, and nothing else.</h2>
@@ -616,14 +627,7 @@ export function homeBody(store) {
 </section>
 
 <section class="section">
-<h2 id="films">The films</h2>
-<p class="muted">Tap a film to see what it does to the same photo.</p>
-<p class="shelf">Black &amp; white</p>
-<div class="films">${bw}</div>
-<p class="shelf">Color</p>
-<div class="films">${color}</div>
 <p class="muted small">Your photos stay on your phone. Nothing is uploaded unless you share a roll or put one on your profile.</p>
-${filmViewer()}
 </section>`;
 }
 
