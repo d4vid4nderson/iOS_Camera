@@ -1,10 +1,11 @@
 import SwiftUI
 import UIKit
 
-private extension Font {
-    static func mono(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
-        .system(size: size, weight: weight, design: .monospaced)
-    }
+/// "ROLL END" → "Roll end": labels shared with the camera's uppercase controls, shown here
+/// in the profile style's sentence case.
+private func sentenceCase(_ text: String) -> String {
+    let lower = text.lowercased()
+    return lower.prefix(1).uppercased() + lower.dropFirst()
 }
 
 /// Your rolls: a contact sheet per roll and a full-screen view to swipe through the
@@ -64,8 +65,8 @@ struct RollViewer: View {
                 if rolls.count > 1 { rollStrip }
                 if frames.isEmpty {
                     Spacer()
-                    Text("NO FRAMES YET").font(.mono(12, .bold)).foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity)
+                    EmptyState(icon: "film", title: "No frames yet",
+                               detail: isInCamera ? "Frames you shoot on this roll show up here." : "This roll has no frames.")
                     Spacer()
                 } else {
                     contactSheet
@@ -103,12 +104,12 @@ struct RollViewer: View {
                 Button {
                     if let roll { startRenaming(roll) }
                 } label: {
-                    HStack(spacing: 6) {
-                        Text((roll ?? camera.roll).title.uppercased())
-                            .font(.mono(15, .bold)).foregroundStyle(accent)
-                            .lineLimit(1)
+                    HStack(spacing: 8) {
+                        Text((roll ?? camera.roll).title)
+                            .font(.system(size: 22, weight: .bold)).foregroundStyle(.white)
+                            .lineLimit(1).minimumScaleFactor(0.7)
                         Image(systemName: "pencil")
-                            .font(.system(size: 11, weight: .bold))
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(.secondary)
                     }
                     .contentShape(Rectangle())
@@ -116,7 +117,7 @@ struct RollViewer: View {
                 .buttonStyle(.plain)
                 .disabled(roll == nil)
                 .accessibilityHint("Rename this roll")
-                Text(subtitle).font(.mono(10)).foregroundStyle(.secondary)
+                Text(subtitle).font(.system(size: 14)).foregroundStyle(.secondary)
             }
             Spacer()
             Button { dismiss() } label: {
@@ -132,26 +133,26 @@ struct RollViewer: View {
 
     private var subtitle: String {
         guard let roll else { return "" }
-        var parts = ["\(frames.count)/\(Roll.length) FRAMES"]
+        var parts = ["\(frames.count)/\(Roll.length) frames"]
         if let started = roll.started {
-            parts.append(started.formatted(.dateTime.month(.abbreviated).day().year()).uppercased())
+            parts.append(started.formatted(.dateTime.month(.abbreviated).day().year()))
         }
         if !pending.isEmpty { parts.append(developNote(roll)) }
         if isInCamera {
-            parts.append("IN CAMERA")
+            parts.append("In camera")
         } else if roll.isOpen {
-            parts.append("\(Roll.length - roll.frames) FRAMES LEFT")
+            parts.append("\(Roll.length - roll.frames) frames left")
         }
         return parts.joined(separator: " · ")
     }
 
     private func developNote(_ roll: Roll) -> String {
         switch roll.develop {
-        case .instant: return "DEVELOPING"
-        case .rollEnd: return roll.finishedAt == nil ? "DEVELOPS WHEN FINISHED" : "DEVELOPING"
+        case .instant: return "Developing"
+        case .rollEnd: return roll.finishedAt == nil ? "Develops when finished" : "Developing"
         case .nextMorning:
-            guard let ready = roll.readyDate() else { return "DEVELOPS THE MORNING AFTER IT'S FINISHED" }
-            return "DEVELOPS " + ready.formatted(.dateTime.weekday(.abbreviated).hour().minute()).uppercased()
+            guard let ready = roll.readyDate() else { return "Develops the morning after it's finished" }
+            return "Develops " + ready.formatted(.dateTime.weekday(.abbreviated).hour().minute())
         }
     }
 
@@ -161,19 +162,18 @@ struct RollViewer: View {
                 ForEach(rolls, id: \.number) { r in
                     let on = r.number == selected
                     Button { selected = r.number } label: {
-                        HStack(spacing: 5) {
+                        HStack(spacing: 6) {
                             if r.number == camera.roll.number {
-                                Image(systemName: "camera.fill").font(.system(size: 8, weight: .bold))
+                                Image(systemName: "camera.fill").font(.system(size: 11, weight: .semibold))
                             } else if r.isOpen {
-                                Image(systemName: "circle.lefthalf.filled").font(.system(size: 8, weight: .bold))
+                                Image(systemName: "circle.lefthalf.filled").font(.system(size: 11, weight: .semibold))
                             }
-                            Text(r.title.uppercased()).lineLimit(1)
+                            Text(r.title).lineLimit(1)
                         }
-                            .font(.mono(10, .bold))
-                            .padding(.horizontal, 10).padding(.vertical, 6)
-                            .background(Capsule().fill(on ? accent.opacity(0.18) : Color(white: 0.15)))
-                            .overlay(Capsule().stroke(on ? accent : .clear, lineWidth: 1))
-                            .foregroundStyle(on ? accent : .white)
+                            .font(.system(size: 14, weight: .semibold))
+                            .padding(.horizontal, 14).padding(.vertical, 8)
+                            .background(Capsule().fill(on ? accent : ProfileStyle.button))
+                            .foregroundStyle(on ? .black : .white)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(r.title + (r.number == camera.roll.number ? ", in camera" : r.isOpen ? ", part-shot" : ""))
@@ -207,8 +207,8 @@ struct RollViewer: View {
                                         Rectangle().fill(Color(white: 0.1))
                                         Rectangle().strokeBorder(Color(white: 0.22), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
                                         VStack(spacing: 3) {
-                                            Text("DEVELOPING").font(.mono(8, .bold)).foregroundStyle(Color(white: 0.4))
-                                            Text("TAP TO DEVELOP").font(.mono(7, .semibold)).foregroundStyle(Color(white: 0.3))
+                                            Text("Developing").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color(white: 0.45))
+                                            Text("Tap to develop").font(.system(size: 10)).foregroundStyle(Color(white: 0.35))
                                         }
                                     }
                                 } else {
@@ -219,16 +219,16 @@ struct RollViewer: View {
                             .clipped()
                             .overlay(alignment: .topLeading) {
                                 if !waiting, frame == coverFrame {
-                                    Text("COVER")
-                                        .font(.mono(8, .bold))
-                                        .padding(.horizontal, 5).padding(.vertical, 3)
-                                        .background(RoundedRectangle(cornerRadius: 3).fill(accent))
+                                    Text("Cover")
+                                        .font(.system(size: 11, weight: .bold))
+                                        .padding(.horizontal, 7).padding(.vertical, 3)
+                                        .background(Capsule().fill(accent))
                                         .foregroundStyle(.black)
                                         .padding(4)
                                 }
                             }
                             Text(String(format: "%02d", frame))
-                                .font(.mono(9, .semibold)).foregroundStyle(.secondary)
+                                .font(.system(size: 12, weight: .medium).monospacedDigit()).foregroundStyle(.secondary)
                         }
                     }
                     .buttonStyle(.plain)
@@ -236,9 +236,9 @@ struct RollViewer: View {
                         if peeked, let number = selected {
                             // Peeking: tap to cover it up again.
                             Button { camera.setPeeking(roll: number, frame: frame, false) } label: {
-                                Label("HIDE", systemImage: "eye.slash.fill")
-                                    .font(.mono(8, .bold))
-                                    .padding(.horizontal, 6).padding(.vertical, 4)
+                                Label("Hide", systemImage: "eye.slash.fill")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .padding(.horizontal, 8).padding(.vertical, 4)
                                     .background(Capsule().fill(Color.black.opacity(0.7)))
                                     .foregroundStyle(.white)
                                     .padding(4)
@@ -277,43 +277,39 @@ struct RollViewer: View {
                 if !developedFrames.isEmpty, let roll {
                     if ShareLinks.isConfigured {
                         if let uploading {
-                            chip("UPLOADING \(uploading.done)/\(uploading.total)", selected: true) {}
+                            chip("Uploading \(uploading.done)/\(uploading.total)", selected: true) {}
                                 .disabled(true)
                         } else if shareRecord != nil {
-                            chip("SHARE LINK", selected: true) { shareLinkAgain(roll) }
+                            chip("Share link", selected: true) { shareLinkAgain(roll) }
                         } else {
-                            chip("SHARE ROLL", selected: true) {
+                            chip("Share roll", selected: true) {
                                 withAnimation(.snappy(duration: 0.15)) { confirmingShare = roll }
                             }
                         }
                     }
                     // Keeps its label (and its size) while the sheet prints: a longer label
                     // got squeezed to "…" in this row and the pill turned into a circle.
-                    chip("SHEET", selected: !ShareLinks.isConfigured, busy: makingSheet) { shareContactSheet(roll) }
+                    chip("Sheet", selected: !ShareLinks.isConfigured, busy: makingSheet) { shareContactSheet(roll) }
                         .disabled(makingSheet)
                         .accessibilityValue(makingSheet ? "Printing" : "")
                 }
                 Spacer(minLength: 0)
                 if let roll, roll.isOpen, !isInCamera {
-                    chip("SHOOT THIS ROLL", selected: true) { load(roll.number) }
+                    chip("Shoot this roll", selected: true) { load(roll.number) }
                 }
-                if let roll {
-                    chip("RENAME", selected: false) { startRenaming(roll) }
-                }
-                if let roll, !frames.isEmpty {
-                    deleteChip("DELETE ROLL") { withAnimation(.snappy(duration: 0.15)) { deleting = roll } }
-                }
+                if let roll { moreMenu(roll) }
             }
             if let shareRecord {
                 HStack(spacing: 8) {
                     let audience = shareRecord.shownAudience
-                    Text(audience == .everyone ? "PUBLIC · ON YOUR PROFILE"
-                         : audience == .followers ? "FOLLOWERS · ON YOUR PROFILE"
-                         : audience == .people ? "SHARED WITH \(shareRecord.people?.count ?? 0) \((shareRecord.people?.count ?? 0) == 1 ? "PERSON" : "PEOPLE")"
-                         : "SHARED · LINK WORKS UNTIL " + shareRecord.expiresAt.formatted(.dateTime.month(.abbreviated).day()).uppercased())
-                        .font(.mono(9, .semibold)).foregroundStyle(audience.isShared ? accent : .secondary)
+                    Text(audience == .everyone ? "Public · on your profile"
+                         : audience == .followers ? "Followers · on your profile"
+                         : audience == .people ? "Shared with \(shareRecord.people?.count ?? 0) \((shareRecord.people?.count ?? 0) == 1 ? "person" : "people")"
+                         : "Shared · link works until " + shareRecord.expiresAt.formatted(.dateTime.month(.abbreviated).day()))
+                        .font(.system(size: 13, weight: .semibold)).foregroundStyle(audience.isShared ? accent : .secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
-                    chip(unsharing ? "UNSHARING…" : audience.isShared ? "MAKE PRIVATE" : "UNSHARE", selected: false) { unshare() }
+                    chip(unsharing ? "Unsharing…" : audience.isShared ? "Make private" : "Unshare", selected: false) { unshare() }
                         .disabled(unsharing)
                 }
             }
@@ -323,16 +319,16 @@ struct RollViewer: View {
             // The roll in the camera: switch to another part-shot roll, load a new one, or
             // finish this one.
             VStack(alignment: .leading, spacing: 6) {
-                Text("IN CAMERA").font(.mono(9, .semibold)).foregroundStyle(.secondary)
-                Text(cameraRollLine).font(.mono(11, .bold)).foregroundStyle(.white).lineLimit(1)
+                FieldLabel("In camera")
+                Text(cameraRollLine).font(.system(size: 16, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
                 if camera.roll.frames > 0 {
-                    HStack(spacing: 6) {
-                        chip("NEW ROLL", selected: false) {
+                    HStack(spacing: 8) {
+                        chip("New roll", selected: false) {
                             confirmFinish = false
                             camera.loadNewRoll()
                             selected = camera.roll.number
                         }
-                        chip(confirmFinish ? "TAP TO FINISH" : "FINISH ROLL", selected: confirmFinish) {
+                        chip(confirmFinish ? "Tap to finish" : "Finish roll", selected: confirmFinish) {
                             if confirmFinish {
                                 camera.rewindRoll()
                                 confirmFinish = false
@@ -346,16 +342,16 @@ struct RollViewer: View {
                     Text(confirmFinish
                          ? "\(camera.roll.title) ends at frame \(camera.roll.frames); the rest stays blank\(camera.roll.develop == .instant ? "." : ", and it goes to be developed.")"
                          : "New roll keeps \(camera.roll.title) part-shot, to come back to.")
-                        .font(.mono(9)).foregroundStyle(.secondary)
+                        .font(.system(size: 13)).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 let others = camera.openRolls()
                 if !others.isEmpty {
-                    Text("SWITCH TO").font(.mono(9, .semibold)).foregroundStyle(.secondary).padding(.top, 4)
+                    FieldLabel("Switch to").padding(.top, 4)
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 6) {
+                        HStack(spacing: 8) {
                             ForEach(others, id: \.number) { other in
-                                chip("\(other.title.uppercased()) · \(other.frames)/\(Roll.length)", selected: false) {
+                                chip("\(other.title) · \(other.frames)/\(Roll.length)", selected: false) {
                                     load(other.number)
                                 }
                             }
@@ -364,15 +360,12 @@ struct RollViewer: View {
                 }
             }
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text(camera.roll.frames > 0 ? "DEVELOP · FROM THE NEXT ROLL" : "DEVELOP")
-                    .font(.mono(9, .semibold)).foregroundStyle(.secondary)
-                HStack(spacing: 6) {
-                    ForEach(DevelopMode.allCases) { mode in
-                        chip(mode.label, selected: camera.developMode == mode) { camera.developMode = mode }
-                    }
-                }
-                .sensoryFeedback(.selection, trigger: camera.developMode)
+            VStack(alignment: .leading, spacing: 8) {
+                FieldLabel(camera.roll.frames > 0 ? "Develop · from the next roll" : "Develop")
+                ChoicePills(options: DevelopMode.allCases.map { ($0, sentenceCase($0.label)) },
+                            selection: Binding(get: { camera.developMode }, set: { camera.developMode = $0 }),
+                            accent: accent)
+                    .sensoryFeedback(.selection, trigger: camera.developMode)
             }
         }
     }
@@ -383,32 +376,31 @@ struct RollViewer: View {
         if ShareLinks.isConfigured, account.isSignedIn, let roll, !frames.isEmpty, shareRecord?.onProfile != true {
             HStack(spacing: 8) {
                 if waitingForProfile {
-                    Text("GOES ON YOUR PROFILE WHEN IT DEVELOPS")
-                        .font(.mono(9, .semibold)).foregroundStyle(accent)
+                    Text("Goes on your profile when it develops")
+                        .font(.system(size: 13, weight: .semibold)).foregroundStyle(accent)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
-                    chip("CANCEL", selected: false) {
+                    chip("Cancel", selected: false) {
                         RollShare.setWaitsForProfile(roll.number, false)
                         waitingForProfile = false
                     }
                 } else if let addingToProfile {
-                    chip("ADDING \(addingToProfile.done)/\(addingToProfile.total)", selected: true) {}
+                    chip("Adding \(addingToProfile.done)/\(addingToProfile.total)", selected: true) {}
                         .disabled(true)
                     Spacer(minLength: 0)
                 } else {
-                    chip("ADD TO PROFILE", selected: true) { addToProfile(roll) }
+                    chip("Add to profile", selected: true) { addToProfile(roll) }
                     Spacer(minLength: 0)
                 }
             }
         } else if let shareRecord, shareRecord.onProfile, let roll, !RollStore.pendingFrames(of: roll.number).isEmpty || roll.isOpen {
-            Text("NEW FRAMES JOIN IT ON YOUR PROFILE AS THEY DEVELOP")
-                .font(.mono(9)).foregroundStyle(.secondary)
+            FootnoteText("New frames join it on your profile as they develop.")
         }
     }
 
     private func addToProfile(_ roll: Roll) {
         guard account.me?.termsAccepted == true else {
-            camera.message = "OPEN YOUR PROFILE AND AGREE TO THE RULES FOR PUBLIC ROLLS FIRST"
+            camera.message = "Open your profile and agree to the rules for public rolls first."
             return
         }
         guard !developedFrames.isEmpty else {
@@ -425,7 +417,7 @@ struct RollViewer: View {
                 }
                 if roll.number == selected { shareRecord = record }
             } catch {
-                camera.message = error.localizedDescription.uppercased()
+                camera.message = error.localizedDescription
             }
             addingToProfile = nil
         }
@@ -440,21 +432,29 @@ struct RollViewer: View {
 
     private var cameraRollLine: String {
         let r = camera.roll
-        let name = r.title.uppercased()
-        guard r.frames > 0 else { return "\(name) · NEW, NOTHING SHOT YET" }
+        let name = r.title
+        guard r.frames > 0 else { return "\(name) · nothing shot yet" }
         return "\(name) · \(r.frames)/\(Roll.length)" + (r.film.map { " · \($0)" } ?? "")
     }
 
-    private func deleteChip(_ text: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(text)
-                .font(.mono(10, .bold))
-                .lineLimit(1)
-                .padding(.horizontal, 10).padding(.vertical, 7)
-                .background(Capsule().fill(Color.red.opacity(0.12)))
-                .foregroundStyle(Color(red: 1, green: 0.45, blue: 0.4))
+    /// Rename and delete, kept out of the way behind "…".
+    private func moreMenu(_ roll: Roll) -> some View {
+        Menu {
+            Button("Rename", systemImage: "pencil") { startRenaming(roll) }
+            if !frames.isEmpty {
+                Button("Delete roll", systemImage: "trash", role: .destructive) {
+                    withAnimation(.snappy(duration: 0.15)) { deleting = roll }
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 15, weight: .bold))
+                .frame(width: 36, height: 36)
+                .background(Circle().fill(ProfileStyle.button))
+                .foregroundStyle(.white)
+                .contentShape(Circle())
         }
-        .buttonStyle(.plain)
+        .accessibilityLabel("More for \(roll.title)")
     }
 
     // MARK: Rename a roll
@@ -469,36 +469,26 @@ struct RollViewer: View {
             Color.black.opacity(0.6).ignoresSafeArea()
                 .onTapGesture { withAnimation(.snappy(duration: 0.15)) { renaming = nil } }
             VStack(alignment: .leading, spacing: 12) {
-                Text("NAME THIS ROLL").font(.mono(15, .bold)).foregroundStyle(accent)
-                TextField("", text: $nameDraft,
-                          prompt: Text("E.G. BEACH DAY").foregroundStyle(Color(white: 0.4)))
-                    .font(.mono(14, .semibold))
-                    .foregroundStyle(.white)
-                    .autocorrectionDisabled()
-                    .submitLabel(.done)
-                    .onSubmit { saveName(target) }
-                    .padding(.horizontal, 14).padding(.vertical, 11)
-                    .background(Capsule().fill(Color(white: 0.17)))
+                cardTitle("Name this roll")
+                ProfileField(prompt: "e.g. Beach day", text: $nameDraft, capitalization: .sentences) { saveName(target) }
                     .onChange(of: nameDraft) { _, new in
                         if new.count > Roll.maxNameLength { nameDraft = String(new.prefix(Roll.maxNameLength)) }
                     }
-                Text("Its album in Photos becomes \"\(previewTitle(target))\". The name also goes on the roll's contact sheet and share card.")
-                    .font(.mono(10)).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                cardButton("SAVE", destructive: false) { saveName(target) }
+                cardDetail("Its album in Photos becomes \"\(previewTitle(target))\". The name also goes on the roll's contact sheet and share card.")
+                cardButton("Save", destructive: false) { saveName(target) }
                 if target.name != nil {
-                    cardButton("CLEAR NAME", destructive: false, quiet: true) {
+                    cardButton("Clear name", destructive: false, quiet: true) {
                         nameDraft = ""
                         saveName(target)
                     }
                 }
-                cardButton("CANCEL", destructive: false, quiet: true) {
+                cardButton("Cancel", destructive: false, quiet: true) {
                     withAnimation(.snappy(duration: 0.15)) { renaming = nil }
                 }
             }
             .padding(18)
-            .background(RoundedRectangle(cornerRadius: 18).fill(Color(white: 0.11)))
-            .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color(white: 0.2), lineWidth: 1))
+            .background(RoundedRectangle(cornerRadius: 20).fill(ProfileStyle.card))
+            .overlay(RoundedRectangle(cornerRadius: 20).stroke(ProfileStyle.divider, lineWidth: 1))
             .padding(.horizontal, 22)
             .padding(.top, 80)
         }
@@ -519,30 +509,28 @@ struct RollViewer: View {
     // MARK: Delete a roll
 
     private func deleteCard(_ target: Roll) -> some View {
-        let name = target.title.uppercased()
+        let name = target.title
         return ZStack {
             Color.black.opacity(0.6).ignoresSafeArea()
                 .onTapGesture { withAnimation(.snappy(duration: 0.15)) { deleting = nil } }
             VStack(alignment: .leading, spacing: 12) {
-                Text("DELETE \(name)?").font(.mono(15, .bold)).foregroundStyle(accent)
-                Text(deleteDetail(target))
-                    .font(.mono(10)).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                cardButton("DELETE FROM FILM EXPOSURES", destructive: false) {
+                cardTitle("Delete \(name)?")
+                cardDetail(deleteDetail(target))
+                cardButton("Delete from Film Exposures", destructive: false) {
                     camera.deleteRoll(target.number, deletingPhotos: false)
                     deleting = nil
                 }
-                cardButton("DELETE ROLL + ITS PHOTOS", destructive: true) {
+                cardButton("Delete roll and its photos", destructive: true) {
                     camera.deleteRoll(target.number, deletingPhotos: true)
                     deleting = nil
                 }
-                cardButton("CANCEL", destructive: false, quiet: true) {
+                cardButton("Cancel", destructive: false, quiet: true) {
                     withAnimation(.snappy(duration: 0.15)) { deleting = nil }
                 }
             }
             .padding(18)
-            .background(RoundedRectangle(cornerRadius: 18).fill(Color(white: 0.11)))
-            .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color(white: 0.2), lineWidth: 1))
+            .background(RoundedRectangle(cornerRadius: 20).fill(ProfileStyle.card))
+            .overlay(RoundedRectangle(cornerRadius: 20).stroke(ProfileStyle.divider, lineWidth: 1))
             .padding(.horizontal, 22)
         }
         .transition(.opacity)
@@ -555,20 +543,18 @@ struct RollViewer: View {
         return ZStack {
             Color.black.opacity(0.6).ignoresSafeArea().onTapGesture(perform: close)
             VStack(alignment: .leading, spacing: 12) {
-                Text("DEVELOP THIS PHOTO?").font(.mono(15, .bold)).foregroundStyle(accent)
-                Text(String(format: "Take a peek at frame %02d before the rest of the roll develops. ", frame)
-                     + "It only shows here, and goes into Photos with the roll when it develops \(roll.map(developWhen) ?? "on schedule"). Tap HIDE on it to cover it up again.")
-                    .font(.mono(10)).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                cardButton("DEVELOP IT", destructive: false) {
+                cardTitle("Develop this photo?")
+                cardDetail(String(format: "Take a peek at frame %02d before the rest of the roll develops. ", frame)
+                     + "It only shows here, and goes into Photos with the roll when it develops \(roll.map(developWhen) ?? "on schedule"). Tap Hide on it to cover it up again.")
+                cardButton("Develop it", destructive: false) {
                     if let number = selected { camera.setPeeking(roll: number, frame: frame, true) }
                     close()
                 }
-                cardButton("KEEP WAITING", destructive: false, quiet: true, action: close)
+                cardButton("Keep waiting", destructive: false, quiet: true, action: close)
             }
             .padding(18)
-            .background(RoundedRectangle(cornerRadius: 18).fill(Color(white: 0.11)))
-            .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color(white: 0.2), lineWidth: 1))
+            .background(RoundedRectangle(cornerRadius: 20).fill(ProfileStyle.card))
+            .overlay(RoundedRectangle(cornerRadius: 20).stroke(ProfileStyle.divider, lineWidth: 1))
             .padding(.horizontal, 22)
         }
         .transition(.opacity)
@@ -586,8 +572,8 @@ struct RollViewer: View {
         let stored = RollStore.frames(of: target.number)
         let waiting = RollStore.pendingFrames(of: target.number).count
         var lines = ["\(stored.count) \(stored.count == 1 ? "frame" : "frames"). Can't be undone."]
-        lines.append("DELETE FROM FILM EXPOSURES keeps the photos in Photos, in the album \"\(target.albumTitle)\".")
-        lines.append("DELETE ROLL + ITS PHOTOS also removes that album and its photos from Photos. iOS asks you to confirm.")
+        lines.append("Delete from Film Exposures keeps the photos in Photos, in the album \"\(target.albumTitle)\".")
+        lines.append("Delete roll and its photos also removes that album and its photos from Photos. iOS asks you to confirm.")
         if waiting > 0 {
             lines.append("\(waiting) \(waiting == 1 ? "frame hasn't" : "frames haven't") developed yet and will be lost.")
         }
@@ -597,30 +583,41 @@ struct RollViewer: View {
         return lines.joined(separator: "\n\n")
     }
 
+    private func cardTitle(_ text: String) -> some View {
+        Text(text).font(.system(size: 20, weight: .bold)).foregroundStyle(.white)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func cardDetail(_ text: String) -> some View {
+        Text(text).font(.system(size: 14)).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// A full-width button on an overlay card: the main action in orange, a destructive one
+    /// in red, a quiet one (Cancel) as plain grey text.
     private func cardButton(_ text: String, destructive: Bool, quiet: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(text)
-                .font(.mono(11, .bold))
+                .font(.system(size: 16, weight: .semibold))
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 11)
-                .background(Capsule().fill(destructive ? Color.red.opacity(0.16) : quiet ? .clear : Color(white: 0.17)))
-                .overlay(Capsule().stroke(destructive ? Color.red.opacity(0.6) : .clear, lineWidth: 1))
-                .foregroundStyle(destructive ? Color(red: 1, green: 0.45, blue: 0.4) : quiet ? Color(white: 0.55) : Color.white)
+                .padding(.vertical, 12)
+                .background(Capsule().fill(destructive ? Color.red.opacity(0.16) : quiet ? Color.clear : accent))
+                .foregroundStyle(destructive ? ProfileStyle.destructive : quiet ? Color(white: 0.6) : Color.black)
         }
         .buttonStyle(.plain)
     }
 
+    /// A compact pill: orange with black text when it's the main action or the chosen option.
     private func chip(_ text: String, selected: Bool, busy: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(text)
-                .font(.mono(10, .bold))
+                .font(.system(size: 14, weight: .semibold))
                 .lineLimit(1)
                 .opacity(busy ? 0 : 1)
-                .overlay { if busy { ProgressView().controlSize(.mini).tint(selected ? accent : .white) } }
-                .padding(.horizontal, 10).padding(.vertical, 7)
-                .background(Capsule().fill(selected ? accent.opacity(0.18) : Color(white: 0.15)))
-                .overlay(Capsule().stroke(selected ? accent : .clear, lineWidth: 1))
-                .foregroundStyle(selected ? accent : .white)
+                .overlay { if busy { ProgressView().controlSize(.small).tint(selected ? .black : .white) } }
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .background(Capsule().fill(selected ? accent : ProfileStyle.button))
+                .foregroundStyle(selected ? .black : .white)
         }
         .buttonStyle(.plain)
     }
@@ -628,32 +625,30 @@ struct RollViewer: View {
     // MARK: Share a roll as a link
 
     private func shareCard(_ target: Roll) -> some View {
-        let name = target.title.uppercased()
+        let name = target.title
         let count = developedFrames.count
         return ZStack {
             Color.black.opacity(0.6).ignoresSafeArea()
                 .onTapGesture { withAnimation(.snappy(duration: 0.15)) { confirmingShare = nil } }
             VStack(alignment: .leading, spacing: 12) {
-                Text("SHARE \(name)?").font(.mono(15, .bold)).foregroundStyle(accent)
-                Text("""
+                cardTitle("Share \(name)?")
+                cardDetail("""
                     Uploads its \(count) developed \(count == 1 ? "frame" : "frames") so anyone with the link can look through them, \
                     in Film Exposures or on the web, for \(RollShare.lifetimeDays) days. Unshare any time to delete them.
 
                     Only share photos you'd post publicly. Nudity, violence and hateful content are removed, and people can report or block you.
                     """)
-                    .font(.mono(10)).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                cardButton("SHARE ROLL", destructive: false) {
+                cardButton("Share roll", destructive: false) {
                     confirmingShare = nil
                     shareRoll(target)
                 }
-                cardButton("CANCEL", destructive: false, quiet: true) {
+                cardButton("Cancel", destructive: false, quiet: true) {
                     withAnimation(.snappy(duration: 0.15)) { confirmingShare = nil }
                 }
             }
             .padding(18)
-            .background(RoundedRectangle(cornerRadius: 18).fill(Color(white: 0.11)))
-            .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color(white: 0.2), lineWidth: 1))
+            .background(RoundedRectangle(cornerRadius: 20).fill(ProfileStyle.card))
+            .overlay(RoundedRectangle(cornerRadius: 20).stroke(ProfileStyle.divider, lineWidth: 1))
             .padding(.horizontal, 22)
         }
         .transition(.opacity)
@@ -807,8 +802,8 @@ private struct FramePager: View {
             .ignoresSafeArea()
 
             HStack(spacing: 10) {
-                Text(String(format: "ROLL %02d · FRAME %02d", roll, current))
-                    .font(.mono(11, .bold)).foregroundStyle(accent)
+                Text(String(format: "Roll %02d · Frame %02d", roll, current))
+                    .font(.system(size: 15, weight: .semibold).monospacedDigit()).foregroundStyle(.white)
                     .contentTransition(.numericText())
                 Spacer()
                 roundButton("square.and.arrow.up", label: "Share frame") {
