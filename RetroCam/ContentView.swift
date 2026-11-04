@@ -246,17 +246,8 @@ struct ContentView: View {
 
             Spacer(minLength: 0)
 
-            // Your profile: headshot and name for share cards.
-            Button { showingProfile = true } label: {
-                ProfileAvatar(photo: profile.photo, size: 40)
-                    .overlay(Circle().stroke(profile.photo == nil ? Color(white: 0.3) : accent.opacity(0.7), lineWidth: 1.5))
-                    .rotationEffect(.degrees(camera.uiRotation))
-                    .animation(.snappy(duration: 0.3), value: camera.uiRotation)
-                    .frame(width: 90, height: 44, alignment: .trailing)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(profile.name.isEmpty ? "Your profile" : "Your profile, \(profile.name)")
+            // Same width as the counter, so the film stays centred. (Your profile is by the shutter.)
+            Color.clear.frame(width: 90, height: 44)
         }
         .frame(height: 44)
     }
@@ -547,6 +538,11 @@ struct ContentView: View {
     private var lensPicker: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
+                chip("BACK", selected: !camera.isFrontCamera) { if camera.isFrontCamera { camera.flipCamera() } }
+                    .accessibilityLabel("Back camera")
+                chip("FRONT", selected: camera.isFrontCamera) { if !camera.isFrontCamera { camera.flipCamera() } }
+                    .accessibilityLabel("Front camera")
+                Rectangle().fill(Color(white: 0.25)).frame(width: 1, height: 20)
                 ForEach(camera.lenses) { option in
                     chip(option.name, selected: option == camera.lens) { camera.selectLens(option) }
                 }
@@ -556,6 +552,7 @@ struct ContentView: View {
         .edgeFade(Self.scrollInset)
         .padding(.horizontal, -Self.panelPadding)
         .sensoryFeedback(.selection, trigger: camera.lens)
+        .sensoryFeedback(.selection, trigger: camera.isFrontCamera)
     }
 
     private var borderWidthText: String { "\(Int((camera.borderWidth * 100).rounded()))%" }
@@ -1133,15 +1130,17 @@ struct ContentView: View {
 
             Spacer()
 
-            Button { camera.flipCamera() } label: {
-                Image(systemName: "arrow.triangle.2.circlepath.camera")
-                    .font(.system(size: 20))
+            // Your profile: headshot, people, sharing. (Front/back camera is in the LENS panel.)
+            Button { showingProfile = true } label: {
+                ProfileAvatar(photo: profile.photo, size: 56)
+                    .overlay(Circle().stroke(profile.photo == nil ? Color(white: 0.3) : accent.opacity(0.7), lineWidth: 1.5))
                     .rotationEffect(.degrees(camera.uiRotation))
                     .animation(.snappy(duration: 0.3), value: camera.uiRotation)
                     .frame(width: 56, height: 56)
-                    .background(Circle().fill(Color(white: 0.15)))
+                    .contentShape(Circle())
             }
-            .foregroundStyle(.white)
+            .buttonStyle(.plain)
+            .accessibilityLabel(profile.name.isEmpty ? "Your profile" : "Your profile, \(profile.name)")
         }
         .padding(.horizontal, 8)
     }
