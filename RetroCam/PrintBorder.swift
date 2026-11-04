@@ -86,8 +86,7 @@ enum PrintBorder {
         CIColor(red: r, green: g, blue: b, alpha: a, colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!)!
     }
 
-    /// The picture in a slide mount, as on filmexposures.com: a card (cream for colour
-    /// film, grey-white plastic for black & white) with rounded corners and a soft shadow,
+    /// The picture in a slide mount, as on filmexposures.com: a light grey card with rounded corners and a soft shadow,
     /// on near-black; the film's name and the frame number printed across the top; the
     /// picture in a window with softly rounded corners and a shadowed edge. The margins
     /// follow the window, so a wide format gets a wide mount.
@@ -110,14 +109,14 @@ enum PrintBorder {
         let canvas = CGRect(x: 0, y: 0, width: card.width + 2 * pad, height: card.height + 2 * pad)
         let window = CGRect(x: card.minX + side, y: card.minY + bottom, width: e.width, height: e.height)
 
-        let color = label?.color ?? true
-        let light = color ? srgb(0.925, 0.89, 0.81) : srgb(0.90, 0.898, 0.882)
-        let dark = color ? srgb(0.866, 0.82, 0.714) : srgb(0.812, 0.804, 0.78)
-        let ink = color ? srgb(0.227, 0.176, 0.122) : srgb(0.149, 0.149, 0.165)
-        let muted = color ? srgb(0.435, 0.376, 0.298) : srgb(0.365, 0.361, 0.353)
+        // A light grey mount for every film (the brand's neutral palette; no cream).
+        let light = srgb(0.93, 0.93, 0.93)
+        let dark = srgb(0.84, 0.84, 0.845)
+        let ink = srgb(0.16, 0.16, 0.17)
+        let muted = srgb(0.40, 0.40, 0.42)
 
         // Near-black behind, and the card's soft shadow.
-        var out = CIImage(color: srgb(0.06, 0.051, 0.047)).cropped(to: canvas)
+        var out = CIImage(color: srgb(0.071, 0.071, 0.071)).cropped(to: canvas)
         let cardRadius = Float(min(card.width, card.height) * 0.05)
         let shadow = CIFilter.roundedRectangleGenerator()
         shadow.extent = card.offsetBy(dx: 0, dy: -long * 0.012)
