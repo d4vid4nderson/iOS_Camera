@@ -21,26 +21,29 @@ enum FilmCodeCard {
         var avatar: UIImage?
     }
 
-    static func render(film: FilmStock, url: URL, photo: UIImage?, sharer: Sharer? = nil) -> UIImage? {
+    /// `style` picks LIGHT / DARK / SLIDE (the share card picker); nil keeps each layout's
+    /// own look (the photo card light, the tone card dark).
+    static func render(film: FilmStock, url: URL, photo: UIImage?, sharer: Sharer? = nil, style: CardStyle? = nil) -> UIImage? {
         guard let modules = modules(for: url.absoluteString) else { return nil }
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         format.opaque = true
         return UIGraphicsImageRenderer(size: size, format: format).image { ctx in
             if let photo {
-                drawPhotoCard(film: film, photo: photo, sharer: sharer, modules: modules, in: ctx.cgContext)
+                drawPhotoCard(film: film, photo: photo, sharer: sharer, modules: modules, style: style ?? .light, in: ctx.cgContext)
             } else {
-                drawToneCard(film: film, sharer: sharer, modules: modules, in: ctx.cgContext)
+                drawToneCard(film: film, sharer: sharer, modules: modules, style: style ?? .dark, in: ctx.cgContext)
             }
         }
     }
 
     // MARK: Layouts
 
-    private static func drawPhotoCard(film: FilmStock, photo: UIImage, sharer: Sharer?, modules: [[Bool]], in cg: CGContext) {
-        let background = Brand.paper
-        let ink = Brand.ink
-        let muted = Brand.mutedOnLight
+    private static func drawPhotoCard(film: FilmStock, photo: UIImage, sharer: Sharer?, modules: [[Bool]],
+                                      style: CardStyle, in cg: CGContext) {
+        let background = style.background
+        let ink = style.ink
+        let muted = style.muted
         let margin: CGFloat = 56
 
         background.setFill()
@@ -56,12 +59,27 @@ enum FilmCodeCard {
             frame.size.width = area.height * aspect
             frame.origin.x = area.midX - frame.width / 2
         }
-        cg.saveGState()
-        UIBezierPath(roundedRect: frame, cornerRadius: 20).addClip()
-        photo.draw(in: frame)
-        cg.restoreGState()
+        var bottom = frame.maxY
+        if style == .slide {
+            // The frame in a slide mount labelled with the film's name, filling the same area.
+            let mount = area
+            let window = style.drawMount(in: mount, label: film.name.uppercased(), context: cg)
+            cg.saveGState()
+            UIBezierPath(roundedRect: window, cornerRadius: window.width * 0.02).addClip()
+            let scale = max(window.width / photo.size.width, window.height / photo.size.height)
+            let drawn = CGSize(width: photo.size.width * scale, height: photo.size.height * scale)
+            photo.draw(in: CGRect(x: window.midX - drawn.width / 2, y: window.midY - drawn.height / 2,
+                                  width: drawn.width, height: drawn.height))
+            cg.restoreGState()
+            bottom = mount.maxY
+        } else {
+            cg.saveGState()
+            UIBezierPath(roundedRect: frame, cornerRadius: 20).addClip()
+            photo.draw(in: frame)
+            cg.restoreGState()
+        }
 
-        let textTop = frame.maxY + 52
+        let textTop = bottom + 52
         let maxWidth = size.width - 2 * margin
         let title = fitted(film.name, weight: .bold, size: 92, minSize: 54, width: maxWidth)
         draw(film.name, font: title, color: ink, at: CGPoint(x: margin - 3, y: textTop), kern: -title.pointSize * 0.02)
@@ -71,7 +89,7 @@ enum FilmCodeCard {
         let codeSide: CGFloat = 210
         let codeRect = CGRect(x: size.width - margin - codeSide, y: size.height - margin - codeSide,
                               width: codeSide, height: codeSide)
-        drawCode(modules, in: codeRect, ink: ink, paper: background, context: cg)
+        style.drawCode(modules, in: codeRect, context: cg)
 
         let mark = UIFont.systemFont(ofSize: 22, weight: .semibold)
         let markWidth = ("FILM EXPOSURES" as NSString).size(withAttributes: [.font: mark, .kern: 1]).width
@@ -79,7 +97,7 @@ enum FilmCodeCard {
             // Headshot + name, with the wordmark and the hint under the name.
             let side: CGFloat = 76
             let avatarRect = CGRect(x: margin, y: size.height - margin - side, width: side, height: side)
-            drawAvatar(sharer, in: avatarRect, fill: UIColor(white: 0.86, alpha: 1), initialsColor: ink)
+            drawAvatar(sharer, in: avatarRect, fill: style.avatarFill, initialsColor: ink)
             let x = avatarRect.maxX + 18
             let nameFont = UIFont.systemFont(ofSize: 28, weight: .semibold)
             let textHeight = nameFont.lineHeight + mark.lineHeight + 2
@@ -99,10 +117,10 @@ enum FilmCodeCard {
         }
     }
 
-    private static func drawToneCard(film: FilmStock, sharer: Sharer?, modules: [[Bool]], in cg: CGContext) {
-        let background = Brand.dark
-        let light = Brand.light
-        let muted = Brand.muted
+    private static func drawToneCard(film: FilmStock, sharer: Sharer?, modules: [[Bool]], style: CardStyle, in cg: CGContext) {
+        let background = style.background
+        let light = style.ink          // the text colour: light on DARK / SLIDE, near-black on LIGHT
+        let muted = style.muted
         let margin: CGFloat = 64
 
         background.setFill()
@@ -113,7 +131,7 @@ enum FilmCodeCard {
             // Headshot + name top left, the wordmark top right.
             let side: CGFloat = 64
             let avatarRect = CGRect(x: margin, y: 40, width: side, height: side)
-            drawAvatar(sharer, in: avatarRect, fill: UIColor(white: 0.22, alpha: 1), initialsColor: light)
+            drawAvatar(sharer, in: avatarRect, fill: style.avatarFill, initialsColor: light)
             if !sharer.name.isEmpty {
                 let nameFont = UIFont.systemFont(ofSize: 28, weight: .semibold)
                 draw(sharer.name, font: nameFont, color: light,
@@ -131,25 +149,39 @@ enum FilmCodeCard {
         draw(film.shareCaption, font: .systemFont(ofSize: 30, weight: .regular), color: muted,
              at: CGPoint(x: margin + 2, y: 340))
 
-        // Tone scale: an even grey ramp developed through the film.
+        // Tone scale: an even grey ramp developed through the film (in a slide mount on SLIDE).
         let tones = toneScale(for: film, steps: 11)
-        let gap: CGFloat = 6, top: CGFloat = 430, height: CGFloat = 150
-        let step = (size.width - 2 * margin - gap * CGFloat(tones.count - 1)) / CGFloat(tones.count)
+        var strip = CGRect(x: margin, y: 430, width: size.width - 2 * margin, height: 150)
+        if style == .slide {
+            strip = style.drawMount(in: CGRect(x: margin, y: 400, width: size.width - 2 * margin, height: 250),
+                                    label: "TONE SCALE", context: cg)
+        }
+        let gap: CGFloat = 6
+        let step = (strip.width - gap * CGFloat(tones.count - 1)) / CGFloat(tones.count)
         for (i, tone) in tones.enumerated() {
             tone.setFill()
-            UIBezierPath(roundedRect: CGRect(x: margin + CGFloat(i) * (step + gap), y: top, width: step, height: height),
-                         cornerRadius: 10).fill()
+            UIBezierPath(roundedRect: CGRect(x: strip.minX + CGFloat(i) * (step + gap), y: strip.minY, width: step, height: strip.height),
+                         cornerRadius: style == .slide ? 4 : 10).fill()
         }
-        draw("TONE SCALE", font: .systemFont(ofSize: 20, weight: .medium), color: muted,
-             at: CGPoint(x: margin, y: top + height + 16), kern: 1)
+        if style != .slide {
+            draw("TONE SCALE", font: .systemFont(ofSize: 20, weight: .medium), color: muted,
+                 at: CGPoint(x: margin, y: strip.maxY + 16), kern: 1)
+        }
 
-        // The code on a light tile (dark-on-light scans most reliably).
+        // The code on a light tile (dark-on-light scans most reliably); on LIGHT the tile
+        // gets an edge so it doesn't vanish into the paper.
         let tileSide: CGFloat = 520, codeSide: CGFloat = 400
         let tile = CGRect(x: (size.width - tileSide) / 2, y: 760, width: tileSide, height: tileSide)
-        light.setFill()
-        UIBezierPath(roundedRect: tile, cornerRadius: 44).fill()
+        let tilePath = UIBezierPath(roundedRect: tile, cornerRadius: 44)
+        Brand.light.setFill()
+        tilePath.fill()
+        if style == .light {
+            UIColor(white: 0, alpha: 0.12).setStroke()
+            tilePath.lineWidth = 2
+            tilePath.stroke()
+        }
         drawCode(modules, in: tile.insetBy(dx: (tileSide - codeSide) / 2, dy: (tileSide - codeSide) / 2),
-                 ink: background, paper: light, context: cg)
+                 ink: Brand.ink, paper: Brand.light, context: cg)
     }
 
     // MARK: Pieces

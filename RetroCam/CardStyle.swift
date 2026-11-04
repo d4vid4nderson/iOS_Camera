@@ -56,7 +56,7 @@ enum CardStyle: String, CaseIterable, Identifiable {
 
     /// A light grey slide mount filling `rect` (a light-to-dark sweep, rounded corners, an
     /// optional label printed across the wider top band). Returns the window inside it.
-    private func drawMount(in rect: CGRect, label: String? = nil, context cg: CGContext) -> CGRect {
+    func drawMount(in rect: CGRect, label: String? = nil, context cg: CGContext) -> CGRect {
         let side = min(rect.width, rect.height) * 0.11
         let mount = UIBezierPath(roundedRect: rect, cornerRadius: min(rect.width, rect.height) * 0.06)
         cg.saveGState()
