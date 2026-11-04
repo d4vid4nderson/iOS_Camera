@@ -1997,15 +1997,21 @@ function rollPage(roll, meta, url, env) {
   const film = meta.film.name ? ` · shot on ${esc(meta.film.name)}` : '';
   const store = storeURL(env);
   const get = storeBadge(esc(store), 'Get Film Exposures to see the whole roll.');
+  // A link to one frame (?frame=3, from sharing that frame in the app): that frame is the
+  // picture, on the page and in link previews.
+  const n = Number(url.searchParams.get('frame'));
+  const frame = Number.isInteger(n) && n >= 1 && n <= meta.frames ? n : null;
+  const picture = frame ? `${base}/${frameName(frame)}` : `${base}/card.jpg`;
+  const title = frame ? `Frame ${frame} of ${meta.title}` : meta.title;
   return layout({
-    title: `${meta.title} · ${who} on Film Exposures`,
+    title: `${title} · ${who} on Film Exposures`,
     description: `${meta.frames} frames${meta.film.name ? ` shot on ${meta.film.name}` : ''}. Open it in Film Exposures.`,
-    image: `${url.origin}${base}/card.jpg`, url: url.href, env, appArgument: url.href,
+    image: `${url.origin}${picture}`, url: url.href, env, appArgument: url.href,
     body: `
       ${whoLine}
-      <h1>${esc(meta.title)}</h1>
+      <h1>${esc(title)}</h1>
       <p class="muted">${frames}${film}</p>
-      <img class="card" src="${base}/card.jpg" alt="${esc(meta.title)}">
+      <img class="card" src="${picture}" alt="${esc(title)}">
       ${get}
       <a class="button" href="exposures://r/${meta.id}">Already have Film Exposures? Open the roll</a>
       <p class="small muted">Swipe through every frame and load the film it was shot on, right in the app.</p>

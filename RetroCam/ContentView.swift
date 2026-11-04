@@ -797,7 +797,7 @@ struct ContentView: View {
         Task {
             let card = await Task.detached(priority: .userInitiated) { FilmShare.card(for: film) }.value
             preparingShare = false
-            if let card { filmShare = ShareItems(items: [card.link], card: card) } else {
+            if let card { filmShare = ShareItems(items: [ShareCaption.text(.film, link: card.link)], card: card) } else {
                 camera.message = "This film couldn't be packed into a link."
             }
         }

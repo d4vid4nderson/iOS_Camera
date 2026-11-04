@@ -556,13 +556,9 @@ struct ProfileSheet: View {
         let developed = RollStore.frames(of: roll.number).filter { !RollStore.isPending(roll: roll.number, frame: $0) }
         let first = roll.cover.flatMap { developed.contains($0) ? $0 : nil } ?? developed.first
         let image = first.flatMap { UIImage(contentsOfFile: RollStore.thumbURL(roll: roll.number, frame: $0).path) }
-        return Color(white: 0.15)
-            .aspectRatio(3 / 4, contentMode: .fit)
-            .overlay {
-                if let image { Image(uiImage: image).resizable().scaledToFill() }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-            .contentShape(RoundedRectangle(cornerRadius: 6))
+        return PrintCell(aspect: 4 / 5, cornerRadius: 6) {
+            if let image { Image(uiImage: image).resizable().scaledToFit() }
+        }
     }
 
     private func loadRolls() {
@@ -740,8 +736,8 @@ struct ProfileSheet: View {
             // So the link you're about to send shows a fresh preview.
             await RollShare.uploadProfilePreview()
             makingCard = false
-            sharing = ShareItems(items: [me.url], activities: SendInAppActivity.forProfile(me.id),
-                                 card: content.map { c in CardShare(link: me.url) { ProfileCard.render(c, style: $0) } })
+            sharing = ShareItems(items: [ShareCaption.text(.profile, link: me.url)], activities: SendInAppActivity.forProfile(me.id),
+                                 card: content.map { c in CardShare(link: me.url, kind: .profile) { ProfileCard.render(c, style: $0) } })
         }
     }
 

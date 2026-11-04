@@ -218,16 +218,14 @@ struct UserProfileView: View {
                 ForEach(profile.rolls) { roll in
                     Button { opening = OpenRoll(id: roll.id) } label: {
                         VStack(alignment: .leading, spacing: 6) {
-                            Color(white: 0.1)
-                                .aspectRatio(3 / 4, contentMode: .fit)
-                                .overlay {
-                                    AsyncImage(url: roll.cover) { image in
-                                        image.resizable().scaledToFill()
-                                    } placeholder: {
-                                        Color(white: 0.1)
-                                    }
+                            // The whole cover print, any format, on a mat: every tile the same size.
+                            PrintCell(aspect: 4 / 5, cornerRadius: 10) {
+                                AsyncImage(url: roll.cover) { image in
+                                    image.resizable().scaledToFit()
+                                } placeholder: {
+                                    Color(white: 0.1)
                                 }
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                            }
                                 .overlay(alignment: .topTrailing) {
                                     if let audience = roll.audience.flatMap(Audience.init(rawValue:)), audience != .everyone {
                                         Image(systemName: audience.icon)
@@ -335,8 +333,8 @@ struct UserProfileView: View {
         Task {
             let content = await ProfileCard.content(for: profile)
             makingCard = false
-            sharing = ShareItems(items: [profile.url], activities: SendInAppActivity.forProfile(profile.id),
-                                 card: CardShare(link: profile.url) { ProfileCard.render(content, style: $0) })
+            sharing = ShareItems(items: [ShareCaption.text(.profile, link: profile.url)], activities: SendInAppActivity.forProfile(profile.id),
+                                 card: CardShare(link: profile.url, kind: .profile) { ProfileCard.render(content, style: $0) })
         }
     }
 

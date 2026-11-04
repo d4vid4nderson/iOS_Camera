@@ -185,11 +185,21 @@ struct RollViewer: View {
 
     // MARK: Contact sheet
 
+    /// The shape of this roll's prints (width ÷ height), from its first developed frame:
+    /// wide formats get landscape cells, two across.
+    private var printAspect: CGFloat? {
+        guard let number = selected,
+              let frame = frames.first(where: { !pending.contains($0) || peeking.contains($0) }) else { return nil }
+        return PrintLayout.aspect(ofImageAt: RollStore.thumbURL(roll: number, frame: frame))
+    }
+
     /// The roll as a contact sheet: three across, frame numbers under each print.
     /// Frames still developing show as blank, numbered spaces.
     private var contactSheet: some View {
-        ScrollView {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 3), spacing: 10) {
+        let shape = printAspect
+        let cell = PrintLayout.cellAspect(for: shape)
+        return ScrollView {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: PrintLayout.columns(for: shape)), spacing: 10) {
                 ForEach(frames, id: \.self) { frame in
                     let waiting = pending.contains(frame) && !peeking.contains(frame)
                     let peeked = pending.contains(frame) && peeking.contains(frame)
@@ -201,7 +211,7 @@ struct RollViewer: View {
                         }
                     } label: {
                         VStack(spacing: 4) {
-                            Group {
+                            PrintCell(aspect: cell) {
                                 if waiting {
                                     ZStack {
                                         Rectangle().fill(Color(white: 0.1))
@@ -212,11 +222,10 @@ struct RollViewer: View {
                                         }
                                     }
                                 } else {
-                                    LocalImage(url: RollStore.thumbURL(roll: selected ?? 0, frame: frame), fill: true)
+                                    // The whole print, border and all, whatever its format.
+                                    LocalImage(url: RollStore.thumbURL(roll: selected ?? 0, frame: frame), fill: false)
                                 }
                             }
-                            .aspectRatio(3 / 4, contentMode: .fit)
-                            .clipped()
                             .overlay(alignment: .topLeading) {
                                 if !waiting, frame == coverFrame {
                                     Text("Cover")
@@ -666,7 +675,7 @@ struct RollViewer: View {
                 }
                 uploading = nil
                 if roll.number == selected { shareRecord = record }
-                sharing = ShareItems(items: [card as Any?, record.url].compactMap { $0 },
+                sharing = ShareItems(items: [card as Any?, ShareCaption.text(.roll, link: record.url)].compactMap { $0 },
                                      activities: SendInAppActivity.forRoll(record.id),
                                      card: CardShare(link: record.url) { style in
                                          RollShare.card(for: roll, record: record, film: film, profile: profile, style: style)
@@ -682,7 +691,7 @@ struct RollViewer: View {
         guard let record = shareRecord else { return }
         let film = camera.film(ofRoll: roll.number)
         let profile = Profile.load()
-        sharing = ShareItems(items: [record.url], activities: SendInAppActivity.forRoll(record.id),
+        sharing = ShareItems(items: [ShareCaption.text(.roll, link: record.url)], activities: SendInAppActivity.forRoll(record.id),
                              card: CardShare(link: record.url) { style in
                                  RollShare.card(for: roll, record: record, film: film, profile: profile, style: style)
                              })
@@ -710,7 +719,9 @@ struct RollViewer: View {
                 ContactSheet.render(roll: roll, frames: frames)
             }.value
             makingSheet = false
-            if let image { sharing = ShareItems(items: [image]) }
+            if let image {
+                sharing = ShareItems(items: [image, ShareCaption.text(.contactSheet, link: RollShare.record(for: roll.number)?.url)])
+            }
         }
     }
 
@@ -808,7 +819,7 @@ private struct FramePager: View {
                 Spacer()
                 roundButton("square.and.arrow.up", label: "Share frame") {
                     if let image = UIImage(contentsOfFile: RollStore.frameURL(roll: roll, frame: current).path) {
-                        sharing = ShareItems(items: [image])
+                        sharing = ShareItems(items: [image, ShareCaption.text(.frame, link: RollShare.frameLink(roll: roll, frame: current))])
                     }
                 }
                 roundButton("xmark", label: "Close") { dismiss() }

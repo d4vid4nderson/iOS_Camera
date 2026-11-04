@@ -160,6 +160,8 @@ enum CardStyle: String, CaseIterable, Identifiable {
 /// A share card that can be drawn in any style, with the link it goes out with.
 struct CardShare {
     let link: URL
+    /// What it is, for the words shared with it (#filmexposures and the link).
+    var kind: ShareCaption.Kind = .roll
     let make: (CardStyle) -> UIImage?
 }
 
@@ -192,9 +194,9 @@ struct CardShareSheet: View {
     var body: some View {
         VStack(spacing: 18) {
             HStack {
-                Text("SHARE CARD").font(.mono(11, .bold)).foregroundStyle(.secondary)
+                Text("Share card").font(.system(size: 17, weight: .semibold)).foregroundStyle(.white)
                 Spacer()
-                Button("CANCEL") { dismiss() }.font(.mono(11, .bold)).foregroundStyle(Color(white: 0.6))
+                Button("Cancel") { dismiss() }.font(.system(size: 16, weight: .semibold)).foregroundStyle(accent)
             }
             Group {
                 if let image {
@@ -207,30 +209,18 @@ struct CardShareSheet: View {
                 }
             }
             .frame(maxHeight: .infinity)
-            HStack(spacing: 8) {
-                ForEach(CardStyle.allCases) { option in
-                    let on = option == style
-                    Button { styleName = option.rawValue } label: {
-                        Text(option.label).font(.mono(11, .bold))
-                            .frame(maxWidth: .infinity).padding(.vertical, 10)
-                            .background(Capsule().fill(on ? accent.opacity(0.18) : Color(white: 0.16)))
-                            .overlay(Capsule().stroke(on ? accent : .clear, lineWidth: 1))
-                            .foregroundStyle(on ? accent : .white)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(on ? .isSelected : [])
-                }
+            ChoicePills(options: CardStyle.allCases.map { ($0.rawValue, $0.rawValue.capitalized) },
+                        selection: $styleName, accent: accent)
+            Text(ShareCaption.text(card.kind, link: card.link))
+                .font(.system(size: 13)).foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityLabel("Posted with: \(ShareCaption.text(card.kind, link: card.link))")
+            PillButton(text: "Share", filled: true, accent: accent) {
+                sharing = ShareItems(items: [image as Any?, ShareCaption.text(card.kind, link: card.link)].compactMap { $0 },
+                                     activities: activities)
             }
-            Button {
-                sharing = ShareItems(items: [image as Any?, card.link].compactMap { $0 }, activities: activities)
-            } label: {
-                Text("SHARE").font(.mono(12, .bold))
-                    .frame(maxWidth: .infinity).padding(.vertical, 13)
-                    .background(Capsule().fill(accent))
-                    .foregroundStyle(.black)
-            }
-            .buttonStyle(.plain)
             .disabled(image == nil)
+            .opacity(image == nil ? 0.5 : 1)
         }
         .padding(20)
         .background(Color(white: 0.06).ignoresSafeArea())
@@ -239,5 +229,26 @@ struct CardShareSheet: View {
         .sheet(item: $sharing) { item in
             ActivityView(items: item.items, activities: item.activities).ignoresSafeArea()
         }
+    }
+}
+
+/// The words that go with anything shared outside the app: what it is, #filmexposures,
+/// and a link back to it (or to the app, when there's nothing to link to). Shared as text
+/// next to the picture; apps that keep text put it in the post.
+enum ShareCaption {
+    static let hashtag = "#filmexposures"
+
+    enum Kind { case roll, frame, contactSheet, profile, film }
+
+    static func text(_ kind: Kind, link: URL?) -> String {
+        let line: String
+        switch kind {
+        case .roll, .contactSheet: line = "A roll shot on Film Exposures \(hashtag)"
+        case .frame: line = "Shot on Film Exposures \(hashtag)"
+        case .profile: line = "My film photos on Film Exposures \(hashtag)"
+        case .film: line = "A film for Film Exposures. Tap to load it \(hashtag)"
+        }
+        let url = link ?? ShareLinks.base ?? URL(string: "https://\(ShareLinks.host)")
+        return [line, url?.absoluteString].compactMap { $0 }.joined(separator: "\n")
     }
 }
