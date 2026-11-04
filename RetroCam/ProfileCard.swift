@@ -9,6 +9,7 @@ enum ProfileCard {
     /// What the card shows, fetched once so it can be drawn in each style.
     struct Content {
         var name: String?
+        var handle: String?
         var avatar: UIImage?
         var rolls: Int
         var frames: Int
@@ -22,7 +23,7 @@ enum ProfileCard {
     }
 
     static func render(_ c: Content, style: CardStyle) -> UIImage? {
-        render(name: c.name, avatar: c.avatar, rolls: c.rolls, frames: c.frames, covers: c.covers, url: c.url, style: style)
+        render(name: c.name, handle: c.handle, avatar: c.avatar, rolls: c.rolls, frames: c.frames, covers: c.covers, url: c.url, style: style)
     }
 
     /// The headshot and the covers of the latest public rolls.
@@ -40,7 +41,7 @@ enum ProfileCard {
             return found.sorted { $0.0 < $1.0 }.map(\.1)
         }
         let frames = open.reduce(0) { $0 + $1.frames }
-        return Content(name: profile.name, avatar: await avatar, rolls: open.count, frames: frames, covers: covers, url: profile.url)
+        return Content(name: profile.name, handle: profile.handle, avatar: await avatar, rolls: open.count, frames: frames, covers: covers, url: profile.url)
     }
 
     private static func image(at url: URL?) async -> UIImage? {
@@ -49,7 +50,7 @@ enum ProfileCard {
         return UIImage(data: data)
     }
 
-    static func render(name: String?, avatar: UIImage?, rolls: Int, frames: Int,
+    static func render(name: String?, handle: String? = nil, avatar: UIImage?, rolls: Int, frames: Int,
                        covers: [UIImage], url: URL, style: CardStyle = .light) -> UIImage? {
         guard let modules = FilmCodeCard.modules(for: url.absoluteString) else { return nil }
         let background = style.background
@@ -69,7 +70,7 @@ enum ProfileCard {
             let shown = Array(covers.prefix(6))
             let width = size.width - 2 * margin
             let gap: CGFloat = 10
-            let gridHeight: CGFloat = 760
+            let gridHeight: CGFloat = 720
             if shown.isEmpty {
                 style.drawEmpty(in: CGRect(x: margin, y: margin, width: width, height: gridHeight), context: cg)
             } else {
@@ -89,22 +90,37 @@ enum ProfileCard {
                 }
             }
 
-            // Headshot, name and counts.
-            let textTop = margin + gridHeight + 44
-            let side: CGFloat = 120
+            // Headshot (large), then the name, the @handle in orange (what people search for and
+            // follow), and the counts, centred on the headshot.
+            let textTop = margin + gridHeight + 40
+            let side: CGFloat = 210
             let avatarRect = CGRect(x: margin, y: textTop, width: side, height: side)
             let displayName = (name?.isEmpty == false ? name! : "Film Exposures photographer")
             FilmCodeCard.drawAvatar(FilmCodeCard.Sharer(name: displayName, avatar: avatar), in: avatarRect,
                                     fill: style.avatarFill, initialsColor: ink)
-            let textX = avatarRect.maxX + 28
+            let textX = avatarRect.maxX + 32
             let textWidth = size.width - margin - textX
-            let nameFont = FilmCodeCard.fitted(displayName, weight: .bold, size: 72, minSize: 40, width: textWidth)
-            FilmCodeCard.draw(displayName, font: nameFont, color: ink,
-                              at: CGPoint(x: textX - 2, y: avatarRect.midY - nameFont.lineHeight + 6),
+            let nameFont = FilmCodeCard.fitted(displayName, weight: .bold, size: 64, minSize: 36, width: textWidth)
+            let at = handle.flatMap { $0.isEmpty ? nil : "@" + $0 }
+            var handleFont = UIFont.monospacedSystemFont(ofSize: 50, weight: .bold)
+            if let at {
+                while handleFont.pointSize > 28,
+                      (at as NSString).size(withAttributes: [.font: handleFont]).width > textWidth {
+                    handleFont = UIFont.monospacedSystemFont(ofSize: handleFont.pointSize - 2, weight: .bold)
+                }
+            }
+            let countsFont = UIFont.systemFont(ofSize: 28, weight: .regular)
+            let block = nameFont.lineHeight + (at == nil ? 0 : handleFont.lineHeight + 4) + 8 + countsFont.lineHeight
+            var y = avatarRect.midY - block / 2
+            FilmCodeCard.draw(displayName, font: nameFont, color: ink, at: CGPoint(x: textX - 2, y: y),
                               kern: -nameFont.pointSize * 0.02)
+            y += nameFont.lineHeight
+            if let at {
+                FilmCodeCard.draw(at, font: handleFont, color: Brand.orange, at: CGPoint(x: textX, y: y + 4))
+                y += handleFont.lineHeight + 4
+            }
             let counts = "\(rolls) \(rolls == 1 ? "roll" : "rolls")  ·  \(frames) \(frames == 1 ? "frame" : "frames")"
-            FilmCodeCard.draw(counts, font: .systemFont(ofSize: 29, weight: .regular), color: muted,
-                              at: CGPoint(x: textX, y: avatarRect.midY + 10))
+            FilmCodeCard.draw(counts, font: countsFont, color: muted, at: CGPoint(x: textX, y: y + 8))
 
             // The link's code, and the mark.
             let codeSide: CGFloat = 180
