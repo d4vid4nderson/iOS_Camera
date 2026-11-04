@@ -143,6 +143,7 @@ select,button,input,textarea{font:inherit;color:var(--fg)}
 .phone .covers small{font-size:calc(9*var(--u));color:#8e8e93;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:calc(6*var(--u))}
 .phone .covers em{position:absolute;top:calc(6*var(--u));right:calc(6*var(--u));width:calc(22*var(--u));height:calc(22*var(--u));border-radius:50%;background:rgba(0,0,0,.6);display:grid;place-items:center}
 .phone .covers em svg{width:calc(11*var(--u));height:calc(11*var(--u));stroke-width:2.2}
+@media (max-width:560px){.formats{grid-template-columns:1fr !important}.negs{--mm:.9}}
 @media (max-width:860px){.phones{grid-template-columns:1fr;gap:44px}}
 .shot{position:relative;margin:-6px -6px 0;border-radius:12px;overflow:hidden;background:#000;font-family:var(--mono)}
 .shot>img{width:100%;height:auto;aspect-ratio:3/2;object-fit:cover;display:block}
@@ -196,13 +197,24 @@ select,button,input,textarea{font:inherit;color:var(--fg)}
 .idea blockquote{margin:0;font-size:clamp(20px,2.6vw,26px);line-height:1.35;letter-spacing:-.01em;color:var(--fg)}
 .idea blockquote span{color:var(--accent)}
 .idea p{color:#c8c8c8;margin:0 0 12px}
-.formats{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;align-items:end}
-.format{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;justify-items:center;text-align:center}
-.format .pic{width:100%;border-radius:3px;overflow:hidden;background:#000;box-shadow:0 0 0 1px var(--line)}
-.format .pic img{width:100%;height:100%;object-fit:cover;display:block}
-.format b{font:700 13px/1 var(--mono);letter-spacing:.06em}
+.formats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:28px}
+.format{display:flex;flex-direction:column;gap:10px;padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--panel);min-width:0}
+.format .pic{display:grid;place-items:center;height:150px;background:#0b0b0b;border-radius:8px;padding:14px}
+.format .crop{overflow:hidden;border-radius:2px;box-shadow:0 0 0 1px #2e2e30}
+.format .crop img{width:100%;height:100%;object-fit:cover;display:block}
+.format .fmeta{display:flex;align-items:baseline;gap:10px}
+.format b{font:700 15px/1 var(--mono);letter-spacing:.06em}
 .format span{font:600 11px/1.3 var(--mono);color:var(--muted)}
-.format em{font:700 12px/1 var(--mono);font-style:normal;color:var(--accent)}
+.format time{margin-left:auto;font:700 12px/1 var(--mono);color:var(--accent);letter-spacing:.06em}
+.format h3{margin:2px 0 0;font:700 17px/1.25 -apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif;letter-spacing:-.01em;text-transform:none;color:var(--fg)}
+.format p{margin:0;color:#c8c8c8;font-size:14.5px;line-height:1.5;flex:1}
+.format em{font:700 11px/1 var(--mono);font-style:normal;color:var(--muted);letter-spacing:.08em}
+.negs{--mm:1.3;display:flex;flex-wrap:wrap;align-items:flex-end;gap:18px 26px;margin:26px 0 6px;padding:20px;border:1px dashed var(--line);border-radius:16px}
+.negs .neg{display:grid;justify-items:center;gap:6px;text-align:center}
+.negs .neg i{display:block;max-width:100%;border-radius:2px;background:linear-gradient(135deg,#3a3a3c,#1c1c1e);box-shadow:0 0 0 1px #4a4a4c}
+.negs .neg b{font:700 12px/1 var(--mono);letter-spacing:.06em}
+.negs .neg span{font:600 10px/1 var(--mono);color:var(--muted)}
+.negs p{flex-basis:100%;margin:0;font-size:13px;color:var(--muted)}
 .borders{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
 .border,.format,.steps li,.feature,.card3{min-width:0}
 .border{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;text-align:center;font:700 12px/1 var(--mono);letter-spacing:.08em;color:var(--muted)}
@@ -226,7 +238,7 @@ select,button,input,textarea{font:inherit;color:var(--fg)}
 .share3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
 .card3 .who{display:inline-flex;margin:0 0 12px;padding:6px 10px;border-radius:99px;font:700 11px/1 var(--mono);letter-spacing:.1em;background:var(--panel2);color:var(--fg)}
 .card3.on .who{background:rgba(232,118,46,.16);color:var(--accent)}
-@media (max-width:860px){.hero-grid,.idea{grid-template-columns:1fr}.phone{margin:8px 0 40px}.steps{grid-template-columns:repeat(2,minmax(0,1fr))}.formats{grid-template-columns:repeat(3,minmax(0,1fr));row-gap:22px}.tools,.share3{grid-template-columns:1fr}}
+@media (max-width:860px){.hero-grid,.idea{grid-template-columns:1fr}.phone{margin:8px 0 40px}.steps{grid-template-columns:repeat(2,minmax(0,1fr))}.formats{grid-template-columns:repeat(2,minmax(0,1fr))}.tools,.share3{grid-template-columns:1fr}}
 @media (max-width:520px){.steps,.features{grid-template-columns:1fr}.borders{grid-template-columns:repeat(2,minmax(0,1fr))}}
 /* The films, as 35mm slides in their mounts */
 .shelf{display:flex;align-items:center;gap:10px;font:700 11px/1 var(--mono);letter-spacing:.16em;color:var(--muted);text-transform:uppercase;margin:30px 0 14px}
@@ -455,11 +467,28 @@ export function homeBody(store) {
   const color = FILM_PREVIEWS.filter((f) => f.color).map(card).join('');
   const get = storeBadge(store);
   // A frame in each format, cut from the same sample photo.
+  // The formats in the order photography got them: the same photo cut to each, the year,
+  // what the format was and who made it popular. Facts only; no famous photographs.
   const formats = [
-    ['35MM', '3:2', 24, 3 / 2], ['6×4.5', '4:3', 36, 4 / 3], ['6×6', '1:1', 36, 1],
-    ['4×5', '5:4', 50, 5 / 4], ['16:9', '16:9', 24, 16 / 9], ['XPAN', '65:24', 24, 65 / 24],
-  ].map(([name, ratio, mp, r]) => `<div class="format"><div class="pic" style="aspect-ratio:${r}"><img src="/films/thumbs/golden100.jpg" alt="" loading="lazy" width="420" height="280"></div>
-<b>${name}</b><span>${ratio}</span><em>UP TO ${mp} MP</em></div>`).join('');
+    ['4×5', '5:4', 50, 5 / 4, '1880s', 'The sheet of film',
+      'One 4 × 5 inch sheet per picture, loaded into a holder behind a bellows camera. Newspaper photographers carried 4×5 press cameras like the Speed Graphic for decades, and landscape photographers still use it for its detail.'],
+    ['35MM', '3:2', 24, 3 / 2, '1925', 'Cinema film, turned sideways',
+      'Oskar Barnack built a small camera around 35mm movie film; Leitz sold it in 1925 as the Leica. Thirty-six 24 × 36 mm frames to a roll made it the camera of street photography and photojournalism, and of most family albums.'],
+    ['6×6', '1:1', 36, 1, '1929', 'The square',
+      'Twelve square frames on 120 roll film. The Rolleiflex twin-lens reflex (1929) and later the Hasselblad made it the format of studio portraits and fashion, and Hasselblads went to the Moon. Square photos came back on phones in 2010.'],
+    ['6×4.5', '4:3', 36, 4 / 3, '1975', 'More frames from medium format',
+      'Fifteen or sixteen frames from a roll of 120 instead of twelve, in a lighter camera. Cameras like the Mamiya 645 (1975) and Pentax 645 (1984) made it a favourite of wedding photographers, who needed to shoot more before reloading.'],
+    ['16:9', '16:9', 24, 16 / 9, '1980s', 'The screen',
+      'Not a film at all: television engineers picked 16:9 in the 1980s as the middle ground between old 4:3 TVs and wide cinema. It became the shape of HDTV, then of phones turned sideways.'],
+    ['XPAN', '65:24', 24, 65 / 24, '1998', 'A panorama on ordinary film',
+      'Panoramic cameras date back more than a century, but the Hasselblad XPAN and Fujifilm TX-1 (1998) put a 24 × 65 mm frame, nearly twice as wide as a normal one, on standard 35mm film, switchable mid-roll.'],
+  ].map(([name, ratio, mp, r, year, title, story]) => `<article class="format">
+<div class="pic"><div class="crop" style="aspect-ratio:${r};width:min(100%, calc(122px * ${r.toFixed(4)}))"><img src="/films/thumbs/golden100.jpg" alt="The same photo cut to ${name}" loading="lazy" width="420" height="280"></div></div>
+<div class="fmeta"><b>${name}</b><span>${ratio}</span><time>${year}</time></div>
+<h3>${title}</h3><p>${story}</p><em>UP TO ${mp} MP</em></article>`).join('');
+  // The film itself, to scale (1 mm = 1.3 px): why bigger formats hold more.
+  const sizes = [['35mm', 36, 24], ['6×4.5', 56, 42], ['6×6', 56, 56], ['XPAN', 65, 24], ['4×5', 120, 95]]
+    .map(([n, w, h]) => `<div class="neg"><i style="width:calc(${w}px * var(--mm));height:calc(${h}px * var(--mm))"></i><b>${n}</b><span>${w} × ${h} mm</span></div>`).join('');
   const border = (kind, label) => `<div class="border"><div class="print ${kind}">${kind === 'slide' ? '<i><span>CLASSIC 400</span><span>12</span></i>' : ''}<img src="/films/thumbs/classic400.jpg" alt="" loading="lazy" width="420" height="280"></div>${label}</div>`;
   const tags = (list) => `<div class="tags">${list.map((t) => `<span>${t}</span>`).join('')}</div>`;
   return `
@@ -575,9 +604,10 @@ ${filmViewer()}
 
 <section class="section">
 <p class="eyebrow">Formats &amp; resolution</p>
-<h2>From 35mm to a 4×5 sheet.</h2>
-<p class="lede">Crop as you shoot, like changing cameras: square 6×6, wide XPAN, or a big 4×5. Larger formats keep more of your iPhone's detail. Shoot in landscape or portrait.</p>
+<h2>Six formats, 140 years of photography.</h2>
+<p class="lede">Crop as you shoot, like changing cameras. Each format comes from a moment in photography's history, and the bigger the film was, the more of your iPhone's detail it keeps. Shoot in landscape or portrait.</p>
 <div class="formats">${formats}</div>
+<div class="negs" aria-label="The film each format used, to scale">${sizes}<p>The film each format was shot on, to scale.</p></div>
 <p class="muted small">The most each format keeps. What you get depends on your iPhone's camera: on a 48 MP camera a 4×5 frame comes out around 46 MP, and an older 12 MP camera gives less. Photos are saved in Display P3 colour.</p>
 </section>
 
