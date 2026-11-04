@@ -117,7 +117,9 @@ struct ChoicePills<Value: Hashable>: View {
 
     private var row: some View {
         HStack(spacing: 8) {
-            ForEach(options, id: \.0) { value, label in
+            ForEach(options.indices, id: \.self) { i in
+                let value = options[i].0
+                let label = options[i].1
                 Button {
                     withAnimation(.snappy(duration: 0.15)) { selection = value }
                 } label: {
