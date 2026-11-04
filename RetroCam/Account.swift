@@ -404,8 +404,8 @@ struct SignInButtons: View {
     var body: some View {
         if Account.ageLockedUntil != nil {
             // Someone here said they're under 13: no accounts on this phone until then.
-            Text("FILM EXPOSURES ACCOUNTS ARE FOR PEOPLE 13 AND OLDER. YOU CAN STILL USE THE CAMERA, AND YOUR ROLLS STAY ON THIS PHONE.")
-                .font(.mono(10, .semibold)).foregroundStyle(.secondary)
+            Text("Film Exposures accounts are for people 13 and older. You can still use the camera, and your rolls stay on this phone.")
+                .font(.system(size: 15)).foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
         } else {
