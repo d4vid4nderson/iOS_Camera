@@ -162,7 +162,7 @@ struct ProfileSheet: View {
             RollViewer(camera: camera, accent: accent, opensOnRoll: ref.number)
         }
         .sheet(item: $sharing) { item in
-            ActivityView(items: item.items, activities: item.activities).ignoresSafeArea()
+            ShareSheetView(item: item)
         }
         .fullScreenCover(item: $socialTab) { ref in
             SocialView(camera: camera, accent: accent, tab: ref.tab)
@@ -667,14 +667,15 @@ struct ProfileSheet: View {
     private func shareProfile(_ me: Account.Me) {
         makingCard = true
         Task {
-            var card: UIImage?
+            var content: ProfileCard.Content?
             if let remote = try? await RollShare.fetchProfile(id: me.id) {
-                card = await ProfileCard.make(for: remote)
+                content = await ProfileCard.content(for: remote)
             }
             // So the link you're about to send shows a fresh preview.
             await RollShare.uploadProfilePreview()
             makingCard = false
-            sharing = ShareItems(items: [card as Any?, me.url].compactMap { $0 }, activities: SendInAppActivity.forProfile(me.id))
+            sharing = ShareItems(items: [me.url], activities: SendInAppActivity.forProfile(me.id),
+                                 card: content.map { c in CardShare(link: me.url) { ProfileCard.render(c, style: $0) } })
         }
     }
 

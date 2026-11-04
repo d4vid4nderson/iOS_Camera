@@ -443,13 +443,14 @@ enum RollShare {
     }
 
     /// The card for a roll you've already shared, to share the link again.
-    static func card(for roll: Roll, record: Record, film: FilmStock?, profile: Profile) -> UIImage? {
+    static func card(for roll: Roll, record: Record, film: FilmStock?, profile: Profile, style: CardStyle = .light) -> UIImage? {
         let frames = RollStore.frames(of: roll.number).filter { !RollStore.isPending(roll: roll.number, frame: $0) }
         let thumbs = cardFrames(roll, from: frames).compactMap { UIImage(contentsOfFile: RollStore.thumbURL(roll: roll.number, frame: $0).path) }
         let showProfile = profile.showOnCards && !profile.isEmpty
         return RollCard.render(title: roll.title, filmName: film?.name ?? roll.film,
                                frameCount: frames.count, frames: Array(thumbs), url: record.url,
-                               sharer: showProfile ? FilmCodeCard.Sharer(name: profile.name, avatar: profile.photo) : nil)
+                               sharer: showProfile ? FilmCodeCard.Sharer(name: profile.name, avatar: profile.photo) : nil,
+                               style: style)
     }
 
     // MARK: Someone else's roll
