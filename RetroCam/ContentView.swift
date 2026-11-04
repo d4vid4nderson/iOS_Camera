@@ -159,7 +159,7 @@ struct ContentView: View {
             } else if let id = ShareLinks.rollID(from: url) {
                 showingPrint = false
                 incomingRoll = IncomingRoll(id: id)
-            } else if let id = ShareLinks.userID(from: url) {
+            } else if let id = ShareLinks.userID(from: url) ?? ShareLinks.userHandle(from: url) {
                 showingPrint = false
                 showingProfile = false
                 incomingUser = IncomingUser(id: id)

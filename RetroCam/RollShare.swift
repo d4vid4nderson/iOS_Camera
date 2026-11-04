@@ -401,7 +401,9 @@ enum RollShare {
 
     static func fetchProfile(id: String) async throws -> RemoteProfile {
         guard let base = ShareLinks.base else { throw ShareError.notConfigured }
-        let data = try await send(base.appendingPathComponent("u").appendingPathComponent(id).appendingPathComponent("profile.json"),
+        // An id (/u/<id>/profile.json) or a handle link's "@handle" (/@handle/profile.json).
+        let profileBase = id.hasPrefix("@") ? base.appendingPathComponent(id) : base.appendingPathComponent("u").appendingPathComponent(id)
+        let data = try await send(profileBase.appendingPathComponent("profile.json"),
                                   method: "GET", account: Account.sessionToken, notFound: "There's no profile here any more.")
         do {
             return try JSONDecoder().decode(RemoteProfile.self, from: data)

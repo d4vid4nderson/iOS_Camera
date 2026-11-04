@@ -993,12 +993,15 @@ struct ProfileScanner: View {
     let onFound: (String) -> Void
     @Environment(\.dismiss) private var dismiss
 
-    /// A profile id from a scanned or pasted link: https://filmexposures.com/u/<id> or exposures://u/<id>.
+    /// A profile from a scanned or pasted link: an id (https://filmexposures.com/u/<id> or
+    /// exposures://u/<id>) or "@handle" (https://filmexposures.com/@handle), which the
+    /// profile view looks up.
     static func profileID(in text: String) -> String? {
         var value = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard value.contains("/u/") else { return nil }
+        guard value.contains("/u/") || value.contains("/@") else { return nil }
         if !value.contains("://") { value = "https://" + value }
-        return URL(string: value).flatMap { ShareLinks.userID(from: $0) }
+        guard let url = URL(string: value) else { return nil }
+        return ShareLinks.userID(from: url) ?? ShareLinks.userHandle(from: url)
     }
 
     var body: some View {
