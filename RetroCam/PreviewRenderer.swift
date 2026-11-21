@@ -21,6 +21,9 @@ final class PreviewRenderer: NSObject, MTKViewDelegate {
     /// The phone is held on its side: the screen's long side is level, so a landscape
     /// frame runs along it.
     var sideways = false
+    /// Show the scene around the frame, dimmed, like a rangefinder's viewfinder: you see
+    /// what's about to walk into the picture, and the bright frame is what the photo keeps.
+    var showsSurroundings = true
     /// Fixed per-session seed for textured borders, so the live view does not flicker.
     private let borderSeed = UInt32.random(in: 0...UInt32.max)
 
@@ -84,7 +87,36 @@ final class PreviewRenderer: NSObject, MTKViewDelegate {
         picture = picture.transformed(by: CGAffineTransform(
             translationX: (bounds.width - picture.extent.width) / 2 - picture.extent.minX,
             y: (bounds.height - picture.extent.height) / 2 - picture.extent.minY))
-        image = picture.composited(over: CIImage(color: .black).cropped(to: bounds))
+        var base = CIImage(color: .black).cropped(to: bounds)
+        if showsSurroundings, frameRect != bounds {
+            // The rest of the scene, dimmed, behind the picture. Scaled with the picture when
+            // a border made it shrink, so the scene stays lined up across the frame's edge.
+            let center = CGPoint(x: bounds.midX, y: bounds.midY)
+            let around = image
+                .applyingFilter("CIColorMatrix", parameters: [
+                    "inputRVector": CIVector(x: 0.3, y: 0, z: 0, w: 0),
+                    "inputGVector": CIVector(x: 0, y: 0.3, z: 0, w: 0),
+                    "inputBVector": CIVector(x: 0, y: 0, z: 0.3, w: 0),
+                ])
+                .transformed(by: CGAffineTransform(translationX: -center.x, y: -center.y)
+                    .concatenating(CGAffineTransform(scaleX: fit, y: fit))
+                    .concatenating(CGAffineTransform(translationX: center.x, y: center.y)))
+                .cropped(to: bounds)
+            base = around.composited(over: base)
+        }
+        image = picture.composited(over: base)
+        if showsSurroundings, frameRect != bounds, border == .none {
+            // Thin frame lines round the picture, so its edge reads against the dim scene.
+            let edge = picture.extent
+            let t = max((target.width / 400).rounded(), 1)
+            let line = CIImage(color: CIColor(red: 1, green: 1, blue: 1, alpha: 0.6))
+            for strip in [CGRect(x: edge.minX, y: edge.maxY - t, width: edge.width, height: t),
+                          CGRect(x: edge.minX, y: edge.minY, width: edge.width, height: t),
+                          CGRect(x: edge.minX, y: edge.minY, width: t, height: edge.height),
+                          CGRect(x: edge.maxX - t, y: edge.minY, width: t, height: edge.height)] {
+                image = line.cropped(to: strip).composited(over: image)
+            }
+        }
 
         let destination = CIRenderDestination(
             width: Int(target.width),
