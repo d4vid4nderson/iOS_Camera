@@ -161,7 +161,7 @@ struct AccountSetup: View {
                         Text(name).font(.system(size: 20, weight: .bold)).foregroundStyle(.white).lineLimit(1)
                     }
                     if let handle = account.me?.handle {
-                        Text("@\(handle)").font(.mono(14, .bold)).foregroundStyle(accent).lineLimit(1)
+                        Text("@\(handle)").font(.system(size: 15, weight: .semibold)).foregroundStyle(accent).lineLimit(1)
                     }
                 }
             }
@@ -171,12 +171,20 @@ struct AccountSetup: View {
             ForEach(providerPhotos, id: \.self) { provider in
                 secondary("Use my \(provider.capitalized) photo") { useProviderPhoto(provider) }
             }
+            // The photo is the main action until there is one; then Done is.
             PhotosPicker(selection: $pickerItem, matching: .images) {
-                PillLabel(text: photo == nil ? "Choose from photos" : "Choose another", accent: accent)
+                PillLabel(text: photo == nil ? "Choose from photos" : "Choose another", filled: photo == nil, accent: accent)
             }
             .buttonStyle(.plain)
             .disabled(working)
-            primary(photo == nil ? "Skip for now" : "Done", enabled: !working, action: onDone)
+            if photo == nil {
+                Button("Skip for now", action: onDone)
+                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(Color(white: 0.6))
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .disabled(working)
+            } else {
+                primary("Done", enabled: !working, action: onDone)
+            }
         }
     }
 

@@ -188,7 +188,9 @@ struct CardShareSheet: View {
     @State private var sharing: ShareItems?
     @Environment(\.dismiss) private var dismiss
 
-    private let accent = Color(red: 0.91, green: 0.46, blue: 0.18)
+    @AppStorage(ShutterFinish.storageKey) private var finishRaw = ShutterFinish.copper.rawValue
+    /// The app's accent: the shutter finish you chose (copper unless you changed it).
+    private var accent: Color { (ShutterFinish(rawValue: finishRaw) ?? .copper).palette.accent }
     private var style: CardStyle { CardStyle(rawValue: styleName) ?? .light }
 
     var body: some View {

@@ -42,6 +42,8 @@ struct ProfileSheet: View {
     @State private var settingUp = false
     /// The EDIT PROFILE sheet: photo, name, username, card options and the account.
     @State private var editing = false
+    /// Sign out asks first (it also clears your account details from this phone).
+    @State private var confirmingSignOut = false
     /// The audience a roll was going to get when the rules had to be agreed to first.
     @State private var pendingAudience: (Audience, [String]) = (.everyone, [])
 
@@ -159,7 +161,7 @@ struct ProfileSheet: View {
                     .foregroundStyle(profile.name.isEmpty ? Color(white: 0.5) : .white)
                     .lineLimit(1).minimumScaleFactor(0.7)
                 if let username = account.me?.handle, account.isSignedIn {
-                    Text("@\(username)").font(.mono(13, .bold)).foregroundStyle(accent).lineLimit(1)
+                    Text("@\(username)").font(.system(size: 15, weight: .semibold)).foregroundStyle(accent).lineLimit(1)
                 }
                 Button { editing = true } label: {
                     Text("Edit profile").font(.system(size: 14, weight: .semibold))
@@ -191,6 +193,22 @@ struct ProfileSheet: View {
             .padding(20)
         }
         .scrollDismissesKeyboard(.interactively)
+        .overlay {
+            if confirmingSignOut {
+                ConfirmCard(title: "Sign out?",
+                            message: "Your rolls stay on this phone. Sign in again any time to get your profile back.",
+                            onCancel: { withAnimation(.snappy(duration: 0.15)) { confirmingSignOut = false } }) {
+                    DestructiveButton(text: "Sign out", icon: "rectangle.portrait.and.arrow.right") {
+                        confirmingSignOut = false
+                        editing = false
+                        Task { await account.signOut() }
+                    }
+                    PillButton(text: "Cancel", accent: accent) {
+                        withAnimation(.snappy(duration: 0.15)) { confirmingSignOut = false }
+                    }
+                }
+            }
+        }
         .presentationDetents([.large])
         .presentationBackground(ProfileStyle.background)
         .preferredColorScheme(.dark)
@@ -289,7 +307,7 @@ struct ProfileSheet: View {
                 }
                 .padding(.horizontal, 16).padding(.vertical, 13)
                 CardDivider()
-                actionRow("Sign out") { editing = false; Task { await account.signOut() } }
+                actionRow("Sign out") { withAnimation(.snappy(duration: 0.15)) { confirmingSignOut = true } }
                 CardDivider()
                 actionRow(confirmDeleteAccount ? "Tap again to delete your account" : "Delete account",
                           tint: ProfileStyle.destructive) {
