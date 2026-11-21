@@ -1,14 +1,8 @@
 import SwiftUI
 
-private extension Font {
-    static func mono(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
-        .system(size: size, weight: weight, design: .monospaced)
-    }
-}
-
-/// The first thing you see: sign in, then pick a @handle and a photo (AccountSetup),
-/// then the camera. The camera doesn't need an account (and App Review doesn't let an app
-/// insist on one for it), so you can go straight to the camera instead.
+/// The first thing you see: start shooting straight away (the camera needs no account, and
+/// App Review doesn't let an app insist on one for it), or sign in to share rolls, then pick
+/// a @username and a photo (AccountSetup).
 struct WelcomeView: View {
     let accent: Color
     /// Finished or skipped: on to the camera.
@@ -34,16 +28,16 @@ struct WelcomeView: View {
             Color(white: 0.06).ignoresSafeArea()
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    Text("FILM EXPOSURES").font(.mono(12, .bold)).foregroundStyle(accent)
+                    Text("Film Exposures").font(.system(size: 15, weight: .semibold)).foregroundStyle(accent)
                         .padding(.top, 24)
                     if (account.isSignedIn && account.needsSetup) || settingUp {
-                        Text("SET UP YOUR PROFILE").font(.mono(10, .semibold)).foregroundStyle(.secondary)
+                        FieldLabel("Set up your profile")
                         AccountSetup(accent: accent, onStart: { settingUp = true }, onRefused: { settingUp = false }) {
                             settingUp = false
                             onFinish()
                         }
                     } else {
-                        signIn
+                        start
                     }
                 }
                 .padding(.horizontal, 22)
@@ -54,58 +48,56 @@ struct WelcomeView: View {
         .interactiveDismissDisabled()
     }
 
-    private var signIn: some View {
+    /// The camera first (it needs no account), then signing in for sharing.
+    private var start: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("A film camera\nfor your iPhone.")
-                .font(.system(size: 34, weight: .bold))
+            Text("Share the roll,\nnot just the shot.")
+                .font(.system(size: 28, weight: .bold))
                 .foregroundStyle(.white)
                 .fixedSize(horizontal: false, vertical: true)
-            Text("Shoot rolls of 36, let them develop, and share them with the people you choose.")
-                .font(.mono(12)).foregroundStyle(.secondary)
+                .accessibilityAddTraits(.isHeader)
+            Text("A film camera for your iPhone: load a film, shoot a roll of 36, share the whole roll.")
+                .font(.system(size: 16)).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+            PillButton(text: "Start shooting", filled: true, accent: accent) {
+                UserDefaults.standard.set(true, forKey: Self.skipKey)
+                onFinish()
+            }
+            FootnoteText("Frames develop instantly. Prefer to wait? Choose Roll end or Next morning in your rolls.")
+
+            Divider().overlay(ProfileStyle.divider).padding(.vertical, 6)
+
+            Text("Sign in to share rolls").font(.system(size: 17, weight: .semibold)).foregroundStyle(.white)
+                .accessibilityAddTraits(.isHeader)
             VStack(alignment: .leading, spacing: 10) {
                 point("person.crop.circle", "Your profile: a @username, your name and photo.")
                 point("person.2", "Share rolls with friends, your followers or everyone.")
                 point("heart", "Follow photographers and like their frames.")
             }
-            .padding(.vertical, 4)
-            if let note {
-                Text(note).font(.mono(10, .semibold)).foregroundStyle(accent)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            SignInButtons(onError: { note = $0.uppercased() }, onSignedIn: {
+            if let note { NoteText(text: note, accent: accent) }
+            SignInButtons(onError: { note = $0 }, onSignedIn: {
                 note = nil
-                // A returning account with a handle goes straight to the camera; a new one
-                // picks its handle and photo first.
+                // A returning account with a username goes straight to the camera; a new one
+                // picks its username and photo first.
                 if !account.needsSetup { onFinish() }
             })
-            Button {
-                UserDefaults.standard.set(true, forKey: Self.skipKey)
-                onFinish()
-            } label: {
-                Text("USE THE CAMERA WITHOUT AN ACCOUNT")
-                    .font(.mono(10, .bold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .foregroundStyle(Color(white: 0.6))
+            FootnoteText("You can sign in later from your profile. Your rolls stay on this phone either way.")
+            HStack(spacing: 8) {
+                Link("Privacy", destination: URL(string: "https://filmexposures.com/privacy")!)
+                    .frame(minWidth: 44, minHeight: 44)
+                Link("Terms", destination: URL(string: "https://filmexposures.com/terms")!)
+                    .frame(minWidth: 44, minHeight: 44)
             }
-            .buttonStyle(.plain)
-            Text("You can sign in later from your profile. Your rolls stay on this phone either way.")
-                .font(.mono(9)).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 16) {
-                Link("PRIVACY", destination: URL(string: "https://filmexposures.com/privacy")!)
-                Link("TERMS", destination: URL(string: "https://filmexposures.com/terms")!)
-            }
-            .font(.mono(9, .semibold))
-            .tint(Color(white: 0.55))
+            .font(.system(size: 14, weight: .medium))
+            .tint(Color(white: 0.6))
         }
     }
 
     private func point(_ symbol: String, _ text: String) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: symbol).font(.system(size: 14, weight: .semibold)).foregroundStyle(accent).frame(width: 20)
-            Text(text).font(.mono(11)).foregroundStyle(.white).fixedSize(horizontal: false, vertical: true)
+            Image(systemName: symbol).font(.system(size: 15, weight: .semibold)).foregroundStyle(accent).frame(width: 22)
+                .accessibilityHidden(true)
+            Text(text).font(.system(size: 15)).foregroundStyle(.white).fixedSize(horizontal: false, vertical: true)
         }
     }
 }
