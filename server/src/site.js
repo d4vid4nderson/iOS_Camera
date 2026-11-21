@@ -497,8 +497,8 @@ export function homeBody(store) {
 <div>
   <img class="app-icon" src="/app-icon.png" alt="The Film Exposures app icon" width="104" height="104">
   <div class="counter">ROLL 01 <b>01/36</b></div>
-  <h1>A film camera<br>for your iPhone.</h1>
-  <p class="lede">Load a roll of 36, shoot it on a film you choose, and let it develop: right away, when the roll is done, or the next morning, like dropping it at a lab.</p>
+  <h1>Share the roll,<br>not just the shot.</h1>
+  <p class="lede">A film camera for your iPhone. Load a roll of 36 on a film you choose, shoot it, and share the whole roll with a few friends, your followers or everyone.</p>
   ${get}
 </div>
 <figure class="phone" aria-label="Film Exposures on an iPhone: the roll counter at 12 of 36, Golden 100 loaded, a 35mm frame in the viewfinder, the settings bar, the copper shutter and your profile">
@@ -526,7 +526,7 @@ export function homeBody(store) {
 
 <section class="section" id="how">
 <p class="eyebrow">How it works</p>
-<h2>Shoot a roll. Wait for it.</h2>
+<h2>Load. Shoot. Develop. Share.</h2>
 <p class="lede">Film Exposures works like the camera you'd load with film, with your iPhone's lenses behind it.</p>
 <ol class="steps">
   <li><b>01</b><h3>Load a roll</h3><p>Pick a film and how the roll develops. A roll is 36 frames. Keep several going, a food roll and a holiday roll, and switch between them.</p></li>

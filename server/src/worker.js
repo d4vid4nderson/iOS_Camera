@@ -2048,7 +2048,7 @@ function profilePage(profile, url, env) {
 function homePage(env) {
   return layout({
     title: 'Film Exposures · A film camera for your iPhone',
-    description: 'Shoot rolls of 36 on black & white and color films, develop them later, and share your films.',
+    description: 'Share the roll, not just the shot. Shoot rolls of 36 on black & white and color films, then share the whole roll with friends, followers or everyone.',
     image: 'https://filmexposures.com/og-image.png', url: 'https://filmexposures.com/',
     env, wide: true, body: homeBody(esc(storeURL(env))),
   });
