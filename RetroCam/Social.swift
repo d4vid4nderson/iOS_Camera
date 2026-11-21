@@ -206,6 +206,17 @@ enum Social {
 
 // MARK: Pieces
 
+extension RollShare {
+    /// Undo `block(_:)` on this phone. (Same list as `RollShare.block`; move next to it.)
+    static func unblock(_ sharer: String?) {
+        guard let sharer else { return }
+        let key = "share.blocked"
+        var blocked = UserDefaults.standard.stringArray(forKey: key) ?? []
+        blocked.removeAll { $0 == sharer }
+        UserDefaults.standard.set(blocked, forKey: key)
+    }
+}
+
 /// Someone's headshot, or their initial.
 struct PersonAvatar: View {
     let person: Social.Person
@@ -321,11 +332,17 @@ struct FollowButton: View {
     let accent: Color
     var onError: (String) -> Void = { _ in }
     var big = false
+    /// When set, tapping Following asks first (the caller shows a confirmation and unfollows).
+    var confirmUnfollow: (() -> Void)?
     @State private var working = false
 
     var body: some View {
         Button {
             guard !working else { return }
+            if status == "following", let confirmUnfollow {
+                confirmUnfollow()
+                return
+            }
             working = true
             let on = status == "none"
             Task {
