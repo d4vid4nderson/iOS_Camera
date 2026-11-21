@@ -24,6 +24,13 @@ final class PreviewRenderer: NSObject, MTKViewDelegate {
     /// Show the scene around the frame, dimmed, like a rangefinder's viewfinder: you see
     /// what's about to walk into the picture, and the bright frame is what the photo keeps.
     var showsSurroundings = true
+    /// The flat profile outside the frame (see `draw`). Saturation 0 is grey, 1 untouched;
+    /// contrast below 1 flattens toward mid-grey; level and lift dim it and raise its blacks.
+    static let surroundSaturation: CGFloat = 0.08
+    static let surroundContrast: CGFloat = 0.55
+    static let surroundBrightness: CGFloat = -0.06
+    static let surroundLevel: CGFloat = 0.55
+    static let surroundLift: CGFloat = 0.015
     /// Fixed per-session seed for textured borders, so the live view does not flicker.
     private let borderSeed = UInt32.random(in: 0...UInt32.max)
 
@@ -89,14 +96,23 @@ final class PreviewRenderer: NSObject, MTKViewDelegate {
             y: (bounds.height - picture.extent.height) / 2 - picture.extent.minY))
         var base = CIImage(color: .black).cropped(to: bounds)
         if showsSurroundings, frameRect != bounds {
-            // The rest of the scene, dimmed, behind the picture. Scaled with the picture when
-            // a border made it shrink, so the scene stays lined up across the frame's edge.
+            // The rest of the scene behind the picture, as a flat, faded "raw" profile: almost
+            // no colour, low contrast, lifted blacks and pulled-down highlights, a little
+            // darker. Nothing out here looks like the film, so the picture reads at a glance.
+            // Scaled with the picture when a border made it shrink, so the scene stays lined
+            // up across the frame's edge.
             let center = CGPoint(x: bounds.midX, y: bounds.midY)
             let around = image
+                .applyingFilter("CIColorControls", parameters: [
+                    kCIInputSaturationKey: Self.surroundSaturation,
+                    kCIInputContrastKey: Self.surroundContrast,
+                    kCIInputBrightnessKey: Self.surroundBrightness,
+                ])
                 .applyingFilter("CIColorMatrix", parameters: [
-                    "inputRVector": CIVector(x: 0.3, y: 0, z: 0, w: 0),
-                    "inputGVector": CIVector(x: 0, y: 0.3, z: 0, w: 0),
-                    "inputBVector": CIVector(x: 0, y: 0, z: 0.3, w: 0),
+                    "inputRVector": CIVector(x: Self.surroundLevel, y: 0, z: 0, w: 0),
+                    "inputGVector": CIVector(x: 0, y: Self.surroundLevel, z: 0, w: 0),
+                    "inputBVector": CIVector(x: 0, y: 0, z: Self.surroundLevel, w: 0),
+                    "inputBiasVector": CIVector(x: Self.surroundLift, y: Self.surroundLift, z: Self.surroundLift, w: 0),
                 ])
                 .transformed(by: CGAffineTransform(translationX: -center.x, y: -center.y)
                     .concatenating(CGAffineTransform(scaleX: fit, y: fit))
