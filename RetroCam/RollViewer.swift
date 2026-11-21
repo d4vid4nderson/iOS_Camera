@@ -83,6 +83,8 @@ struct RollViewer: View {
             if let target = renaming { renameCard(target) }
             if let target = confirmingShare { shareCard(target) }
         }
+        // Share, delete and profile errors land here: the camera's toast is behind this screen.
+        .cameraMessages(camera)
         .preferredColorScheme(.dark)
         .onAppear(perform: reload)
         .onChange(of: camera.rollsVersion) { _, _ in reload() }
@@ -382,7 +384,10 @@ struct RollViewer: View {
     /// Your public profile and this roll: add it (even while you're still shooting it; frames
     /// join it as they develop), or see that it's on there or waiting to develop.
     @ViewBuilder private var profileRow: some View {
-        if ShareLinks.isConfigured, account.isSignedIn, let roll, !frames.isEmpty, shareRecord?.onProfile != true {
+        // Only for rolls that aren't shared with anyone in particular (private or link-only):
+        // a roll shared with followers or chosen people mustn't become public by one tap.
+        if ShareLinks.isConfigured, account.isSignedIn, let roll, !frames.isEmpty,
+           shareRecord == nil || shareRecord?.shownAudience == .link {
             HStack(spacing: 8) {
                 if waitingForProfile {
                     Text("Goes on your profile when it develops")

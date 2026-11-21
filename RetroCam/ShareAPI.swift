@@ -52,7 +52,31 @@ enum ShareAPI {
         let message: String?
         /// A sentence meant for people (e.g. "That handle is taken."), when the server sends one.
         var reason: String? = nil
-        var errorDescription: String? { reason ?? "The share server said: \(message ?? "error \(status)")." }
+        var errorDescription: String? {
+            if let reason { return reason }
+            // Some refusals carry a sentence meant for people in `error` ("Sign in with Google
+            // could not be verified."); others a short code ("not your roll"). Show the first,
+            // never the second: fall back to what the status means.
+            if let message, message.first?.isUppercase == true, message.contains(" ") {
+                return message.hasSuffix(".") ? message : message + "."
+            }
+            return Self.plain(status)
+        }
+
+        /// What a refusal means, in words, when the server didn't say.
+        static func plain(_ status: Int) -> String {
+            switch status {
+            case 401: return "You're signed out. Sign in again from your profile."
+            case 403: return "That isn't allowed for your account."
+            case 404: return "That isn't there any more."
+            case 409: return "That changed while you were on it. Try again."
+            case 413: return "That's too big to upload."
+            case 415, 400: return "Something in that request wasn't right. Try again."
+            case 429: return "Too many tries. Wait a minute and try again."
+            case 500...599: return "Film Exposures is having trouble right now. Try again in a minute."
+            default: return "Something went wrong (error \(status)). Try again."
+            }
+        }
     }
 
     static func parseDate(_ string: String) -> Date? {

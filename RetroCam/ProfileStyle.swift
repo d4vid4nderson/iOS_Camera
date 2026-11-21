@@ -254,3 +254,39 @@ struct NoteText: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 }
+
+/// The camera's short messages ("Couldn't share…", "Roll 03 deleted") on a screen that
+/// covers the camera, such as the roll viewer: the camera's own toast is underneath it.
+/// Read out by VoiceOver, and cleared after a few seconds.
+struct CameraMessages: ViewModifier {
+    @ObservedObject var camera: CameraModel
+
+    func body(content: Content) -> some View {
+        content.overlay(alignment: .bottom) {
+            if let text = camera.message {
+                Text(text)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 16).padding(.vertical, 11)
+                    .background(RoundedRectangle(cornerRadius: 18).fill(Color(white: 0.2)))
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 28)
+                    .transition(.opacity)
+                    .allowsHitTesting(false)
+                    .task(id: text) {
+                        AccessibilityNotification.Announcement(text).post()
+                        try? await Task.sleep(for: .seconds(4))
+                        withAnimation { if camera.message == text { camera.message = nil } }
+                    }
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: camera.message)
+    }
+}
+
+extension View {
+    /// Show the camera's messages over this screen (see `CameraMessages`).
+    func cameraMessages(_ camera: CameraModel) -> some View { modifier(CameraMessages(camera: camera)) }
+}

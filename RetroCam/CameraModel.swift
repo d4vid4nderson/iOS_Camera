@@ -778,7 +778,8 @@ final class CameraModel: NSObject, ObservableObject {
             await previous?.value
             var developed: [String] = []
             var developedRolls: [Roll] = []
-            for stored in RollStore.rolls() where stored.isDeveloped() {
+            var failure: Error?
+            rolls: for stored in RollStore.rolls() where stored.isDeveloped() {
                 let waiting = RollStore.pendingFrames(of: stored.number)
                 guard !waiting.isEmpty else { continue }
                 for frame in waiting {
@@ -787,20 +788,33 @@ final class CameraModel: NSObject, ObservableObject {
                         _ = try await RollAlbums.save(jpeg, to: stored)
                         RollStore.clearPending(roll: stored.number, frame: frame)
                     } catch {
-                        await MainActor.run { self.message = error.localizedDescription }
-                        break   // keep the rest waiting; try again next time
+                        // Keep the rest waiting and try again next time. Only rolls whose
+                        // frames all reached Photos are announced as developed.
+                        failure = error
+                        break rolls
                     }
                 }
                 developed.append(stored.title.uppercased())
                 developedRolls.append(stored)
             }
+            if let failure {
+                let text = (failure as? CameraError).map { error -> String in
+                    if case .photosAccessDenied = error {
+                        return "Rolls can't develop without Photos access. Turn it on in Settings → Film Exposures → Photos."
+                    }
+                    return error.localizedDescription
+                } ?? "A roll couldn't develop: \(failure.localizedDescription)"
+                await MainActor.run { self.message = text }
+            }
+            let failed = failure != nil
             await MainActor.run {
                 developedRolls.forEach(self.syncShare)
                 self.rollsVersion += 1
                 guard !developed.isEmpty else { return }
                 self.lastPrint = RollStore.latestThumbnail()
                 let names = developed.joined(separator: ", ")
-                self.message = "\(names) \(developed.count == 1 ? "HAS" : "HAVE") DEVELOPED"
+                // A Photos problem matters more than the good news: keep that message up.
+                if !failed { self.message = "\(names) \(developed.count == 1 ? "HAS" : "HAVE") DEVELOPED" }
             }
         }
     }

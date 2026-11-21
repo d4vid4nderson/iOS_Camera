@@ -442,6 +442,9 @@ struct SocialView: View {
 
     @State private var feed: [Social.RollTile]?
     @State private var shared: [Social.RollTile]?
+    /// The last load of the feed, shared rolls or requests failed (offline, server trouble):
+    /// say so with a retry instead of showing an empty list.
+    @State private var loadFailed = false
     @State private var requests: [Social.Person]?
     @State private var query = ""
     @State private var results: [Social.Person] = []
@@ -513,6 +516,34 @@ struct SocialView: View {
     }
 
     @ViewBuilder private var content: some View {
+        if showsLoadError {
+            VStack(spacing: 16) {
+                Spacer(minLength: 0)
+                EmptyState(icon: "wifi.exclamationmark", title: "Couldn't load",
+                           detail: "Check your connection and try again.")
+                PillButton(text: "Try again", filled: true, accent: accent, fullWidth: false) {
+                    Task { await loadAll() }
+                }
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            tabContent
+        }
+    }
+
+    /// A failed load with nothing already on screen for this tab.
+    private var showsLoadError: Bool {
+        guard loadFailed else { return false }
+        switch tab {
+        case .feed: return feed?.isEmpty ?? true
+        case .shared: return (shared?.isEmpty ?? true) && sent.isEmpty
+        case .requests: return requests?.isEmpty ?? true
+        default: return false
+        }
+    }
+
+    @ViewBuilder private var tabContent: some View {
         switch tab {
         case .feed:
             rolls(feed, empty: CenteredEmpty(icon: "person.2", title: "Nothing here yet",
@@ -805,16 +836,18 @@ struct SocialView: View {
     }
 
     private func loadAll() async {
-        guard account.isSignedIn else { note = "Sign in from your profile first."; feed = []; shared = []; requests = []; return }
+        guard account.isSignedIn else { note = "Sign in from your profile first."; loadFailed = false; feed = []; shared = []; requests = []; return }
         async let f = try? Social.feed()
         async let s = try? Social.inbox()
         async let r = try? Social.requests()
         async let n = try? Social.sends()
         let (fv, sv, rv, nv) = await (f, s, r, n)
-        feed = fv ?? []
-        shared = sv ?? []
-        requests = rv ?? []
-        sent = nv ?? []
+        loadFailed = fv == nil || sv == nil || rv == nil || nv == nil
+        // Keep what was already showing when a refresh fails.
+        feed = fv ?? feed ?? []
+        shared = sv ?? shared ?? []
+        requests = rv ?? requests ?? []
+        sent = nv ?? sent
     }
 }
 

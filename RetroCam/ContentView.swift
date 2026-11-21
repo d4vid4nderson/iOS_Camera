@@ -100,7 +100,8 @@ struct ContentView: View {
             }
             .padding(.vertical, 8)
 
-            if let message = camera.message {
+            // While the roll viewer covers the camera, it shows (and reads out) messages itself.
+            if let message = camera.message, !showingPrint {
                 toast(message)
             }
 
@@ -1183,8 +1184,9 @@ struct ContentView: View {
         }
         .transition(.opacity)
         .task(id: text) {
+            AccessibilityNotification.Announcement(text).post()
             try? await Task.sleep(for: .seconds(3))
-            withAnimation { camera.message = nil }
+            withAnimation { if camera.message == text { camera.message = nil } }
         }
     }
 }
