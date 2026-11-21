@@ -234,6 +234,8 @@ struct PersonAvatar: View {
 struct PersonRow<Trailing: View>: View {
     let person: Social.Person
     var onOpen: (() -> Void)?
+    /// The @username's colour (the shutter finish).
+    var accent: Color = Color(uiColor: Brand.orange)
     @ViewBuilder var trailing: () -> Trailing
 
     var body: some View {
@@ -244,7 +246,7 @@ struct PersonRow<Trailing: View>: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(person.title).font(.system(size: 16, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
                         if let handle = person.handle {
-                            Text("@\(handle)").font(.system(size: 13)).foregroundStyle(.secondary).lineLimit(1)
+                            Text("@\(handle)").font(.system(size: 13, weight: .semibold)).foregroundStyle(accent).lineLimit(1)
                         }
                     }
                     Spacer(minLength: 0)
@@ -263,12 +265,13 @@ struct PersonRow<Trailing: View>: View {
 struct PeopleCard<Trailing: View>: View {
     let people: [Social.Person]
     var onOpen: ((Social.Person) -> Void)?
+    var accent: Color = Color(uiColor: Brand.orange)
     @ViewBuilder var trailing: (Social.Person) -> Trailing
 
     var body: some View {
         SettingsCard {
             ForEach(Array(people.enumerated()), id: \.element.id) { index, p in
-                PersonRow(person: p, onOpen: onOpen == nil ? nil : { onOpen?(p) }) { trailing(p) }
+                PersonRow(person: p, onOpen: onOpen == nil ? nil : { onOpen?(p) }, accent: accent) { trailing(p) }
                     .padding(.horizontal, 14)
                 if index < people.count - 1 {
                     CardDivider(inset: 68)
@@ -365,9 +368,36 @@ struct CloseCircle: View {
                 .font(.system(size: size * 0.4, weight: .bold))
                 .frame(width: size, height: size)
                 .background(Circle().fill(fill))
+                // Drawn at `size`, tappable at 44pt at least.
+                .frame(width: max(size, 44), height: max(size, 44))
+                .contentShape(Rectangle())
         }
         .foregroundStyle(.white)
         .accessibilityLabel("Close")
+    }
+}
+
+/// A round icon button, drawn at 32pt and tappable at 44pt: Approve and Decline in lists,
+/// dismissing a banner. Filled in the accent when it's the thing to do.
+struct IconCircleButton: View {
+    let icon: String
+    var filled = false
+    var accent: Color = Color(uiColor: Brand.orange)
+    let label: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .bold))
+                .frame(width: 32, height: 32)
+                .background(Circle().fill(filled ? accent : ProfileStyle.button))
+                .foregroundStyle(filled ? Color.black : Color.white)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 }
 
@@ -381,6 +411,7 @@ struct SearchField: View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
             TextField("", text: $text, prompt: Text(prompt).foregroundStyle(ProfileStyle.faint))
+                .accessibilityLabel(prompt)
                 .font(.system(size: 16))
                 .foregroundStyle(.white)
                 .textInputAutocapitalization(.never)
@@ -471,10 +502,17 @@ struct SocialView: View {
                     Spacer()
                     CloseCircle { dismiss() }
                 }
-                // The tabs scroll edge to edge, so the last one isn't cut off by the margin.
-                ScrollView(.horizontal, showsIndicators: false) {
-                    ChoicePills(options: Tab.allCases.map { ($0, tabLabel($0)) }, selection: $tab, accent: accent)
+                // The tabs scroll edge to edge, so the last one isn't cut off by the margin,
+                // and the chosen one is scrolled into view (People can open on Requests).
+                ScrollViewReader { reader in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(Tab.allCases, id: \.self) { t in tabPill(t).id(t) }
+                        }
                         .padding(.horizontal, 16)
+                    }
+                    .onAppear { reader.scrollTo(tab, anchor: .center) }
+                    .onChange(of: tab) { _, new in withAnimation { reader.scrollTo(new, anchor: .center) } }
                 }
                 .padding(.horizontal, -16)
                 if account.me?.handle == nil {
@@ -506,6 +544,25 @@ struct SocialView: View {
         .sheet(isPresented: $showingMyCode) {
             MyCodeSheet(accent: accent)
         }
+    }
+
+    /// One tab, in the look of `ChoicePills`.
+    private func tabPill(_ t: Tab) -> some View {
+        let on = tab == t
+        return Button {
+            withAnimation(.snappy(duration: 0.15)) { tab = t }
+        } label: {
+            Text(tabLabel(t))
+                .font(.system(size: 14, weight: .semibold))
+                .lineLimit(1)
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .background(Capsule().fill(on ? accent : ProfileStyle.button))
+                .foregroundStyle(on ? Color.black : Color.white)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 
     /// A tab's name, with how many are waiting (requests, things sent to you).
@@ -620,35 +677,43 @@ struct SocialView: View {
     /// A profile or roll someone sent you, at the top of Shared with you: follow or look,
     /// or dismiss it.
     private func sentBanner(_ item: Social.Sent) -> some View {
-        HStack(spacing: 10) {
-            if let profile = item.profile {
-                PersonAvatar(person: profile, size: 40)
-            } else if let roll = item.roll {
-                AsyncImage(url: roll.cover) { image in image.resizable().scaledToFill() } placeholder: { Color(white: 0.15) }
-                    .frame(width: 40, height: 40).clipShape(RoundedRectangle(cornerRadius: 8))
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                Text("\(item.from.title) sent you").font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
-                Text(item.profile.map { $0.handle.map { "@\($0)" } ?? $0.title } ?? (item.roll?.title ?? ""))
-                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
-            }
-            Spacer(minLength: 0)
-            if let profile = item.profile {
-                if (profile.status ?? "none") == "none" {
-                    SocialChip(text: "Follow", selected: true, accent: accent) { acceptFollow(item, profile) }
+        HStack(spacing: 6) {
+            // The banner itself opens what was sent, so the name gets the room.
+            Button {
+                if let profile = item.profile {
+                    person = IncomingUser(id: profile.id)
+                } else if let roll = item.roll {
+                    opening = OpenSocialRoll(id: roll.id)
                 }
-                SocialChip(text: "View", accent: accent) { person = IncomingUser(id: profile.id) }
-            } else if let roll = item.roll {
-                SocialChip(text: "View", selected: true, accent: accent) { opening = OpenSocialRoll(id: roll.id) }
-            }
-            Button { dismissSent(item) } label: {
-                Image(systemName: "xmark").font(.system(size: 11, weight: .bold)).foregroundStyle(Color(white: 0.6))
-                    .frame(width: 26, height: 26)
+            } label: {
+                HStack(spacing: 10) {
+                    if let profile = item.profile {
+                        PersonAvatar(person: profile, size: 40)
+                    } else if let roll = item.roll {
+                        AsyncImage(url: roll.cover) { image in image.resizable().scaledToFill() } placeholder: { Color(white: 0.15) }
+                            .frame(width: 40, height: 40).clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(item.from.title) sent you").font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
+                        if let profile = item.profile, let handle = profile.handle {
+                            Text("@\(handle)").font(.system(size: 15, weight: .semibold)).foregroundStyle(accent).lineLimit(1)
+                        } else {
+                            Text(item.profile?.title ?? item.roll?.title ?? "")
+                                .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Dismiss")
+            .accessibilityHint(item.profile != nil ? "Opens their profile" : "Opens the roll")
+            if let profile = item.profile, (profile.status ?? "none") == "none" {
+                SocialChip(text: "Follow", selected: true, accent: accent) { acceptFollow(item, profile) }
+            }
+            IconCircleButton(icon: "xmark", accent: accent, label: "Dismiss") { dismissSent(item) }
         }
-        .padding(12)
+        .padding(.leading, 12).padding(.trailing, 4).padding(.vertical, 6)
         .background(RoundedRectangle(cornerRadius: 14).fill(ProfileStyle.card))
     }
 
@@ -723,10 +788,11 @@ struct SocialView: View {
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 10) {
-                        PeopleCard(people: requests, onOpen: { p in person = IncomingUser(id: p.id) }) { p in
-                            HStack(spacing: 6) {
-                                SocialChip(text: "Approve", selected: true, accent: accent) { answer(p, accept: true) }
-                                SocialChip(text: "Decline", accent: accent) { answer(p, accept: false) }
+                        PeopleCard(people: requests, onOpen: { p in person = IncomingUser(id: p.id) }, accent: accent) { p in
+                            let who = p.handle.map { "@\($0)" } ?? p.title
+                            HStack(spacing: 0) {
+                                IconCircleButton(icon: "checkmark", filled: true, accent: accent, label: "Approve \(who)") { answer(p, accept: true) }
+                                IconCircleButton(icon: "xmark", accent: accent, label: "Decline \(who)") { answer(p, accept: false) }
                             }
                         }
                         FootnoteText("Followers see the rolls you share with your followers. You can remove a follower any time from their profile.")
@@ -804,7 +870,7 @@ struct SocialView: View {
 
     /// People with a Follow button each.
     private func peopleCard(_ list: [Social.Person]) -> some View {
-        PeopleCard(people: list, onOpen: { p in person = IncomingUser(id: p.id) }) { p in
+        PeopleCard(people: list, onOpen: { p in person = IncomingUser(id: p.id) }, accent: accent) { p in
             FollowButton(id: p.id, status: Binding(get: { statuses[p.id] ?? p.status ?? "none" }, set: { statuses[p.id] = $0 }),
                          accent: accent, onError: { note = $0 })
         }
@@ -886,7 +952,7 @@ struct PeopleListSheet: View {
                                                                 : "People \(mine ? "you follow" : "they follow") show up here.")
                 } else {
                     ScrollView {
-                        PeopleCard(people: people, onOpen: { p in person = IncomingUser(id: p.id) }) { p in
+                        PeopleCard(people: people, onOpen: { p in person = IncomingUser(id: p.id) }, accent: accent) { p in
                             if mine && which == "followers" {
                                 SocialChip(text: "Remove", accent: accent) { remove(p) }
                             }
@@ -943,6 +1009,7 @@ struct PeoplePicker: View {
                     Text(chosen.isEmpty ? "Pick people" : "\(chosen.count) chosen").font(.system(size: 13)).foregroundStyle(.secondary)
                 }
                 Spacer()
+                SocialChip(text: "Cancel", accent: accent) { dismiss() }
                 SocialChip(text: "Done", selected: true, accent: accent) {
                     onDone(Array(chosen))
                     dismiss()
@@ -966,12 +1033,12 @@ struct PeoplePicker: View {
                             .padding(.top, 4)
                     }
                     if !shown.isEmpty {
-                        PeopleCard(people: shown, onOpen: { p in toggle(p.id) }) { p in
-                            Image(systemName: chosen.contains(p.id) ? "checkmark.circle.fill" : "circle")
-                                .font(.system(size: 22))
-                                .foregroundStyle(chosen.contains(p.id) ? accent : Color(white: 0.4))
-                                .onTapGesture { toggle(p.id) }
-                                .accessibilityLabel(chosen.contains(p.id) ? "Chosen" : "Not chosen")
+                        // The whole row picks or unpicks someone.
+                        SettingsCard {
+                            ForEach(Array(shown.enumerated()), id: \.element.id) { index, p in
+                                if index > 0 { CardDivider(inset: 68) }
+                                pickRow(p)
+                            }
                         }
                     }
                 }
@@ -992,6 +1059,31 @@ struct PeoplePicker: View {
             known = all.filter { seen.insert($0.id).inserted }
             loading = false
         }
+    }
+
+    private func pickRow(_ p: Social.Person) -> some View {
+        let on = chosen.contains(p.id)
+        return Button { toggle(p.id) } label: {
+            HStack(spacing: 12) {
+                PersonAvatar(person: p, size: 42)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(p.title).font(.system(size: 16, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
+                    if let handle = p.handle {
+                        Text("@\(handle)").font(.system(size: 13, weight: .semibold)).foregroundStyle(accent).lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 0)
+                Image(systemName: on ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 22))
+                    .foregroundStyle(on ? accent : Color(white: 0.4))
+            }
+            .padding(.horizontal, 14).padding(.vertical, 9)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(p.handle.map { "\(p.title), @\($0)" } ?? p.title)
+        .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
     }
 
     private func toggle(_ id: String) {
@@ -1223,7 +1315,7 @@ struct SendSheet: View {
                                   detail: "You can send things to your followers.")
                 } else {
                     ScrollView {
-                        PeopleCard(people: shown, onOpen: { p in send(to: p) }) { p in
+                        PeopleCard(people: shown, onOpen: { p in send(to: p) }, accent: accent) { p in
                             SocialChip(text: sending == p.id ? "…" : "Send", selected: true, accent: accent) { send(to: p) }
                         }
                         .padding(.bottom, 16)

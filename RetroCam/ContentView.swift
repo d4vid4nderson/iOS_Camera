@@ -562,13 +562,15 @@ struct ContentView: View {
             Text("LOADING FILM…").font(.mono(13)).foregroundStyle(.secondary)
         case .unauthorized:
             VStack(spacing: 12) {
-                Text("Film Exposures needs camera access.").font(.mono(13))
+                Text("Film Exposures needs camera access to take photos.")
+                    .font(.system(size: 15)).multilineTextAlignment(.center)
                 Button("Open Settings") {
                     if let url = URL(string: UIApplication.openSettingsURLString) {
                         UIApplication.shared.open(url)
                     }
                 }
-                .font(.mono(13, .bold)).foregroundStyle(accent)
+                .font(.system(size: 15, weight: .semibold)).foregroundStyle(accent)
+                .frame(minHeight: 44)
             }
             .padding()
         case .failed(let reason):
@@ -888,7 +890,7 @@ struct ContentView: View {
                     smallChip("ADD TO MY FILMS", selected: true) {
                         camera.addSharedFilm(film)
                         incomingFilm = nil
-                        camera.message = "\(film.name) ADDED"
+                        camera.message = "\(film.name) added to your films."
                     }
                 }
             }
@@ -1200,9 +1202,12 @@ struct ContentView: View {
         VStack {
             Spacer()
             Text(text)
-                .font(.mono(12))
-                .padding(.horizontal, 14).padding(.vertical, 10)
-                .background(Capsule().fill(Color(white: 0.2)))
+                .font(.system(size: 14, weight: .medium))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 16).padding(.vertical, 11)
+                .background(RoundedRectangle(cornerRadius: 18).fill(Color(white: 0.2)))
+                .padding(.horizontal, 24)
                 .rotationEffect(.degrees(camera.uiRotation))
                 .padding(.bottom, 140)
         }
