@@ -17,6 +17,8 @@ struct UserProfileView: View {
     @State private var opening: OpenRoll?
     @State private var sharing: ShareItems?
     @State private var confirmingBlock = false
+    @State private var confirmingUnfollow = false
+    @State private var askingToSignIn = false
     @State private var reporting = false
     @State private var makingCard = false
     @State private var followStatus = "none"
@@ -32,7 +34,14 @@ struct UserProfileView: View {
             VStack(alignment: .leading, spacing: 16) {
                 header
                 if RollShare.isBlocked(uid) {
-                    centered("hand.raised", "You blocked this person")
+                    VStack(spacing: 16) {
+                        Spacer()
+                        EmptyState(icon: "hand.raised", title: "You blocked this person",
+                                   detail: "Unblock them to see their profile again. Following doesn't come back on its own.")
+                        PillButton(text: "Unblock", accent: accent, fullWidth: false) { unblock() }
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
                 } else if let profile {
                     if profile.rolls.isEmpty {
                         if isMe {
@@ -58,6 +67,8 @@ struct UserProfileView: View {
             .padding(.bottom, 8)
 
             if confirmingBlock { blockCard }
+            if confirmingUnfollow { unfollowCard }
+            if askingToSignIn { signInCard }
             if reporting { reportCard }
         }
         .preferredColorScheme(.dark)
@@ -104,12 +115,17 @@ struct UserProfileView: View {
                 stats(profile)
                 HStack(spacing: 10) {
                     if !isMe && account.isSignedIn && profile.relation != nil {
-                        FollowButton(id: uid, status: $followStatus, accent: accent, onError: { note = $0 }, big: true)
+                        FollowButton(id: uid, status: $followStatus, accent: accent, onError: { note = $0 }, big: true,
+                                     confirmUnfollow: { withAnimation(.snappy(duration: 0.15)) { confirmingUnfollow = true } })
+                    } else if !isMe && !account.isSignedIn {
+                        PillButton(text: "Sign in to follow", filled: true, accent: accent) {
+                            withAnimation(.snappy(duration: 0.15)) { askingToSignIn = true }
+                        }
                     }
                     if profile.relation?.askedYou == true && !isMe {
                         PillButton(text: "Approve", filled: true, accent: accent) { approve() }
                     }
-                    PillButton(text: makingCard ? "Making card…" : "Share profile", filled: isMe || !account.isSignedIn, accent: accent) {
+                    PillButton(text: makingCard ? "Making card…" : "Share profile", filled: isMe, accent: accent) {
                         shareProfile(profile)
                     }
                     .disabled(makingCard)
@@ -138,6 +154,8 @@ struct UserProfileView: View {
                 .frame(width: 34, height: 34)
                 .background(Circle().fill(Color(white: 0.16)))
                 .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .accessibilityLabel("More: report or block")
     }
@@ -254,77 +272,94 @@ struct UserProfileView: View {
         }
     }
 
-    // MARK: Block
+    // MARK: Block, unfollow, sign in, report
+
+    private var who: String {
+        profile?.handle.map { "@\($0)" } ?? profile?.name.flatMap { $0.isEmpty ? nil : $0 } ?? "this person"
+    }
 
     private var blockCard: some View {
-        let who = profile?.name.flatMap { $0.isEmpty ? nil : $0 } ?? "this person"
-        return ZStack {
-            Color.black.opacity(0.6).ignoresSafeArea()
-                .onTapGesture { withAnimation(.snappy(duration: 0.15)) { confirmingBlock = false } }
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Block \(who)?").font(.system(size: 20, weight: .bold)).foregroundStyle(.white)
-                Text("You won't see their profile or rolls they share. Following ends both ways, and they can't find you, follow you or share with you.")
-                    .font(.system(size: 14)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                cardButton("Block", destructive: true) {
-                    RollShare.block(uid)
-                    if account.isSignedIn { Task { try? await Social.block(uid, true) } }
-                    confirmingBlock = false
-                    dismiss()
-                }
-                cardButton("Cancel", quiet: true) { withAnimation(.snappy(duration: 0.15)) { confirmingBlock = false } }
+        ConfirmCard(title: "Block \(who)?",
+                    message: "You won't see their profile or rolls they share. Following ends both ways, and they can't find you, follow you or share with you.",
+                    onCancel: { withAnimation(.snappy(duration: 0.15)) { confirmingBlock = false } }) {
+            DestructiveButton(text: "Block", icon: "hand.raised") {
+                RollShare.block(uid)
+                if account.isSignedIn { Task { try? await Social.block(uid, true) } }
+                confirmingBlock = false
+                dismiss()
             }
-            .padding(18)
-            .background(RoundedRectangle(cornerRadius: 18).fill(ProfileStyle.card))
-            .overlay(RoundedRectangle(cornerRadius: 18).stroke(ProfileStyle.divider, lineWidth: 1))
-            .padding(.horizontal, 22)
+            PillButton(text: "Cancel", accent: accent) { withAnimation(.snappy(duration: 0.15)) { confirmingBlock = false } }
         }
-        .transition(.opacity)
+    }
+
+    private var unfollowCard: some View {
+        ConfirmCard(title: "Unfollow \(who)?",
+                    message: "Rolls they share with followers stop showing for you. To follow again, you'll need to ask again.",
+                    onCancel: { withAnimation(.snappy(duration: 0.15)) { confirmingUnfollow = false } }) {
+            DestructiveButton(text: "Unfollow", icon: "person.badge.minus") {
+                confirmingUnfollow = false
+                Task {
+                    do {
+                        followStatus = try await Social.follow(uid, false)
+                    } catch {
+                        note = error.localizedDescription
+                    }
+                }
+            }
+            PillButton(text: "Cancel", accent: accent) { withAnimation(.snappy(duration: 0.15)) { confirmingUnfollow = false } }
+        }
+    }
+
+    private var signInCard: some View {
+        ConfirmCard(title: "Sign in to follow",
+                    message: "Follow \(who) to see the rolls they share with followers. They approve every follow.",
+                    onCancel: { withAnimation(.snappy(duration: 0.15)) { askingToSignIn = false } }) {
+            SignInButtons(onError: { message in
+                askingToSignIn = false
+                note = message
+            }, onSignedIn: {
+                askingToSignIn = false
+                if account.needsSetup {
+                    note = "Finish setting up your profile (your age and a @username) to follow people."
+                }
+                Task { await load() }
+            })
+            PillButton(text: "Not now", accent: accent) { withAnimation(.snappy(duration: 0.15)) { askingToSignIn = false } }
+        }
+    }
+
+    private func unblock() {
+        RollShare.unblock(uid)
+        note = nil
+        Task {
+            if account.isSignedIn {
+                do { try await Social.block(uid, false) } catch { note = error.localizedDescription }
+            }
+            await load()
+        }
     }
 
     // MARK: Report
 
     private var reportCard: some View {
-        ZStack {
-            Color.black.opacity(0.6).ignoresSafeArea()
-                .onTapGesture { withAnimation(.snappy(duration: 0.15)) { reporting = false } }
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Report this person").font(.system(size: 20, weight: .bold)).foregroundStyle(.white)
-                Text("Tell us what's wrong. We review every report, and accounts that break the rules are removed.")
-                    .font(.system(size: 14)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                ForEach(["They may be under 13", "Pretending to be someone", "Hate or harassment", "Spam", "Something else"], id: \.self) { reason in
-                    cardButton(reason) {
-                        reporting = false
-                        Task {
-                            do {
-                                try await Social.report(uid, reason: reason)
-                                note = "Thanks. We'll take a look."
-                            } catch {
-                                note = error.localizedDescription
-                            }
+        ConfirmCard(title: "Report \(who)",
+                    message: "Tell us what's wrong. We review every report, and accounts that break the rules are removed.",
+                    onCancel: { withAnimation(.snappy(duration: 0.15)) { reporting = false } }) {
+            ForEach(["They may be under 13", "Pretending to be someone", "Hate or harassment", "Spam", "Something else"], id: \.self) { reason in
+                PillButton(text: reason, accent: accent) {
+                    reporting = false
+                    Task {
+                        do {
+                            try await Social.report(uid, reason: reason)
+                            note = "Thanks. We'll take a look."
+                        } catch {
+                            note = error.localizedDescription
                         }
                     }
                 }
-                cardButton("Cancel", quiet: true) { withAnimation(.snappy(duration: 0.15)) { reporting = false } }
             }
-            .padding(18)
-            .background(RoundedRectangle(cornerRadius: 18).fill(ProfileStyle.card))
-            .overlay(RoundedRectangle(cornerRadius: 18).stroke(ProfileStyle.divider, lineWidth: 1))
-            .padding(.horizontal, 22)
+            PillButton(text: "Cancel", accent: accent) { withAnimation(.snappy(duration: 0.15)) { reporting = false } }
         }
-        .transition(.opacity)
-    }
-
-    /// A full-width choice on the block and report cards: red to block, plain grey text to cancel.
-    private func cardButton(_ text: String, destructive: Bool = false, quiet: Bool = false, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(text)
-                .font(.system(size: 15, weight: .semibold))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(Capsule().fill(quiet ? Color.clear : destructive ? Color.red.opacity(0.16) : ProfileStyle.button))
-                .foregroundStyle(destructive ? ProfileStyle.destructive : quiet ? Color(white: 0.6) : .white)
-        }
-        .buttonStyle(.plain)
     }
 
     /// Share the profile as a card (latest roll covers, headshot, name, counts) with its link.

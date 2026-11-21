@@ -284,7 +284,8 @@ export async function route(request, env, now = Date.now()) {
 
   if ((m = path.match(/^\/r\/([A-Za-z0-9]{10})$/)) && method === 'GET') {
     const meta = await liveRoll(env, m[1], now);
-    if (!meta) return html(404, messagePage('This roll has expired or was unshared.', env));
+    if (!meta) return html(404, messagePage('This roll has expired or was unshared.', env,
+      'Shared rolls stay up for 30 days unless they’re on someone’s profile. Ask whoever sent it to share it again, or see what people are shooting on Film Exposures.'));
     // The web has no sign-in, so it only shows rolls that anyone may see.
     if (!isOpen(meta)) return html(404, messagePage('This roll is only for the people it was shared with. Open it in Film Exposures.', env));
     return html(200, rollPage(await rollPayload(env, meta, url, now), meta, url, env));
@@ -2054,9 +2055,11 @@ function homePage(env) {
   });
 }
 
-function messagePage(message, env) {
+function messagePage(message, env, detail = '') {
+  // Never a dead end: say what to do next, and link home.
   return layout({ title: 'Film Exposures', description: message, env, body: `
-    <p class="eyebrow">FILM EXPOSURES</p><h1>${esc(message)}</h1>${storeButton(env)}` });
+    <p class="eyebrow">FILM EXPOSURES</p><h1>${esc(message)}</h1>${detail ? `<p class="lede">${esc(detail)}</p>` : ''}${storeButton(env)}
+    <p><a href="/">See what Film Exposures does</a></p>` });
 }
 
 /// The App Store page: APP_STORE_ID (the app's Apple ID, from App Store Connect), or a full

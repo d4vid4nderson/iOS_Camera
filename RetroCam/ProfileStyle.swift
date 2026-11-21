@@ -290,3 +290,78 @@ extension View {
     /// Show the camera's messages over this screen (see `CameraMessages`).
     func cameraMessages(_ camera: CameraModel) -> some View { modifier(CameraMessages(camera: camera)) }
 }
+
+/// A destructive action (delete, block, sign out, make private): red text and a red outline
+/// with an icon, never a filled pill. With the Red shutter finish the main buttons are red
+/// too, so a delete must never look like them.
+struct DestructiveLabel: View {
+    let text: String
+    var icon: String? = "trash"
+    var fullWidth = true
+    var compact = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if let icon { Image(systemName: icon).font(.system(size: compact ? 13 : 14, weight: .semibold)) }
+            Text(text).lineLimit(1)
+        }
+        .font(.system(size: compact ? 14 : 15, weight: .semibold))
+        .frame(maxWidth: fullWidth ? .infinity : nil)
+        .padding(.horizontal, compact ? 14 : 18)
+        .padding(.vertical, compact ? 8 : 12)
+        .overlay(Capsule().stroke(ProfileStyle.destructive.opacity(0.85), lineWidth: 1.2))
+        .foregroundStyle(ProfileStyle.destructive)
+        .contentShape(Capsule())
+    }
+}
+
+struct DestructiveButton: View {
+    let text: String
+    var icon: String? = "trash"
+    var fullWidth = true
+    var compact = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            DestructiveLabel(text: text, icon: icon, fullWidth: fullWidth, compact: compact)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// The one design for confirmations and small forms over a screen (rename, delete, block,
+/// make private…): a dimmed backdrop that cancels on tap, a card with a title, an optional
+/// message and the actions (PillButton for the main one, DestructiveButton for a destructive
+/// one, a quiet "Cancel" PillButton last). Modal for VoiceOver.
+struct ConfirmCard<Actions: View>: View {
+    let title: String
+    var message: String?
+    let onCancel: () -> Void
+    @ViewBuilder var actions: Actions
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.6).ignoresSafeArea()
+                .onTapGesture(perform: onCancel)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 14) {
+                Text(title).font(.system(size: 20, weight: .bold)).foregroundStyle(.white)
+                    .accessibilityAddTraits(.isHeader)
+                if let message {
+                    Text(message).font(.system(size: 14)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                actions
+            }
+            .padding(20)
+            .background(RoundedRectangle(cornerRadius: 20).fill(ProfileStyle.card))
+            .overlay(RoundedRectangle(cornerRadius: 20).stroke(ProfileStyle.divider, lineWidth: 1))
+            .padding(.horizontal, 22)
+            .accessibilityElement(children: .contain)
+            .accessibilityAddTraits(.isModal)
+            .accessibilityAction(.escape, onCancel)
+        }
+        .transition(.opacity)
+    }
+}

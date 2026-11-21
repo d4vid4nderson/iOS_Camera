@@ -672,7 +672,7 @@ final class CameraModel: NSObject, ObservableObject {
             selectFilm(id: last)
         }
         rollsVersion += 1
-        message = "\(stored.title.uppercased()) LOADED · \(stored.frames)/\(Roll.length)"
+        message = "\(stored.title) loaded · \(stored.frames)/\(Roll.length)"
     }
 
     /// A number no roll has yet.
@@ -727,7 +727,7 @@ final class CameraModel: NSObject, ObservableObject {
             return
         }
         let name = (RollStore.rolls().first { $0.number == number }?.title
-                    ?? (number == roll.number ? roll.title : String(format: "Roll %02d", number))).uppercased()
+                    ?? (number == roll.number ? roll.title : String(format: "Roll %02d", number)))
         let previous = saveChain
         saveChain = Task {
             await previous?.value
@@ -742,7 +742,7 @@ final class CameraModel: NSObject, ObservableObject {
             do {
                 let removed = try await RollAlbums.remove(rollNumber: number, deletingPhotos: deletingPhotos)
                 if deletingPhotos {
-                    photosNote = removed == nil ? " (ITS PHOTOS WEREN'T FOUND IN PHOTOS)" : " AND ITS PHOTOS"
+                    photosNote = removed == nil ? " Its photos weren't found in Photos." : " Its photos were removed from Photos too."
                 }
             } catch {
                 await MainActor.run { self.message = "\(name) wasn't deleted: its photos weren't removed from Photos." }
@@ -758,7 +758,7 @@ final class CameraModel: NSObject, ObservableObject {
                 if number == self.roll.number, self.roll.frames > 0 { self.roll = Roll(number: self.freshRollNumber) }
                 self.rollsVersion += 1
                 self.lastPrint = RollStore.latestThumbnail()
-                self.message = "\(name)\(photosNote) DELETED"
+                self.message = "\(name) deleted.\(photosNote)"
             }
         }
     }
@@ -794,7 +794,7 @@ final class CameraModel: NSObject, ObservableObject {
                         break rolls
                     }
                 }
-                developed.append(stored.title.uppercased())
+                developed.append(stored.title)
                 developedRolls.append(stored)
             }
             if let failure {
@@ -814,7 +814,7 @@ final class CameraModel: NSObject, ObservableObject {
                 self.lastPrint = RollStore.latestThumbnail()
                 let names = developed.joined(separator: ", ")
                 // A Photos problem matters more than the good news: keep that message up.
-                if !failed { self.message = "\(names) \(developed.count == 1 ? "HAS" : "HAVE") DEVELOPED" }
+                if !failed { self.message = "\(names) \(developed.count == 1 ? "has" : "have") developed." }
             }
         }
     }

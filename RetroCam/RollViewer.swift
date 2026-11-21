@@ -36,6 +36,8 @@ struct RollViewer: View {
     @State private var uploading: (done: Int, total: Int)?
     @State private var shareRecord: RollShare.Record?
     @State private var unsharing = false
+    /// "Make private" / "Unshare" asks first: it takes the roll off your profile and kills the link.
+    @State private var confirmingPrivate = false
     @State private var renaming: Roll?
     /// A developing frame you tapped: asks before showing it early.
     @State private var developingEarly: Int?
@@ -82,6 +84,7 @@ struct RollViewer: View {
             if let frame = developingEarly { developEarlyCard(frame) }
             if let target = renaming { renameCard(target) }
             if let target = confirmingShare { shareCard(target) }
+            if confirmingPrivate, let roll { privateCard(roll) }
         }
         // Share, delete and profile errors land here: the camera's toast is behind this screen.
         .cameraMessages(camera)
@@ -127,6 +130,8 @@ struct RollViewer: View {
                     .font(.system(size: 14, weight: .bold))
                     .frame(width: 34, height: 34)
                     .background(Circle().fill(Color(white: 0.16)))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .foregroundStyle(.white)
             .accessibilityLabel("Close")
@@ -298,11 +303,11 @@ struct RollViewer: View {
                             }
                         }
                     }
-                    // Keeps its label (and its size) while the sheet prints: a longer label
-                    // got squeezed to "…" in this row and the pill turned into a circle.
-                    chip("Sheet", selected: !ShareLinks.isConfigured, busy: makingSheet) { shareContactSheet(roll) }
-                        .disabled(makingSheet)
-                        .accessibilityValue(makingSheet ? "Printing" : "")
+                    if !ShareLinks.isConfigured {
+                        // No share server: the contact sheet is the only way to share.
+                        chip("Share contact sheet", selected: true, busy: makingSheet) { shareContactSheet(roll) }
+                            .disabled(makingSheet)
+                    }
                 }
                 Spacer(minLength: 0)
                 if let roll, roll.isOpen, !isInCamera {
@@ -320,8 +325,10 @@ struct RollViewer: View {
                         .font(.system(size: 13, weight: .semibold)).foregroundStyle(audience.isShared ? accent : .secondary)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
-                    chip(unsharing ? "Unsharing…" : audience.isShared ? "Make private" : "Unshare", selected: false) { unshare() }
-                        .disabled(unsharing)
+                    chip(unsharing ? "Unsharing…" : audience.isShared ? "Make private" : "Unshare", selected: false) {
+                        withAnimation(.snappy(duration: 0.15)) { confirmingPrivate = true }
+                    }
+                    .disabled(unsharing)
                 }
             }
 
@@ -454,6 +461,11 @@ struct RollViewer: View {
     /// Rename and delete, kept out of the way behind "…".
     private func moreMenu(_ roll: Roll) -> some View {
         Menu {
+            if ShareLinks.isConfigured, !developedFrames.isEmpty {
+                // All the frames on one print, to post anywhere.
+                Button("Share contact sheet", systemImage: "square.grid.3x3") { shareContactSheet(roll) }
+                    .disabled(makingSheet)
+            }
             Button("Rename", systemImage: "pencil") { startRenaming(roll) }
             if !frames.isEmpty {
                 Button("Delete roll", systemImage: "trash", role: .destructive) {
@@ -461,12 +473,16 @@ struct RollViewer: View {
                 }
             }
         } label: {
-            Image(systemName: "ellipsis")
+            Group {
+                if makingSheet { ProgressView().controlSize(.small).tint(.white) }
+                else { Image(systemName: "ellipsis") }
+            }
                 .font(.system(size: 15, weight: .bold))
                 .frame(width: 36, height: 36)
                 .background(Circle().fill(ProfileStyle.button))
                 .foregroundStyle(.white)
-                .contentShape(Circle())
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .accessibilityLabel("More for \(roll.title)")
     }
@@ -479,34 +495,24 @@ struct RollViewer: View {
     }
 
     private func renameCard(_ target: Roll) -> some View {
-        ZStack(alignment: .top) {
-            Color.black.opacity(0.6).ignoresSafeArea()
-                .onTapGesture { withAnimation(.snappy(duration: 0.15)) { renaming = nil } }
-            VStack(alignment: .leading, spacing: 12) {
-                cardTitle("Name this roll")
-                ProfileField(prompt: "e.g. Beach day", text: $nameDraft, capitalization: .sentences) { saveName(target) }
-                    .onChange(of: nameDraft) { _, new in
-                        if new.count > Roll.maxNameLength { nameDraft = String(new.prefix(Roll.maxNameLength)) }
-                    }
-                cardDetail("Its album in Photos becomes \"\(previewTitle(target))\". The name also goes on the roll's contact sheet and share card.")
-                cardButton("Save", destructive: false) { saveName(target) }
-                if target.name != nil {
-                    cardButton("Clear name", destructive: false, quiet: true) {
-                        nameDraft = ""
-                        saveName(target)
-                    }
+        let close = { withAnimation(.snappy(duration: 0.15)) { renaming = nil } }
+        return ConfirmCard(title: "Name this roll",
+                           message: "Its album in Photos becomes \"\(previewTitle(target))\". The name also goes on the roll's contact sheet and share card.",
+                           onCancel: close) {
+            ProfileField(prompt: "e.g. Beach day", text: $nameDraft, capitalization: .sentences) { saveName(target) }
+                .accessibilityLabel("Roll name")
+                .onChange(of: nameDraft) { _, new in
+                    if new.count > Roll.maxNameLength { nameDraft = String(new.prefix(Roll.maxNameLength)) }
                 }
-                cardButton("Cancel", destructive: false, quiet: true) {
-                    withAnimation(.snappy(duration: 0.15)) { renaming = nil }
+            PillButton(text: "Save", filled: true, accent: accent) { saveName(target) }
+            if target.name != nil {
+                PillButton(text: "Clear name", accent: accent) {
+                    nameDraft = ""
+                    saveName(target)
                 }
             }
-            .padding(18)
-            .background(RoundedRectangle(cornerRadius: 20).fill(ProfileStyle.background))
-            .overlay(RoundedRectangle(cornerRadius: 20).stroke(ProfileStyle.divider, lineWidth: 1))
-            .padding(.horizontal, 22)
-            .padding(.top, 80)
+            cancelButton(close)
         }
-        .transition(.opacity)
     }
 
     private func previewTitle(_ target: Roll) -> String {
@@ -523,55 +529,34 @@ struct RollViewer: View {
     // MARK: Delete a roll
 
     private func deleteCard(_ target: Roll) -> some View {
-        let name = target.title
-        return ZStack {
-            Color.black.opacity(0.6).ignoresSafeArea()
-                .onTapGesture { withAnimation(.snappy(duration: 0.15)) { deleting = nil } }
-            VStack(alignment: .leading, spacing: 12) {
-                cardTitle("Delete \(name)?")
-                cardDetail(deleteDetail(target))
-                cardButton("Delete from Film Exposures", destructive: false) {
-                    camera.deleteRoll(target.number, deletingPhotos: false)
-                    deleting = nil
-                }
-                cardButton("Delete roll and its photos", destructive: true) {
-                    camera.deleteRoll(target.number, deletingPhotos: true)
-                    deleting = nil
-                }
-                cardButton("Cancel", destructive: false, quiet: true) {
-                    withAnimation(.snappy(duration: 0.15)) { deleting = nil }
-                }
+        let close = { withAnimation(.snappy(duration: 0.15)) { deleting = nil } }
+        return ConfirmCard(title: "Delete \(target.title)?", message: deleteDetail(target), onCancel: close) {
+            DestructiveButton(text: "Delete roll, keep photos", icon: "trash") {
+                camera.deleteRoll(target.number, deletingPhotos: false)
+                deleting = nil
             }
-            .padding(18)
-            .background(RoundedRectangle(cornerRadius: 20).fill(ProfileStyle.background))
-            .overlay(RoundedRectangle(cornerRadius: 20).stroke(ProfileStyle.divider, lineWidth: 1))
-            .padding(.horizontal, 22)
+            DestructiveButton(text: "Delete roll and photos", icon: "trash.fill") {
+                camera.deleteRoll(target.number, deletingPhotos: true)
+                deleting = nil
+            }
+            cancelButton(close)
         }
-        .transition(.opacity)
     }
 
     // MARK: Develop a frame early
 
     private func developEarlyCard(_ frame: Int) -> some View {
         let close = { withAnimation(.snappy(duration: 0.15)) { developingEarly = nil } }
-        return ZStack {
-            Color.black.opacity(0.6).ignoresSafeArea().onTapGesture(perform: close)
-            VStack(alignment: .leading, spacing: 12) {
-                cardTitle("Develop this photo?")
-                cardDetail(String(format: "Take a peek at frame %02d before the rest of the roll develops. ", frame)
-                     + "It only shows here, and goes into Photos with the roll when it develops \(roll.map(developWhen) ?? "on schedule"). Tap Hide on it to cover it up again.")
-                cardButton("Develop it", destructive: false) {
-                    if let number = selected { camera.setPeeking(roll: number, frame: frame, true) }
-                    close()
-                }
-                cardButton("Keep waiting", destructive: false, quiet: true, action: close)
+        return ConfirmCard(title: "Develop this frame?",
+                           message: String(format: "Take a peek at frame %02d before the rest of the roll develops. ", frame)
+                               + "It only shows here, and goes into Photos with the roll when it develops \(roll.map(developWhen) ?? "on schedule"). Tap Hide on it to cover it up again.",
+                           onCancel: close) {
+            PillButton(text: "Develop it", filled: true, accent: accent) {
+                if let number = selected { camera.setPeeking(roll: number, frame: frame, true) }
+                close()
             }
-            .padding(18)
-            .background(RoundedRectangle(cornerRadius: 20).fill(ProfileStyle.background))
-            .overlay(RoundedRectangle(cornerRadius: 20).stroke(ProfileStyle.divider, lineWidth: 1))
-            .padding(.horizontal, 22)
+            PillButton(text: "Keep waiting", accent: accent, action: close)
         }
-        .transition(.opacity)
     }
 
     private func developWhen(_ roll: Roll) -> String {
@@ -586,8 +571,8 @@ struct RollViewer: View {
         let stored = RollStore.frames(of: target.number)
         let waiting = RollStore.pendingFrames(of: target.number).count
         var lines = ["\(stored.count) \(stored.count == 1 ? "frame" : "frames"). Can't be undone."]
-        lines.append("Delete from Film Exposures keeps the photos in Photos, in the album \"\(target.albumTitle)\".")
-        lines.append("Delete roll and its photos also removes that album and its photos from Photos. iOS asks you to confirm.")
+        lines.append("Delete roll, keep photos leaves them in Photos, in the album \"\(target.albumTitle)\".")
+        lines.append("Delete roll and photos also removes that album and its photos from Photos. iOS asks you to confirm.")
         if waiting > 0 {
             lines.append("\(waiting) \(waiting == 1 ? "frame hasn't" : "frames haven't") developed yet and will be lost.")
         }
@@ -597,26 +582,31 @@ struct RollViewer: View {
         return lines.joined(separator: "\n\n")
     }
 
-    private func cardTitle(_ text: String) -> some View {
-        Text(text).font(.system(size: 20, weight: .bold)).foregroundStyle(.white)
-            .fixedSize(horizontal: false, vertical: true)
+    // MARK: Make a roll private
+
+    private func privateCard(_ roll: Roll) -> some View {
+        let close = { withAnimation(.snappy(duration: 0.15)) { confirmingPrivate = false } }
+        let shared = shareRecord?.shownAudience.isShared == true
+        return ConfirmCard(title: shared ? "Make \(roll.title) private?" : "Unshare \(roll.title)?",
+                           message: (shared ? "It comes off your profile and out of the people's Shared with you, and its link stops working."
+                                            : "Its link stops working for everyone you sent it to.")
+                               + " The uploaded photos are deleted from the server. Your roll stays on this phone.",
+                           onCancel: close) {
+            DestructiveButton(text: shared ? "Make private" : "Unshare", icon: "lock") {
+                confirmingPrivate = false
+                unshare()
+            }
+            cancelButton(close)
+        }
     }
 
-    private func cardDetail(_ text: String) -> some View {
-        Text(text).font(.system(size: 14)).foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-    }
-
-    /// A full-width button on an overlay card: the main action in orange, a destructive one
-    /// in red, a quiet one (Cancel) as plain grey text.
-    private func cardButton(_ text: String, destructive: Bool, quiet: Bool = false, action: @escaping () -> Void) -> some View {
+    /// Cancel on a confirmation card: quiet grey text, full width.
+    private func cancelButton(_ action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(text)
-                .font(.system(size: 16, weight: .semibold))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(Capsule().fill(destructive ? Color.red.opacity(0.16) : quiet ? Color.clear : accent))
-                .foregroundStyle(destructive ? ProfileStyle.destructive : quiet ? Color(white: 0.6) : Color.black)
+            Text("Cancel").font(.system(size: 16, weight: .semibold))
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .foregroundStyle(Color(white: 0.6))
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -639,33 +629,22 @@ struct RollViewer: View {
     // MARK: Share a roll as a link
 
     private func shareCard(_ target: Roll) -> some View {
-        let name = target.title
         let count = developedFrames.count
-        return ZStack {
-            Color.black.opacity(0.6).ignoresSafeArea()
-                .onTapGesture { withAnimation(.snappy(duration: 0.15)) { confirmingShare = nil } }
-            VStack(alignment: .leading, spacing: 12) {
-                cardTitle("Share \(name)?")
-                cardDetail("""
-                    Uploads its \(count) developed \(count == 1 ? "frame" : "frames") so anyone with the link can look through them, \
-                    in Film Exposures or on the web, for \(RollShare.lifetimeDays) days. Unshare any time to delete them.
+        let close = { withAnimation(.snappy(duration: 0.15)) { confirmingShare = nil } }
+        return ConfirmCard(title: "Share \(target.title)?",
+                           message: """
+                               Uploads its \(count) developed \(count == 1 ? "frame" : "frames") so anyone with the link can look through them, \
+                               in Film Exposures or on the web, for \(RollShare.lifetimeDays) days. Unshare any time to delete them.
 
-                    Only share photos you'd post publicly. Nudity, violence and hateful content are removed, and people can report or block you.
-                    """)
-                cardButton("Share roll", destructive: false) {
-                    confirmingShare = nil
-                    shareRoll(target)
-                }
-                cardButton("Cancel", destructive: false, quiet: true) {
-                    withAnimation(.snappy(duration: 0.15)) { confirmingShare = nil }
-                }
+                               Only share photos you'd post publicly. Nudity, violence and hateful content are removed, and people can report or block you.
+                               """,
+                           onCancel: close) {
+            PillButton(text: "Share roll", filled: true, accent: accent) {
+                confirmingShare = nil
+                shareRoll(target)
             }
-            .padding(18)
-            .background(RoundedRectangle(cornerRadius: 20).fill(ProfileStyle.background))
-            .overlay(RoundedRectangle(cornerRadius: 20).stroke(ProfileStyle.divider, lineWidth: 1))
-            .padding(.horizontal, 22)
+            cancelButton(close)
         }
-        .transition(.opacity)
     }
 
     private func shareRoll(_ roll: Roll) {

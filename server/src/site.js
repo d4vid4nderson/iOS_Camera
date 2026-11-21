@@ -47,6 +47,7 @@ h3{font:700 12px/1.3 var(--mono);letter-spacing:.1em;text-transform:uppercase;co
 .store-badge a:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .store-badge p{margin:0 0 10px}
 .store-badge.soon{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.store-badge.soon img{opacity:.45;filter:grayscale(1)}
 .store-badge.soon span{font:600 12px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
 .who{display:flex;align-items:center;gap:10px;margin-bottom:16px;font-weight:600;color:var(--fg);text-decoration:none}
 .profile-head{display:flex;align-items:center;gap:16px;margin-bottom:20px}.profile-head .avatar{width:72px;height:72px}

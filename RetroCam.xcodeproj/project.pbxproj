@@ -279,9 +279,9 @@
 				INFOPLIST_FILE = Config/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Film Exposures";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				INFOPLIST_KEY_NSCameraUsageDescription = "Film Exposures uses the camera to shoot your film photos.";
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Film Exposures saves your developed shots to your photo library.";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Film Exposures files each roll of film into its own album, inside a Film Exposures folder in Photos.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Film Exposures uses the camera to take your photos.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Film Exposures saves each developed frame to your photo library.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Film Exposures files each roll in its own album in Photos, renames albums when you rename a roll, and removes a roll's photos only when you ask it to.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -315,9 +315,9 @@
 				INFOPLIST_FILE = Config/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Film Exposures";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				INFOPLIST_KEY_NSCameraUsageDescription = "Film Exposures uses the camera to shoot your film photos.";
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Film Exposures saves your developed shots to your photo library.";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Film Exposures files each roll of film into its own album, inside a Film Exposures folder in Photos.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Film Exposures uses the camera to take your photos.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Film Exposures saves each developed frame to your photo library.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Film Exposures files each roll in its own album in Photos, renames albums when you rename a roll, and removes a roll's photos only when you ask it to.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

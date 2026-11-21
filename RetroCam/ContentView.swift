@@ -22,7 +22,7 @@ private enum SettingPanel: String, Identifiable {
         case .lens: return "LENS"
         case .exposure: return "EXPOSURE"
         case .grain: return "GRAIN"
-        case .border: return "FRAME"
+        case .border: return "FORMAT"
         }
     }
 
@@ -202,6 +202,15 @@ struct ContentView: View {
         }
     }
 
+    /// The develop setting's icon on the top plate: now, at the end of the roll, or overnight.
+    private var developSymbol: String {
+        switch camera.developMode {
+        case .instant: return "bolt.fill"
+        case .rollEnd: return "film"
+        case .nextMorning: return "sunrise.fill"
+        }
+    }
+
     private func toggle(_ panel: SettingPanel) {
         withAnimation(.snappy(duration: 0.25)) {
             openPanel = openPanel == panel ? nil : panel
@@ -224,12 +233,20 @@ struct ContentView: View {
                     Text(String(format: "%02d", camera.framesShot) + "/\(CameraModel.rollLength)")
                         .font(.mono(15, .bold)).foregroundStyle(accent)
                         .contentTransition(.numericText())
+                    // How this roll develops (changed in the roll viewer this opens).
+                    HStack(spacing: 3) {
+                        Image(systemName: developSymbol).font(.system(size: 7, weight: .bold))
+                        Text(camera.developMode.label).font(.mono(8, .semibold))
+                    }
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                 }
-                .frame(width: 90, height: 44, alignment: .leading)
+                .frame(width: 96, height: 48, alignment: .leading)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("\(camera.roll.title), frame \(camera.framesShot) of \(CameraModel.rollLength)")
+            .accessibilityLabel("\(camera.roll.title), frame \(camera.framesShot) of \(CameraModel.rollLength), develops \(camera.developMode.label.lowercased())")
             .accessibilityHint("Open this roll")
             // Hidden: long-press for a camera-orientation readout (for bug reports).
             .simultaneousGesture(LongPressGesture(minimumDuration: 0.8).onEnded { _ in camera.showDiagnostics.toggle() })
@@ -384,13 +401,13 @@ struct ContentView: View {
                           majorEvery: 3, accent: accent,
                           label: { v in abs(v) < 0.01 ? "0" : String(format: "%+.0f", v.rounded()) },
                           spoken: { v in String(format: "%+.1f stops", v) },
-                          onChange: { camera.setExposure(Float($0)) })
+                          onChange: { camera.setExposure(Float($0)) }, name: "Exposure")
             case .grain:
                 ScrubDial(value: camera.grainLevel, range: 0...2, step: 0.1,
                           majorEvery: 5, accent: accent,
                           label: { v in v < 0.01 ? "OFF" : "\(Int((v * 100).rounded()))" },
                           spoken: { v in v == 0 ? "Off" : "\(Int(v * 100)) percent" },
-                          onChange: { camera.setGrainLevel($0) })
+                          onChange: { camera.setGrainLevel($0) }, name: "Grain")
             case .border: borderPicker
             }
         }
@@ -425,11 +442,12 @@ struct ContentView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .background(Capsule().fill(selected ? accent.opacity(0.18) : Color(white: 0.17)))
-            .overlay(Capsule().stroke(selected ? accent : .clear, lineWidth: 1.2))
-            .foregroundStyle(selected ? accent : .white)
+            // Chosen: black on the accent, so it reads on any finish and over a bright scene.
+            .background(Capsule().fill(selected ? accent : Color(white: 0.17)))
+            .foregroundStyle(selected ? .black : .white)
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private func chip(_ text: String, selected: Bool, action: @escaping () -> Void) -> some View {
@@ -438,11 +456,11 @@ struct ContentView: View {
                 .font(.mono(12, .bold))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
-                .background(Capsule().fill(selected ? accent.opacity(0.18) : Color(white: 0.17)))
-                .overlay(Capsule().stroke(selected ? accent : .clear, lineWidth: 1.2))
-                .foregroundStyle(selected ? accent : .white)
+                .background(Capsule().fill(selected ? accent : Color(white: 0.17)))
+                .foregroundStyle(selected ? .black : .white)
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     // MARK: Viewfinder
@@ -544,13 +562,15 @@ struct ContentView: View {
             Text("LOADING FILM…").font(.mono(13)).foregroundStyle(.secondary)
         case .unauthorized:
             VStack(spacing: 12) {
-                Text("Film Exposures needs camera access.").font(.mono(13))
+                Text("Film Exposures needs camera access to take photos.")
+                    .font(.system(size: 15)).multilineTextAlignment(.center)
                 Button("Open Settings") {
                     if let url = URL(string: UIApplication.openSettingsURLString) {
                         UIApplication.shared.open(url)
                     }
                 }
-                .font(.mono(13, .bold)).foregroundStyle(accent)
+                .font(.system(size: 15, weight: .semibold)).foregroundStyle(accent)
+                .frame(minHeight: 44)
             }
             .padding()
         case .failed(let reason):
@@ -626,7 +646,7 @@ struct ContentView: View {
                           step: 1, majorEvery: 2, accent: accent,
                           label: { v in "\(Int(v.rounded()))" },
                           spoken: { v in "Border width \(Int(v.rounded())) percent" },
-                          onChange: { camera.setBorderWidth($0 / 100) })
+                          onChange: { camera.setBorderWidth($0 / 100) }, name: "Border width")
                     .transition(.opacity)
             }
         }
@@ -645,9 +665,8 @@ struct ContentView: View {
                         .font(.mono(10, .bold))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 7)
-                        .background(Capsule().fill(on ? accent.opacity(0.18) : Color(white: 0.15)))
-                        .overlay(Capsule().stroke(on ? accent : .clear, lineWidth: 1))
-                        .foregroundStyle(on ? accent : .white)
+                        .background(Capsule().fill(on ? accent : Color(white: 0.15)))
+                        .foregroundStyle(on ? .black : .white)
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(on ? .isSelected : [])
@@ -733,7 +752,7 @@ struct ContentView: View {
                 .stroke(selected ? accent : Color(white: 0.22), lineWidth: selected ? 1.5 : 0.5)
         )
         .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 
     /// The selected film's actions, under the film strip: share it straight to the share
@@ -871,7 +890,7 @@ struct ContentView: View {
                     smallChip("ADD TO MY FILMS", selected: true) {
                         camera.addSharedFilm(film)
                         incomingFilm = nil
-                        camera.message = "\(film.name) ADDED"
+                        camera.message = "\(film.name) added to your films."
                     }
                 }
             }
@@ -914,7 +933,7 @@ struct ContentView: View {
                           majorEvery: 4, accent: accent,
                           label: { "\(Int(($0 * 100).rounded()))" },
                           spoken: { "Effect strength \(Int(($0 * 100).rounded())) percent" },
-                          onChange: { v in camera.adjustFilm { $0.effectAmount = CGFloat(v) } })
+                          onChange: { v in camera.adjustFilm { $0.effectAmount = CGFloat(v) } }, name: "Effect strength")
 
                 if camera.stock.effect.usesCenter {
                     HStack(spacing: 6) {
@@ -988,6 +1007,8 @@ struct ContentView: View {
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(param.title.capitalized)
+                        .accessibilityAddTraits(on ? .isSelected : [])
                         .id(param)
                     }
                 }
@@ -1043,7 +1064,8 @@ struct ContentView: View {
                           accent: accent,
                           label: { param.format($0) },
                           spoken: { "\(param.title.capitalized) \(param.format($0))" },
-                          onChange: { v in camera.adjustFilm { $0[keyPath: path] = CGFloat(v) } })
+                          onChange: { v in camera.adjustFilm { $0[keyPath: path] = CGFloat(v) } },
+                          name: param.title.capitalized)
             }
         }
     }
@@ -1076,6 +1098,7 @@ struct ContentView: View {
     private func smallChip(_ text: String, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) { chipLabel(text, selected: selected) }
             .buttonStyle(.plain)
+            .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private func chipLabel(_ text: String, selected: Bool) -> some View {
@@ -1083,9 +1106,8 @@ struct ContentView: View {
             .font(.mono(10, .bold))
             .padding(.horizontal, 9)
             .padding(.vertical, 6)
-            .background(Capsule().fill(selected ? accent.opacity(0.18) : Color(white: 0.17)))
-            .overlay(Capsule().stroke(selected ? accent : .clear, lineWidth: 1))
-            .foregroundStyle(selected ? accent : .white)
+            .background(Capsule().fill(selected ? accent : Color(white: 0.17)))
+            .foregroundStyle(selected ? .black : .white)
     }
 
     // MARK: Shutter row
@@ -1127,6 +1149,10 @@ struct ContentView: View {
                         .foregroundStyle(.black)
                         .frame(width: 84, height: 84)
                         .background(Circle().fill(accent))
+                }
+                .accessibilityLabel("Rewind and finish the roll")
+                .onAppear {
+                    AccessibilityNotification.Announcement("Roll finished. Rewind to finish it and load a new roll.").post()
                 }
             } else {
                 Button { camera.shoot() } label: { EmptyView() }
@@ -1176,9 +1202,12 @@ struct ContentView: View {
         VStack {
             Spacer()
             Text(text)
-                .font(.mono(12))
-                .padding(.horizontal, 14).padding(.vertical, 10)
-                .background(Capsule().fill(Color(white: 0.2)))
+                .font(.system(size: 14, weight: .medium))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 16).padding(.vertical, 11)
+                .background(RoundedRectangle(cornerRadius: 18).fill(Color(white: 0.2)))
+                .padding(.horizontal, 24)
                 .rotationEffect(.degrees(camera.uiRotation))
                 .padding(.bottom, 140)
         }
@@ -1397,6 +1426,8 @@ private struct ScrubDial: View {
     let label: (Double) -> String
     let spoken: (Double) -> String
     let onChange: (Double) -> Void
+    /// What VoiceOver calls the dial ("Exposure", "Grain"…).
+    var name: String = "Adjust"
 
     @State private var dragStart: Double?
     /// Points of travel per click.
@@ -1450,6 +1481,7 @@ private struct ScrubDial: View {
         )
         .sensoryFeedback(.selection, trigger: value)
         .accessibilityElement()
+        .accessibilityLabel(name)
         .accessibilityValue(spoken(value))
         .accessibilityAdjustableAction { direction in
             switch direction {
