@@ -21,6 +21,8 @@ struct SharedRollView: View {
     @State private var askingToSignIn = false
     @State private var sharerProfile: IncomingUser?
     @State private var likersOf: LikersOf?
+    /// Bumped by Unblock, so the screen redraws (the block list lives in UserDefaults).
+    @State private var unblockedCount = 0
 
     var body: some View {
         ZStack {
@@ -29,7 +31,19 @@ struct SharedRollView: View {
                 header
                 if let roll {
                     if RollShare.isBlocked(roll.sharer.id) {
-                        centered(icon: "hand.raised", title: "You blocked the person who shared this roll")
+                        VStack(spacing: 16) {
+                            Spacer()
+                            EmptyState(icon: "hand.raised", title: "You blocked the person who shared this roll",
+                                       detail: "Blocking a roll's sender is kept on this phone.")
+                            PillButton(text: "Unblock", accent: accent, fullWidth: false) {
+                                RollShare.unblock(roll.sharer.id)
+                                note = nil
+                                unblockedCount += 1
+                            }
+                            Spacer()
+                        }
+                        .frame(maxWidth: .infinity)
+                        .id(unblockedCount)
                     } else {
                         rollLikes
                         grid(roll)
@@ -115,14 +129,7 @@ struct SharedRollView: View {
             .buttonStyle(.plain)
             .allowsHitTesting(roll?.sharer.profile != nil)
             Spacer()
-            Button { dismiss() } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 14, weight: .bold))
-                    .frame(width: 34, height: 34)
-                    .background(Circle().fill(Color(white: 0.16)))
-            }
-            .foregroundStyle(.white)
-            .accessibilityLabel("Close")
+            CloseCircle { dismiss() }
         }
     }
 
@@ -174,7 +181,8 @@ struct SharedRollView: View {
                                 .accessibilityLabel("Who liked frame \(index + 1)")
                             }
                             Spacer(minLength: 0)
-                            LikeButton(count: likes.count(index + 1), liked: likes.isMine(index + 1), accent: accent, size: 11) {
+                            LikeButton(count: likes.count(index + 1), liked: likes.isMine(index + 1), accent: accent, size: 11,
+                                       what: "frame \(index + 1)") {
                                 Task { await toggleLike(index + 1) }
                             }
                         }
@@ -215,7 +223,8 @@ struct SharedRollView: View {
                         .frame(width: 36, height: 36)
                         .background(Circle().fill(ProfileStyle.button))
                         .foregroundStyle(.white)
-                        .contentShape(Circle())
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .accessibilityLabel("Report or block")
             }
@@ -228,9 +237,11 @@ struct SharedRollView: View {
     }
 
     private func reportCard(_ roll: RollShare.RemoteRoll) -> some View {
-        overlayCard(title: "Report this roll", detail: "Tell us what's wrong. Rolls with several reports are hidden until they're reviewed.") {
+        ConfirmCard(title: "Report this roll",
+                    message: "Tell us what's wrong. Rolls with several reports are hidden until they're reviewed.",
+                    onCancel: { withAnimation(.snappy(duration: 0.15)) { reporting = false } }) {
             ForEach(["Nudity or sexual content", "Violence or abuse", "Hate or harassment", "Spam", "The person may be under 13", "Something else"], id: \.self) { reason in
-                cardButton(reason) {
+                PillButton(text: reason, accent: accent) {
                     reporting = false
                     Task {
                         do {
@@ -242,52 +253,22 @@ struct SharedRollView: View {
                     }
                 }
             }
-            cardButton("Cancel", quiet: true) { withAnimation(.snappy(duration: 0.15)) { reporting = false } }
+            PillButton(text: "Cancel", accent: accent) { withAnimation(.snappy(duration: 0.15)) { reporting = false } }
         }
     }
 
     private func blockCard(_ roll: RollShare.RemoteRoll) -> some View {
         let who = roll.sharer.name.flatMap { $0.isEmpty ? nil : $0 } ?? "this person"
-        return overlayCard(title: "Block \(who)?", detail: "You won't see rolls they share again on this phone.") {
-            cardButton("Block", destructive: true) {
+        return ConfirmCard(title: "Block \(who)?",
+                           message: "You won't see rolls they share again on this phone. You can unblock them by opening one of their roll links.",
+                           onCancel: { withAnimation(.snappy(duration: 0.15)) { confirmingBlock = false } }) {
+            DestructiveButton(text: "Block", icon: "hand.raised") {
                 RollShare.block(roll.sharer.id)
                 confirmingBlock = false
                 dismiss()
             }
-            cardButton("Cancel", quiet: true) { withAnimation(.snappy(duration: 0.15)) { confirmingBlock = false } }
+            PillButton(text: "Cancel", accent: accent) { withAnimation(.snappy(duration: 0.15)) { confirmingBlock = false } }
         }
-    }
-
-    private func overlayCard<Content: View>(title: String, detail: String, @ViewBuilder buttons: () -> Content) -> some View {
-        ZStack {
-            Color.black.opacity(0.6).ignoresSafeArea()
-                .onTapGesture { withAnimation(.snappy(duration: 0.15)) { reporting = false; confirmingBlock = false } }
-            VStack(alignment: .leading, spacing: 10) {
-                Text(title).font(.system(size: 20, weight: .bold)).foregroundStyle(.white)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(detail).font(.system(size: 14)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                buttons()
-            }
-            .padding(18)
-            .background(RoundedRectangle(cornerRadius: 20).fill(ProfileStyle.background))
-            .overlay(RoundedRectangle(cornerRadius: 20).stroke(ProfileStyle.divider, lineWidth: 1))
-            .padding(.horizontal, 22)
-        }
-        .transition(.opacity)
-    }
-
-    /// A full-width button on an overlay card: grey for a choice (a report reason), red for
-    /// a destructive one, plain grey text for Cancel.
-    private func cardButton(_ text: String, destructive: Bool = false, quiet: Bool = false, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(text)
-                .font(.system(size: 16, weight: .semibold))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(Capsule().fill(destructive ? Color.red.opacity(0.16) : quiet ? Color.clear : ProfileStyle.button))
-                .foregroundStyle(destructive ? ProfileStyle.destructive : quiet ? Color(white: 0.6) : Color.white)
-        }
-        .buttonStyle(.plain)
     }
 
     /// A compact pill: orange with black text for the main action.
@@ -342,28 +323,18 @@ struct SharedRollView: View {
     }
 
     private var signInCard: some View {
-        ZStack {
-            Color.black.opacity(0.6).ignoresSafeArea()
-                .onTapGesture { withAnimation(.snappy(duration: 0.15)) { askingToSignIn = false } }
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Sign in to like").font(.system(size: 20, weight: .bold)).foregroundStyle(.white)
-                Text("One like per person, so likes mean something. People see your name and photo on what you like. Signing in also lets you put your own rolls on a public profile.")
-                    .font(.system(size: 14)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                SignInButtons(onError: { message in
-                    askingToSignIn = false
-                    note = message
-                }, onSignedIn: {
-                    askingToSignIn = false
-                    Task { if let fetched = try? await RollShare.likes(id: rollID) { likes = fetched } }
-                })
-                cardButton("Not now", quiet: true) { withAnimation(.snappy(duration: 0.15)) { askingToSignIn = false } }
-            }
-            .padding(18)
-            .background(RoundedRectangle(cornerRadius: 20).fill(ProfileStyle.background))
-            .overlay(RoundedRectangle(cornerRadius: 20).stroke(ProfileStyle.divider, lineWidth: 1))
-            .padding(.horizontal, 22)
+        ConfirmCard(title: "Sign in to like",
+                    message: "One like per person, so likes mean something. People see your name and photo on what you like. Signing in also lets you put your own rolls on a public profile.",
+                    onCancel: { withAnimation(.snappy(duration: 0.15)) { askingToSignIn = false } }) {
+            SignInButtons(onError: { message in
+                askingToSignIn = false
+                note = message
+            }, onSignedIn: {
+                askingToSignIn = false
+                Task { if let fetched = try? await RollShare.likes(id: rollID) { likes = fetched } }
+            })
+            PillButton(text: "Not now", accent: accent) { withAnimation(.snappy(duration: 0.15)) { askingToSignIn = false } }
         }
-        .transition(.opacity)
     }
 }
 
@@ -391,6 +362,7 @@ struct LikeButton: View {
                 }
             }
             .padding(.vertical, 4).padding(.leading, 8)
+            .frame(minWidth: 44, minHeight: 44, alignment: .trailing)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -469,15 +441,8 @@ private struct RemotePager: View {
             .sheet(item: $likersOf) { of in
                 LikersSheet(frame: of.frame, people: likes.people(of.frame), count: likes.count(of.frame), camera: camera, accent: accent)
             }
-            Button { dismiss() } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 14, weight: .bold))
-                    .frame(width: 34, height: 34)
-                    .background(Circle().fill(Color(white: 0.16)))
-            }
-            .foregroundStyle(.white)
-            .padding(16)
-            .accessibilityLabel("Close")
+            CloseCircle { dismiss() }
+                .padding(11)
         }
     }
 }
@@ -595,14 +560,7 @@ struct LikersSheet: View {
                         .font(.system(size: 14)).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button { dismiss() } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 13, weight: .bold))
-                        .frame(width: 30, height: 30)
-                        .background(Circle().fill(Color(white: 0.16)))
-                }
-                .foregroundStyle(.white)
-                .accessibilityLabel("Close")
+                CloseCircle(size: 30) { dismiss() }
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {

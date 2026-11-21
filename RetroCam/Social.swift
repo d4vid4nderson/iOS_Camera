@@ -206,17 +206,6 @@ enum Social {
 
 // MARK: Pieces
 
-extension RollShare {
-    /// Undo `block(_:)` on this phone. (Same list as `RollShare.block`; move next to it.)
-    static func unblock(_ sharer: String?) {
-        guard let sharer else { return }
-        let key = "share.blocked"
-        var blocked = UserDefaults.standard.stringArray(forKey: key) ?? []
-        blocked.removeAll { $0 == sharer }
-        UserDefaults.standard.set(blocked, forKey: key)
-    }
-}
-
 /// Someone's headshot, or their initial.
 struct PersonAvatar: View {
     let person: Social.Person

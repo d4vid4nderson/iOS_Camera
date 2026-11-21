@@ -157,6 +157,14 @@ enum RollShare {
         UserDefaults.standard.set(blocked, forKey: blockedKey)
     }
 
+    /// Undo `block(_:)` on this phone.
+    static func unblock(_ sharer: String?) {
+        guard let sharer else { return }
+        var blocked = UserDefaults.standard.stringArray(forKey: blockedKey) ?? []
+        blocked.removeAll { $0 == sharer }
+        UserDefaults.standard.set(blocked, forKey: blockedKey)
+    }
+
     // MARK: Your shared rolls
 
     private static func recordURL(_ roll: Int) -> URL {
