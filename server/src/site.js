@@ -109,16 +109,16 @@ select,button,input,textarea{font:inherit;color:var(--fg)}
 .phones figcaption b{display:block;font:700 12px/1.3 var(--mono);letter-spacing:.08em;margin-bottom:4px}
 .phones figcaption span{font-size:14px;color:#c8c8c8}
 .phone.small{--w:min(260px,78vw)}
-.phone .screen.app{background:#0f0f0f;justify-content:flex-start;gap:calc(12*var(--u));padding:calc(62*var(--u)) calc(16*var(--u)) calc(30*var(--u))}
+.phone .screen.app{background:#0f0f0f;justify-content:flex-start;font-family:-apple-system,"SF Pro Text",system-ui,"Segoe UI",sans-serif;gap:calc(12*var(--u));padding:calc(62*var(--u)) calc(16*var(--u)) calc(30*var(--u))}
 .phone .screen.app>*{flex:none}
 .phone .ahead{display:flex;justify-content:space-between;align-items:flex-start}
-.phone .ahead b{display:block;font-size:calc(15*var(--u));color:var(--accent)}
-.phone .ahead small{display:block;margin-top:calc(3*var(--u));font-size:calc(9.5*var(--u));color:#8e8e93}
+.phone .ahead b{display:block;font-size:calc(21*var(--u));font-weight:700;color:#fff}
+.phone .ahead small{display:block;margin-top:calc(3*var(--u));font-size:calc(11*var(--u));color:#8e8e93}
 .phone .x{flex:none;width:calc(34*var(--u));height:calc(34*var(--u));border-radius:50%;background:#292929;display:grid;place-items:center}
 .phone .x svg{width:calc(13*var(--u));height:calc(13*var(--u));stroke-width:2.6}
 .phone .chips{display:flex;gap:calc(6*var(--u));overflow:hidden}
-.phone .chips span{flex:none;padding:calc(6*var(--u)) calc(10*var(--u));border-radius:99px;background:#262626;font-size:calc(10*var(--u));font-weight:700;white-space:nowrap}
-.phone .chips span.on{background:rgba(232,118,46,.18);box-shadow:inset 0 0 0 1px var(--accent);color:var(--accent)}
+.phone .chips span{flex:none;padding:calc(6*var(--u)) calc(10*var(--u));border-radius:99px;background:#262626;font-size:calc(12*var(--u));font-weight:600;white-space:nowrap}
+.phone .chips span.on{background:var(--accent);color:#000}
 .phone .chips span.red{background:rgba(255,59,48,.1);color:#ff7366}
 .phone .sheet{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:calc(10*var(--u)) calc(6*var(--u))}
 .phone .sheet i{display:grid;gap:calc(4*var(--u));font-style:normal;font-size:calc(9*var(--u));font-weight:600;color:#8e8e93;text-align:center}
@@ -130,16 +130,16 @@ select,button,input,textarea{font:inherit;color:var(--fg)}
 .phone .who{display:flex;align-items:center;gap:calc(14*var(--u));margin:0}
 .phone .face{flex:none;width:calc(72*var(--u));height:calc(72*var(--u));border-radius:50%;display:grid;place-items:center;font-size:calc(28*var(--u));font-weight:700;color:#fff;background:linear-gradient(145deg,#5e5e62,#343436)}
 .phone .face.s{width:calc(16*var(--u));height:calc(16*var(--u));font-size:calc(7*var(--u))}
-.phone .who b{display:block;font-size:calc(16*var(--u));color:var(--accent)}
-.phone .who small{display:block;margin-top:calc(4*var(--u));font-size:calc(11*var(--u));font-weight:600}
+.phone .who b{display:block;font-size:calc(20*var(--u));color:#fff}
+.phone .who small{display:block;margin-top:calc(4*var(--u));font-size:calc(13*var(--u));font-weight:600;color:var(--accent)}
 .phone .tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:calc(8*var(--u))}
 .phone .tiles span{display:grid;gap:calc(3*var(--u));padding:calc(10*var(--u)) 0;border-radius:calc(12*var(--u));background:#1c1c1c;text-align:center}
-.phone .tiles b{font-size:calc(20*var(--u))}.phone .tiles small{font-size:calc(8*var(--u));font-weight:600;color:#8e8e93}
+.phone .tiles b{font-size:calc(20*var(--u))}.phone .tiles small{font-size:calc(9*var(--u));color:#8e8e93}
 .phone .covers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:calc(16*var(--u)) calc(10*var(--u))}
 .phone .covers i{display:grid;gap:calc(6*var(--u));font-style:normal;text-align:left;min-width:0}
 .phone .covers i>span{position:relative;display:block;aspect-ratio:3/4;border-radius:calc(9*var(--u));overflow:hidden;background:#1a1a1a}
 .phone .covers img{width:100%;height:100%;object-fit:cover;display:block}
-.phone .covers b{font-size:calc(11*var(--u));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.phone .covers b{font-size:calc(12*var(--u));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .phone .covers small{font-size:calc(9*var(--u));color:#8e8e93;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:calc(6*var(--u))}
 .phone .covers em{position:absolute;top:calc(6*var(--u));right:calc(6*var(--u));width:calc(22*var(--u));height:calc(22*var(--u));border-radius:50%;background:rgba(0,0,0,.6);display:grid;place-items:center}
 .phone .covers em svg{width:calc(11*var(--u));height:calc(11*var(--u));stroke-width:2.2}
@@ -556,10 +556,10 @@ ${filmViewer()}
   <div class="phone small" aria-label="The roll viewer: a roll as a contact sheet, with its cover and two frames still developing">
     <div class="screen app">
       <span class="island"></span>
-      <div class="ahead"><div><b>ROLL 03<svg viewBox="0 0 24 24" aria-hidden="true" style="display:inline-block;width:.75em;height:.75em;margin-left:.4em;color:#8e8e93;vertical-align:baseline"><path d="M4 20l1-4L16 5l3 3L8 19z"/></svg></b><small>09/36 FRAMES · OCT 12, 2026 · DEVELOPS TUE 9:00 AM</small></div><span class="x"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></div>
-      <div class="chips"><span class="on">ROLL 03</span><span>ROLL 02</span><span>ROLL 01</span></div>
-      <div class="sheet"><i><span><img src="/mock/roll-1.jpg" alt="" loading="lazy" width="480" height="640"><em>COVER</em></span>01</i><i><span><img src="/mock/roll-2.jpg" alt="" loading="lazy" width="480" height="640"></span>02</i><i><span><img src="/mock/roll-3.jpg" alt="" loading="lazy" width="480" height="640"></span>03</i><i><span><img src="/mock/roll-4.jpg" alt="" loading="lazy" width="480" height="640"></span>04</i><i><span><img src="/mock/roll-5.jpg" alt="" loading="lazy" width="480" height="640"></span>05</i><i><span><img src="/mock/roll-6.jpg" alt="" loading="lazy" width="480" height="640"></span>06</i><i><span><img src="/mock/roll-7.jpg" alt="" loading="lazy" width="480" height="640"></span>07</i><i><span class="dev"><b>DEVELOPING</b><small>TAP TO DEVELOP</small></span>08</i><i><span class="dev"><b>DEVELOPING</b><small>TAP TO DEVELOP</small></span>09</i></div>
-      <div class="chips"><span class="on">SHARE ROLL</span><span>SHEET</span><span>RENAME</span></div>
+      <div class="ahead"><div><b>Roll 03<svg viewBox="0 0 24 24" aria-hidden="true" style="display:inline-block;width:.75em;height:.75em;margin-left:.4em;color:#8e8e93;vertical-align:baseline"><path d="M4 20l1-4L16 5l3 3L8 19z"/></svg></b><small>9/36 frames · Oct 12, 2026 · Develops Tue 9:00 AM</small></div><span class="x"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></div>
+      <div class="chips"><span class="on">Roll 03</span><span>Roll 02</span><span>Roll 01</span></div>
+      <div class="sheet"><i><span><img src="/mock/roll-1.jpg" alt="" loading="lazy" width="480" height="640"><em>Cover</em></span>01</i><i><span><img src="/mock/roll-2.jpg" alt="" loading="lazy" width="480" height="640"></span>02</i><i><span><img src="/mock/roll-3.jpg" alt="" loading="lazy" width="480" height="640"></span>03</i><i><span><img src="/mock/roll-4.jpg" alt="" loading="lazy" width="480" height="640"></span>04</i><i><span><img src="/mock/roll-5.jpg" alt="" loading="lazy" width="480" height="640"></span>05</i><i><span><img src="/mock/roll-6.jpg" alt="" loading="lazy" width="480" height="640"></span>06</i><i><span><img src="/mock/roll-7.jpg" alt="" loading="lazy" width="480" height="640"></span>07</i><i><span class="dev"><b>Developing</b><small>Tap to develop</small></span>08</i><i><span class="dev"><b>Developing</b><small>Tap to develop</small></span>09</i></div>
+      <div class="chips"><span class="on">Share roll</span><span>Shoot this roll</span><span>•••</span></div>
     </div>
   </div>
   <figcaption><b>THE ROLL</b><span>Every frame, in order, like a contact sheet. Tap one that's still developing to see it early.</span></figcaption>
@@ -568,11 +568,11 @@ ${filmViewer()}
   <div class="phone small" aria-label="A profile: name and handle, rolls, frames, followers and following, and their rolls">
     <div class="screen app">
       <span class="island"></span>
-      <div class="ahead"><div><small style="margin:0">PROFILE</small></div><span class="x"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></div>
-      <div class="who"><span class="face">M</span><div><b>MARA LIND</b><small>@mara.lind</small></div></div>
-      <div class="tiles"><span><b>4</b><small>ROLLS</small></span><span><b>114</b><small>FRAMES</small></span><span><b>23</b><small>FOLLOWERS</small></span><span><b>31</b><small>FOLLOWING</small></span></div>
-      <div class="chips"><span class="on">FOLLOW</span><span>SHARE PROFILE</span><span>BLOCK</span></div>
-      <div class="covers"><i><span><img src="/mock/profile-1.jpg" alt="" loading="lazy" width="480" height="640"></span><b>COAST WEEKEND</b><small>36 FRAMES · GOLDEN 100</small></i><i><span><img src="/mock/profile-2.jpg" alt="" loading="lazy" width="480" height="640"></span><b>ROME</b><small>36 FRAMES · CLASSIC 400</small></i><i><span><img src="/mock/profile-3.jpg" alt="" loading="lazy" width="480" height="640"><em><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="3"/><circle cx="16" cy="9" r="3"/><path d="M3 19c.5-3 2.5-5 5-5s4.5 2 5 5M11 19c.5-3 2.5-5 5-5s4.5 2 5 5"/></svg></em></span><b>SUMMER NIGHTS</b><small>24 FRAMES · DUSK 800</small></i><i><span><img src="/mock/profile-4.jpg" alt="" loading="lazy" width="480" height="640"></span><b>OLD TOWN</b><small>18 FRAMES · PAN 50</small></i></div>
+      <div class="ahead"><div><b>Profile</b></div><span class="x"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></div>
+      <div class="who"><span class="face">M</span><div><b>Mara Lind</b><small>@mara.lind</small></div></div>
+      <div class="tiles"><span><b>4</b><small>Rolls</small></span><span><b>114</b><small>Frames</small></span><span><b>23</b><small>Followers</small></span><span><b>31</b><small>Following</small></span></div>
+      <div class="chips"><span class="on">Follow</span><span>Share profile</span><span>•••</span></div>
+      <div class="covers"><i><span><img src="/mock/profile-1.jpg" alt="" loading="lazy" width="480" height="640"></span><b>Coast weekend</b><small>36 frames · GOLDEN 100</small></i><i><span><img src="/mock/profile-2.jpg" alt="" loading="lazy" width="480" height="640"></span><b>Rome</b><small>36 frames · CLASSIC 400</small></i><i><span><img src="/mock/profile-3.jpg" alt="" loading="lazy" width="480" height="640"><em><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="3"/><circle cx="16" cy="9" r="3"/><path d="M3 19c.5-3 2.5-5 5-5s4.5 2 5 5M11 19c.5-3 2.5-5 5-5s4.5 2 5 5"/></svg></em></span><b>Summer nights</b><small>24 frames · DUSK 800</small></i><i><span><img src="/mock/profile-4.jpg" alt="" loading="lazy" width="480" height="640"></span><b>Old town</b><small>18 frames · PAN 50</small></i></div>
     </div>
   </div>
   <figcaption><b>A PROFILE</b><span>Someone's rolls, the public ones and those for their followers. Follow, and they approve.</span></figcaption>
@@ -581,9 +581,9 @@ ${filmViewer()}
   <div class="phone small" aria-label="People: rolls from the people you follow">
     <div class="screen app">
       <span class="island"></span>
-      <div class="ahead"><div><b>PEOPLE</b></div><span class="x"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></div>
-      <div class="chips"><span class="on">FOLLOWING</span><span>SHARED WITH YOU</span><span>REQUESTS</span></div>
-      <div class="covers"><i><span><img src="/mock/feed-1.jpg" alt="" loading="lazy" width="480" height="640"></span><b>BLUE HOUR</b><small><span class="face s">J</span>JONAS ERIKSEN</small></i><i><span><img src="/mock/feed-2.jpg" alt="" loading="lazy" width="480" height="640"><em><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3.2"/><path d="M3.5 19.5c.6-3.3 2.8-5.3 5.5-5.3s4.9 2 5.5 5.3"/><circle cx="17" cy="10" r="2.4"/><path d="M15.5 14.6c2.6.1 4.3 1.9 4.9 4.9"/></svg></em></span><b>MARKET DAY</b><small><span class="face s">A</span>ANA LIMA</small></i><i><span><img src="/mock/feed-3.jpg" alt="" loading="lazy" width="480" height="640"></span><b>LOW TIDE</b><small><span class="face s">M</span>MARA LIND</small></i><i><span><img src="/mock/feed-4.jpg" alt="" loading="lazy" width="480" height="640"></span><b>SUNDAY WALK</b><small><span class="face s">S</span>SAM OKAFOR</small></i></div>
+      <div class="ahead"><div><b>People</b></div><span class="x"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></div>
+      <div class="chips"><span class="on">Following</span><span>Shared with you</span><span>Requests</span></div>
+      <div class="covers"><i><span><img src="/mock/feed-1.jpg" alt="" loading="lazy" width="480" height="640"></span><b>Blue hour</b><small><span class="face s">J</span>Jonas Eriksen</small></i><i><span><img src="/mock/feed-2.jpg" alt="" loading="lazy" width="480" height="640"><em><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3.2"/><path d="M3.5 19.5c.6-3.3 2.8-5.3 5.5-5.3s4.9 2 5.5 5.3"/><circle cx="17" cy="10" r="2.4"/><path d="M15.5 14.6c2.6.1 4.3 1.9 4.9 4.9"/></svg></em></span><b>Market day</b><small><span class="face s">A</span>Ana Lima</small></i><i><span><img src="/mock/feed-3.jpg" alt="" loading="lazy" width="480" height="640"></span><b>Low tide</b><small><span class="face s">M</span>Mara Lind</small></i><i><span><img src="/mock/feed-4.jpg" alt="" loading="lazy" width="480" height="640"></span><b>Sunday walk</b><small><span class="face s">S</span>Sam Okafor</small></i></div>
     </div>
   </div>
   <figcaption><b>PEOPLE</b><span>Rolls from the people you follow, and the ones shared with just you. No comments, no ads.</span></figcaption>
