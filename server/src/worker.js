@@ -2017,7 +2017,7 @@ function rollPage(roll, meta, url, env) {
       <p class="small muted">Swipe through every frame and load the film it was shot on, right in the app.</p>
       <details class="report"><summary>Report this roll</summary>
         <form method="post" action="/api/rolls/${meta.id}/report">
-          <select name="reason"><option>Nudity or sexual content</option><option>Violence or abuse</option><option>Hate or harassment</option><option>Spam</option><option>Something else</option></select>
+          <select name="reason"><option>Nudity or sexual content</option><option>Violence or abuse</option><option>Hate or harassment</option><option>Spam</option><option>Someone under 13</option><option>Something else</option></select>
           <button type="submit">Send report</button>
         </form></details>
       <p class="small muted">${lifetime}</p>`,

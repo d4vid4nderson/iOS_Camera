@@ -565,7 +565,7 @@ ${filmViewer()}
   <figcaption><b>THE ROLL</b><span>Every frame, in order, like a contact sheet. Tap one that's still developing to see it early.</span></figcaption>
 </figure>
 <figure>
-  <div class="phone small" aria-label="A profile: name and handle, rolls, frames, followers and following, and their rolls">
+  <div class="phone small" aria-label="A profile: name and username, rolls, frames, followers and following, and their rolls">
     <div class="screen app">
       <span class="island"></span>
       <div class="ahead"><div><small style="margin:0">PROFILE</small></div><span class="x"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></div>
@@ -648,11 +648,11 @@ ${filmViewer()}
 <p class="lede">Every roll starts private. Choose who sees each one, from a few friends to everyone, and change your mind whenever you like. Photos shared with followers or specific people only load for them.</p>
 <div class="share3">
   <div class="card3 on"><span class="who">PRIVATE</span><h3>Just you</h3><p>Rolls live on your phone and in Photos. Nothing is uploaded unless you share it.</p></div>
-  <div class="card3"><span class="who">SPECIFIC PEOPLE</span><h3>Only who you pick</h3><p>Choose people by their @handle. The roll shows up in their Shared with you, and nobody else can open it, not even with the link.</p></div>
+  <div class="card3"><span class="who">SPECIFIC PEOPLE</span><h3>Only who you pick</h3><p>Choose people by their @username. The roll shows up in their Shared with you, and nobody else can open it, not even with the link.</p></div>
   <div class="card3"><span class="who">FOLLOWERS</span><h3>People you approved</h3><p>Every follow is a request you approve. Rolls for followers appear in their feed, and you can remove a follower any time.</p></div>
   <div class="card3"><span class="who">PUBLIC</span><h3>Everyone</h3><p>On your public profile, for anyone to see and like, and to see who liked it.</p></div>
   <div class="card3"><span class="who">LINK</span><h3>Anyone with the link</h3><p>Send a roll as a link, even one you're still shooting: new frames appear as they develop. The link lasts 30 days, and you can unshare it any time.</p></div>
-  <div class="card3"><span class="who">FIND PEOPLE</span><h3>Follow photographers</h3><p>Search by @handle or name and ask to follow. Block someone and they can't find you, follow you or see your rolls. Prefer not to be found? Turn search off.</p></div>
+  <div class="card3"><span class="who">FIND PEOPLE</span><h3>Follow photographers</h3><p>Search by @username or name and ask to follow. Block someone and they can't find you, follow you or see your rolls. Prefer not to be found? Turn search off.</p></div>
 </div>
 </section>
 
@@ -684,19 +684,20 @@ export function privacyBody() {
 </ul>
 
 <h2>Accounts</h2>
-<p>An account is optional. You need one only to put rolls on a public profile and to like frames and rolls. You can sign in with Apple, Google or Facebook. We receive:</p>
+<p>An account is optional: the camera, your rolls and sharing a roll as a link all work without one. You need one to have a profile, follow people, share rolls with your followers or people you choose, put rolls on your public profile, and like frames and rolls. You can sign in with Apple, Google or Facebook. We receive:</p>
 <ul>
 <li>An identifier for your Apple, Google or Facebook account. We store it only in a scrambled (one-way hashed) form, used to recognise you when you sign in again.</li>
 <li>Your name, if the service provides it or you set one, and your profile photo from Google or Facebook, which you can replace or remove.</li>
 </ul>
 <p>We don't ask for your email address, contacts or friends list. We also store which frames and rolls you have liked, the time you confirmed you're 13 or older (not your date of birth), the time you agreed to our rules for public rolls, and sign-in sessions for your devices.</p>
-<p><b>Following and search.</b> If you choose a @handle, we store it with the people you follow, the people who follow you, follow requests, the people you block, and who you've shared rolls with. Your handle and name can be found in search unless you turn that off. Who follows whom is visible to signed-in users. Blocking someone ends following both ways and hides your rolls and profile from them.</p>
+<p><b>Following and search.</b> If you choose a @username, we store it with the people you follow, the people who follow you, follow requests, the people you block, and who you've shared rolls with. Your username and name can be found in search unless you turn that off. Who follows whom is visible to signed-in users. Blocking someone ends following both ways and hides your rolls and profile from them.</p>
 <p><b>Likes are public.</b> When you like a frame or a roll, anyone who opens that roll in the app can see that you liked it, with your name and profile photo. Unlike it, or delete your account, and it's gone.</p>
 
 <h2>Reports, blocks and support</h2>
 <ul>
 <li>When you <b>report</b> a roll, we store the roll, the reason you chose and the time. Rolls with several reports are hidden until they are reviewed.</li>
-<li><b>Blocking</b> someone is stored only on your phone.</li>
+<li>When you <b>report a person</b> (for example, someone who seems to be under 13), we store the reason you chose, your account and the time.</li>
+<li><b>Blocking</b> someone from their profile is stored with your account, so it applies on all your devices (see Following and search above). Blocking the sender of a roll that was shared with you by link is kept only on your phone.</li>
 <li>When you use the <b>support form</b>, we store the email address you give us (so we can reply), your name if you give it, the topic and your message. We keep these until your request is resolved, and for a reasonable time after in case you follow up.</li>
 </ul>
 
@@ -722,7 +723,7 @@ export function privacyBody() {
 <h2>Children under 13</h2>
 <p>Film Exposures accounts are for people 13 and older. The app is not directed at children under 13, and we don't knowingly collect personal information from them.</p>
 <ul>
-<li><b>We ask everyone's age.</b> Before you can pick a handle, follow anyone or share a roll, the app asks for your date of birth. We use it once to check that you're 13 or older and don't store it; your account only records that you confirmed.</li>
+<li><b>We ask everyone's age.</b> Before you can pick a username, follow anyone or share a roll, the app asks for your date of birth. We use it once to check that you're 13 or older and don't store it; your account only records that you confirmed.</li>
 <li><b>Under 13, the account is deleted.</b> If the date shows you're under 13, we delete the account straight away, with any name, photo and rolls it had. To stop a new account being made, we keep only a scrambled code for that sign-in (not your name, email or the sign-in itself) and the date you turn 13; the phone remembers that date too. After it, you're welcome to sign in.</li>
 <li><b>The camera needs no account.</b> Anyone can shoot and keep rolls on their phone without an account. Nothing is sent to us unless you share.</li>
 <li><b>Reports.</b> Anyone can report a person who seems to be under 13. We review reports, usually within 24 hours, and delete accounts that belong to children under 13.</li>
@@ -856,7 +857,7 @@ async function photo(src, box) {
 function who(p) {
   if (!p) return 'No account (shared before signing in)';
   if (p.removed) return 'Account deleted';
-  return (p.handle ? '@' + p.handle : '(no handle)') + (p.name ? ' · ' + p.name : '');
+  return (p.handle ? '@' + p.handle : '(no username)') + (p.name ? ' · ' + p.name : '');
 }
 async function loadReports() {
   const res = await fetch('/api/admin/reports', { headers: auth() });
