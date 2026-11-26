@@ -769,7 +769,7 @@ struct ActivityView: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
 
-/// Full-screen frames, swipe left and right, with how each one was shot underneath.
+/// Full-screen frames, swipe left and right, with how each one was shot over its corner.
 /// View and share only.
 private struct FramePager: View {
     let roll: Int
@@ -780,7 +780,7 @@ private struct FramePager: View {
     @State private var current: Int
     @State private var sharing: ShareItems?
     @State private var settings: [Int: FrameSettings] = [:]
-    /// The settings panel is showing (the info button hides it to see the whole frame).
+    /// The settings overlay is showing (the info button hides it to see the whole frame).
     @AppStorage("viewer.showsSettings") private var showsSettings = true
     @Environment(\.dismiss) private var dismiss
 
@@ -792,39 +792,37 @@ private struct FramePager: View {
         _current = State(initialValue: start)
     }
 
-    /// What's known about how the frame on screen was shot.
-    private var rows: [(label: String, value: String)] {
-        if let recorded = settings[current] { return recorded.rows }
-        if let film = films[current] { return [("Film", film)] }
+    /// What's known about how a frame was shot.
+    private func rows(for frame: Int) -> [(label: String, value: String)] {
+        if let recorded = settings[frame] { return recorded.rows }
+        if let film = films[frame] { return [("Film", film)] }
         return []
     }
 
-    /// The settings of the frame on screen: two columns of label and value.
-    private var settingsPanel: some View {
-        VStack(alignment: .leading, spacing: 10) {
+    /// A frame's settings, small, over the top-left corner of the picture: a label and
+    /// its value on each line.
+    private func settingsOverlay(for frame: Int) -> some View {
+        let rows = rows(for: frame)
+        return Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 3) {
             if rows.isEmpty {
-                Text("Settings weren't recorded for this frame.")
-                    .font(.system(size: 13)).foregroundStyle(.secondary)
-            } else {
-                LazyVGrid(columns: [GridItem(.flexible(), alignment: .topLeading),
-                                    GridItem(.flexible(), alignment: .topLeading)],
-                          alignment: .leading, spacing: 10) {
-                    ForEach(rows, id: \.label) { row in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(row.label).font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
-                            Text(row.value).font(.system(size: 13, weight: .semibold)).foregroundStyle(.white)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .accessibilityElement(children: .combine)
-                    }
+                GridRow { Text("Settings weren't recorded").foregroundStyle(.white.opacity(0.75)) }
+            }
+            ForEach(rows, id: \.label) { row in
+                GridRow {
+                    Text(row.label).foregroundStyle(.white.opacity(0.6))
+                    Text(row.value).fontWeight(.semibold).foregroundStyle(.white)
                 }
+                .accessibilityElement(children: .combine)
             }
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 14).fill(.ultraThinMaterial))
-        .padding(.horizontal, 12)
-        .padding(.bottom, 8)
+        .font(.system(size: 10.5))
+        .lineLimit(1)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 7)
+        .background(RoundedRectangle(cornerRadius: 8).fill(.black.opacity(0.55)))
+        .padding(10)
+        .allowsHitTesting(false)
+        .transition(.opacity)
     }
 
     var body: some View {
@@ -832,7 +830,12 @@ private struct FramePager: View {
             Color.black.ignoresSafeArea()
             TabView(selection: $current) {
                 ForEach(frames, id: \.self) { frame in
+                    // The overlay hugs the picture as it's fitted, so it sits in the
+                    // picture's own corner whatever its shape.
                     LocalImage(url: RollStore.frameURL(roll: roll, frame: frame), fill: false)
+                        .overlay(alignment: .topLeading) {
+                            if showsSettings { settingsOverlay(for: frame) }
+                        }
                         .padding(.horizontal, 8)
                         .tag(frame)
                 }
@@ -858,9 +861,6 @@ private struct FramePager: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
-        }
-        .overlay(alignment: .bottom) {
-            if showsSettings { settingsPanel.transition(.move(edge: .bottom).combined(with: .opacity)) }
         }
         .task(id: roll) {
             let number = roll
