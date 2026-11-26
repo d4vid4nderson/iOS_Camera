@@ -609,12 +609,30 @@ struct ContentView: View {
             .padding(.horizontal, -Self.panelPadding)
             .disabled(!camera.apertureAvailable)
             .opacity(camera.apertureAvailable ? 1 : 0.35)
+            if camera.apertureActive { bladesPicker }
             Text(apertureNote)
                 .font(.mono(9))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .sensoryFeedback(.selection, trigger: camera.aperture)
+        .sensoryFeedback(.selection, trigger: camera.blades)
+    }
+
+    /// Aperture blades: the shape out-of-focus lights take. Round, or a polygon.
+    private var bladesPicker: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                Text("BLADES").font(.mono(9, .semibold)).foregroundStyle(.secondary)
+                ForEach(Aperture.bladeCounts, id: \.self) { count in
+                    chip(count == 0 ? "ROUND" : "\(count)", selected: camera.blades == count) { camera.selectBlades(count) }
+                        .accessibilityLabel(count == 0 ? "Round aperture" : "\(count) aperture blades")
+                }
+            }
+            .padding(.horizontal, Self.scrollInset)
+        }
+        .edgeFade(Self.scrollInset)
+        .padding(.horizontal, -Self.panelPadding)
     }
 
     private var apertureNote: String {

@@ -70,7 +70,7 @@ A film's whole recipe can be shared as a link or QR code, and whoever opens it c
 - Lenses: the phone's own cameras, plus the classic focal lengths (21, 28, 35, 50, 85, 135mm) wherever a crop still leaves at least 8 MP.
 - Eleven lens and print effects: fisheye, swirl, tilt-shift, zoom, drag, double, prism, ripple, halftone, etch and kaleido.
 - Four borders: none, white, black and slide mount.
-- An aperture dial, f/1.4 to f/16, that blurs what is nearer or farther than the focus point using the phone's depth map. It works on the back lenses that can measure depth (the main lens and longer, on phones with two or more back cameras), and photos are about 12 MP while it is open.
+- An aperture dial, f/1.4 to f/16, that blurs what is nearer or farther than the focus point using the phone's depth map. The blur is drawn as a lens makes it, with out-of-focus lights taking the aperture's shape: round, or a polygon of 5 to 9 blades. It works on the back lenses that can measure depth (the main lens and longer, on phones with two or more back cameras), and photos are about 12 MP while it is open.
 - A date back that burns the date, or date and time, into the corner in seven-segment digits.
 - ±2 EV exposure dial in 1/3 stops, tap to focus and meter, flash, front/back flip.
 - Seven shutter finishes (copper, silver, black, red, cobalt, olive, brass). The finish is also the app's accent color, and the app icon can be changed to match.
@@ -100,7 +100,7 @@ The app target runs on iOS 17+; the camera control extension needs iOS 18+. Use 
 | `RetroCam/FilmStock.swift` | The film presets. Add one to `FilmStock.all` and it shows up in the picker. |
 | `RetroCam/FilmLook.swift`, `ColorGrade.swift` | The emulation pipeline, black & white and color |
 | `RetroCam/LensFX.swift`, `LensPlanner.swift` | Lens effects, and which focal lengths a phone offers |
-| `RetroCam/DepthOfField.swift` | The aperture dial and its depth-of-field blur |
+| `RetroCam/DepthOfField.swift`, `Bokeh.ci.metal` | The aperture dial and its depth-of-field blur |
 | `RetroCam/FrameFormat.swift`, `PrintBorder.swift`, `DateStamp.swift` | Formats, borders and the date back |
 | `RetroCam/CameraModel.swift` | Capture session, exposure, focus, flash |
 | `RetroCam/Roll.swift`, `RollStore.swift`, `RollAlbums.swift`, `Darkroom.swift` | Rolls, the app's copies, Photos albums, developing |

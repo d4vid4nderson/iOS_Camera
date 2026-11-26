@@ -48,6 +48,7 @@ final class CameraModel: NSObject, ObservableObject {
     private static let grainLevelKey = "grainLevel"
     private static let flashKey = "flash"
     private static let apertureKey = "aperture"
+    private static let bladesKey = "aperture.blades"
     private static let stampKey = "stamp"
     private static let borderKey = "border"
     private static let borderWidthKey = "borderWidth"
@@ -167,6 +168,19 @@ final class CameraModel: NSObject, ObservableObject {
             }
         }
     }
+    /// Aperture blades: the shape out-of-focus lights take. 0 is a round aperture.
+    @Published private(set) var blades: Int = {
+        let saved = UserDefaults.standard.integer(forKey: CameraModel.bladesKey)
+        return Aperture.bladeCounts.contains(saved) ? saved : 0
+    }() {
+        didSet {
+            UserDefaults.standard.set(blades, forKey: Self.bladesKey)
+            updateRendererAperture()
+        }
+    }
+    func selectBlades(_ count: Int) {
+        if count != blades, Aperture.bladeCounts.contains(count) { blades = count }
+    }
     /// Whether the lens in use can measure depth (two back cameras see the scene at once).
     @Published private(set) var apertureAvailable = false {
         didSet { updateRendererAperture() }
@@ -181,6 +195,7 @@ final class CameraModel: NSObject, ObservableObject {
     private func updateRendererAperture() {
         renderer.aperture = apertureActive ? aperture.fNumber : nil
         renderer.focalLength = Double(lens?.focalLength ?? 26)
+        renderer.blades = blades
     }
 
     /// Megapixels a frame in `format` comes out at with the current lens: the format's cut
@@ -976,6 +991,7 @@ final class CameraModel: NSObject, ObservableObject {
         let flashMode = flashAvailable ? flash.mode : .off
         let openAperture = apertureActive ? aperture.fNumber : nil
         let focalLength = Double(lens?.focalLength ?? 26)
+        let blades = self.blades
         let stampText = stampMode.text(for: Date())
         var finish = PrintFinish(border: border, seed: UInt32.random(in: 0...UInt32.max), width: borderWidth,
                                  format: format, orientation: orientation)
@@ -1021,7 +1037,7 @@ final class CameraModel: NSObject, ObservableObject {
                 settings.isDepthDataDeliveryEnabled = true
                 settings.embedsDepthDataInPhoto = false
                 depth = PhotoCaptureProcessor.Depth(fNumber: openAperture, focalLength: focalLength,
-                                                    focusPoint: self.focusDevicePoint)
+                                                    blades: blades, focusPoint: self.focusDevicePoint)
             }
             let id = settings.uniqueID
 
@@ -1125,6 +1141,7 @@ private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelega
     struct Depth {
         var fNumber: Double
         var focalLength: Double
+        var blades: Int
         var focusPoint: CGPoint
     }
 
@@ -1158,7 +1175,8 @@ private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelega
         let orientation = (photo.metadata[kCGImagePropertyOrientation as String] as? UInt32)
             .flatMap { CGImagePropertyOrientation(rawValue: $0) } ?? .up
         depthShot = DepthOfField.Shot(disparity: image.oriented(orientation), focus: focus,
-                                      fNumber: depth.fNumber, focalLength: depth.focalLength)
+                                      fNumber: depth.fNumber, focalLength: depth.focalLength,
+                                      blades: depth.blades)
     }
 
     func photoOutput(_ output: AVCapturePhotoOutput, didFinishCaptureFor resolvedSettings: AVCaptureResolvedPhotoSettings, error: Error?) {

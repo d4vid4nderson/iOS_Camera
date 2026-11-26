@@ -78,7 +78,8 @@ enum Darkroom {
         // glow sit on top of the blur, not under it.
         if let depth, let disparity {
             source = DepthOfField.apply(to: source, disparity: disparity, focus: depth.focus,
-                                        fNumber: depth.fNumber, focalLength: depth.focalLength)
+                                        fNumber: depth.fNumber, focalLength: depth.focalLength,
+                                        blades: depth.blades, quality: .photo)
         }
         let film = FilmLook.apply(stock, to: source, stamp: stampText)
         let developed = PrintBorder.apply(finish.border, to: film, seed: finish.seed, width: finish.width,

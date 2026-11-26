@@ -28,6 +28,8 @@ final class PreviewRenderer: NSObject, MTKViewDelegate {
     var aperture: Double?
     /// 35 mm-equivalent focal length of the lens in use (longer lenses blur more).
     var focalLength: Double = 26
+    /// Aperture blades (the shape of out-of-focus lights); 0 is round.
+    var blades = 0
     /// Read on the main thread (where MTKView draws), written from the main thread.
     var stock: FilmStock = .classic400
     var stampMode: StampMode = .off
@@ -137,7 +139,8 @@ final class PreviewRenderer: NSObject, MTKViewDelegate {
             disparity = DepthOfField.fit(disparity, to: filled).cropped(to: frameRect)
                 .transformed(by: CGAffineTransform(translationX: -frameRect.minX, y: -frameRect.minY))
             picture = DepthOfField.apply(to: picture, disparity: disparity, focus: focusAt,
-                                         fNumber: fNumber, focalLength: focalLength)
+                                         fNumber: fNumber, focalLength: focalLength,
+                                         blades: blades, quality: .preview)
                 .cropped(to: pictureBounds)
         }
         picture = FilmLook.apply(stock, to: picture, stamp: stampMode.text(for: Date())).cropped(to: pictureBounds)
