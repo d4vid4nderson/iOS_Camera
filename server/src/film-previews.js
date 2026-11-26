@@ -224,5 +224,117 @@ export const FILM_PREVIEWS = [
    "#dedad5",
    "#fffef3"
   ]
+ },
+ {
+  "id": "true200",
+  "name": "TRUE 200",
+  "blurb": "Colors as they were, gentle contrast",
+  "iso": 200,
+  "color": true,
+  "tones": [
+   "#020202",
+   "#292929",
+   "#535353",
+   "#808080",
+   "#aeaeae",
+   "#d8d8d8",
+   "#ffffff"
+  ]
+ },
+ {
+  "id": "vivid100",
+  "name": "VIVID 100",
+  "blurb": "Bold color, strong contrast",
+  "iso": 100,
+  "color": true,
+  "tones": [
+   "#000000",
+   "#212121",
+   "#4a4a4a",
+   "#808080",
+   "#b5b5b5",
+   "#dedede",
+   "#ffffff"
+  ]
+ },
+ {
+  "id": "blush160",
+  "name": "BLUSH 160",
+  "blurb": "Open shadows, a rosy tint",
+  "iso": 160,
+  "color": true,
+  "tones": [
+   "#110709",
+   "#393133",
+   "#635c5d",
+   "#8d8688",
+   "#b5b0b2",
+   "#dad6d8",
+   "#fcf9fb"
+  ]
+ },
+ {
+  "id": "slate100",
+  "name": "SLATE 100",
+  "blurb": "Muted color, quiet contrast",
+  "iso": 100,
+  "color": true,
+  "tones": [
+   "#000503",
+   "#242827",
+   "#4f504f",
+   "#7f7f7e",
+   "#aeaead",
+   "#d6d6d6",
+   "#fafaf9"
+  ]
+ },
+ {
+  "id": "matinee250",
+  "name": "MATINEE 250",
+  "blurb": "Warm and faded, firm contrast",
+  "iso": 250,
+  "color": true,
+  "tones": [
+   "#110c08",
+   "#2e2a26",
+   "#53504c",
+   "#82807c",
+   "#b3b0aa",
+   "#d8d5cd",
+   "#f6f2e7"
+  ]
+ },
+ {
+  "id": "frost400",
+  "name": "FROST 400",
+  "blurb": "Drained color, cold blue air",
+  "iso": 400,
+  "color": true,
+  "tones": [
+   "#000613",
+   "#222730",
+   "#4c4f54",
+   "#7e8083",
+   "#aeb1b4",
+   "#d5dade",
+   "#f4fbff"
+  ]
+ },
+ {
+  "id": "orchid400",
+  "name": "ORCHID 400",
+  "blurb": "Bold color, a magenta cast",
+  "iso": 400,
+  "color": true,
+  "tones": [
+   "#0f000d",
+   "#2b1a29",
+   "#50424f",
+   "#837883",
+   "#bcaebb",
+   "#e6d9e4",
+   "#fff9ff"
+  ]
  }
 ];

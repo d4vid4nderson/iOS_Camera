@@ -617,7 +617,7 @@ test('the home page script parses', async () => {
   assert.ok(scripts.length >= 1, 'has the film viewer script');
   for (const code of scripts) assert.doesNotThrow(() => new Function(code), 'script is valid JavaScript');
   assert.match(page, /data-film="tide200"/);
-  assert.equal((page.match(/data-film="/g) || []).length, 14, 'all 14 films are listed');
+  assert.equal((page.match(/data-film="/g) || []).length, 21, 'all 21 films are listed');
 });
 
 test('the terms carry the promises to photographers', async () => {
