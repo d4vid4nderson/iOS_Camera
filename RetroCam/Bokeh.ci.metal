@@ -29,8 +29,8 @@ float4 dofWeigh(sample_t s, float boost) {
 // A point only counts if its own blur circle reaches this pixel. That keeps a sharp
 // subject from smearing into the blurred background behind it.
 float4 dofGather(sampler image, sampler coc, float scale, float maxGather,
-                 float blades, float rotation, float count) {
-    float2 dc = destCoord();
+                 float blades, float rotation, float count, destination dest) {
+    float2 dc = dest.coord();
     float radius = min(coc.sample(coc.transform(dc)).r * scale, maxGather);
     float4 sum = image.sample(image.transform(dc));
     if (radius > 0.35) {
