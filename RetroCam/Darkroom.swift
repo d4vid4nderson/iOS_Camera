@@ -29,7 +29,8 @@ enum Darkroom {
     }
 
     static func develop(_ photoData: Data, stock: FilmStock, stampText: String? = nil,
-                        finish: PrintFinish = PrintFinish(border: .none, seed: 0)) throws -> Print {
+                        finish: PrintFinish = PrintFinish(border: .none, seed: 0),
+                        depth: DepthOfField.Shot? = nil) throws -> Print {
         guard var source = CIImage(data: photoData, options: [.applyOrientationProperty: true]) else {
             throw CameraError.processingFailed
         }
@@ -52,6 +53,15 @@ enum Darkroom {
         // The frame format (35mm, 6×6, XPAN…) is cut first, from the full capture, so a
         // crop keeps all the detail the sensor has; and before the film, so grain, glow and
         // vignette sit on the frame you chose.
+        // The depth map (aperture open) is laid over the whole capture and cut the same
+        // way, so it still lines up. If it came out turned differently from the photo,
+        // leave the frame sharp rather than blur the wrong places.
+        var disparity: CIImage?
+        if let depth, (depth.disparity.extent.width > depth.disparity.extent.height)
+            == (source.extent.width > source.extent.height) {
+            disparity = finish.format.crop(DepthOfField.fit(depth.disparity, to: source.extent),
+                                           wide: finish.orientation == .landscape)
+        }
         source = finish.format.crop(source, wide: finish.orientation == .landscape)
 
         // Then each format keeps about the detail its film would: 24 MP for 35mm-sized
@@ -63,6 +73,12 @@ enum Darkroom {
             source = source.applyingFilter("CILanczosScaleTransform",
                                            parameters: [kCIInputScaleKey: scale, kCIInputAspectRatioKey: 1])
             source = source.transformed(by: CGAffineTransform(translationX: -source.extent.minX, y: -source.extent.minY))
+        }
+        // Depth of field is the lens's doing, so it comes before the film: grain and
+        // glow sit on top of the blur, not under it.
+        if let depth, let disparity {
+            source = DepthOfField.apply(to: source, disparity: disparity, focus: depth.focus,
+                                        fNumber: depth.fNumber, focalLength: depth.focalLength)
         }
         let film = FilmLook.apply(stock, to: source, stamp: stampText)
         let developed = PrintBorder.apply(finish.border, to: film, seed: finish.seed, width: finish.width,

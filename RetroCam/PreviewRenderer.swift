@@ -1,3 +1,4 @@
+import AVFoundation
 import CoreImage
 import MetalKit
 import SwiftUI
@@ -10,7 +11,23 @@ final class PreviewRenderer: NSObject, MTKViewDelegate {
 
     private let lock = NSLock()
     private var latestFrame: CIImage?
+    /// The newest depth map (disparity) and the disparity at the focus point, eased from
+    /// frame to frame so the blur doesn't flicker. Behind `lock`, like the frame.
+    private var latestDepth: CIImage?
+    private var focusDisparity: CGFloat?
+    private var focus = CGPoint(x: 0.5, y: 0.5)
 
+    /// Where the camera is focused, 0...1 in the portrait viewfinder (the centre until
+    /// the viewfinder is tapped). The aperture's blur is measured from the depth here.
+    var focusPoint: CGPoint {
+        get { lock.lock(); defer { lock.unlock() }; return focus }
+        set { lock.lock(); focus = newValue; lock.unlock() }
+    }
+
+    /// The open aperture's f-number, or nil when there's no depth of field to draw.
+    var aperture: Double?
+    /// 35 mm-equivalent focal length of the lens in use (longer lenses blur more).
+    var focalLength: Double = 26
     /// Read on the main thread (where MTKView draws), written from the main thread.
     var stock: FilmStock = .classic400
     var stampMode: StampMode = .off
@@ -52,11 +69,39 @@ final class PreviewRenderer: NSObject, MTKViewDelegate {
         lock.unlock()
     }
 
+    /// Called from the camera's video queue with each live depth map; nil when depth stops.
+    func pushDepth(_ depthData: AVDepthData?) {
+        guard let depthData else {
+            lock.lock()
+            latestDepth = nil
+            focusDisparity = nil
+            lock.unlock()
+            return
+        }
+        let disparity = DepthOfField.disparity(from: depthData)
+        let map = disparity.depthDataMap
+        let point = focusPoint
+        // The map should arrive portrait, like the frames. If it's still as the sensor
+        // saw it (landscape), look up the focus point in the sensor's coordinates.
+        let sideways = CVPixelBufferGetWidth(map) > CVPixelBufferGetHeight(map)
+        let sampled = DepthOfField.focusDisparity(
+            in: map, at: sideways ? CGPoint(x: point.y, y: 1 - point.x) : point)
+        guard let image = DepthOfField.image(from: disparity) else { return }
+        lock.lock()
+        latestDepth = image
+        if let sampled {
+            focusDisparity = focusDisparity.map { $0 + (sampled - $0) * 0.3 } ?? sampled
+        }
+        lock.unlock()
+    }
+
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 
     func draw(in view: MTKView) {
         lock.lock()
         let frame = latestFrame
+        let depth = latestDepth
+        let focusAt = focusDisparity
         lock.unlock()
 
         let target = view.drawableSize
@@ -78,12 +123,23 @@ final class PreviewRenderer: NSObject, MTKViewDelegate {
         image = image.transformed(by: CGAffineTransform(
             translationX: (target.width - image.extent.width) / 2 - image.extent.minX,
             y: (target.height - image.extent.height) / 2 - image.extent.minY))
+        let filled = image.extent
         let bounds = CGRect(origin: .zero, size: target)
         // The frame format, as the photo will be cut: the picture inside the viewfinder.
         let frameRect = format.rect(in: bounds, wide: (orientation == .landscape) != sideways)
         var picture = image.cropped(to: frameRect)
             .transformed(by: CGAffineTransform(translationX: -frameRect.minX, y: -frameRect.minY))
         let pictureBounds = CGRect(origin: .zero, size: frameRect.size)
+        if let fNumber = aperture, var disparity = depth, let focusAt {
+            // The depth map, laid over the frame and cut like the picture. Blurred before
+            // the film, as in the darkroom: the lens comes first.
+            if disparity.extent.width > disparity.extent.height { disparity = disparity.oriented(.right) }
+            disparity = DepthOfField.fit(disparity, to: filled).cropped(to: frameRect)
+                .transformed(by: CGAffineTransform(translationX: -frameRect.minX, y: -frameRect.minY))
+            picture = DepthOfField.apply(to: picture, disparity: disparity, focus: focusAt,
+                                         fNumber: fNumber, focalLength: focalLength)
+                .cropped(to: pictureBounds)
+        }
         picture = FilmLook.apply(stock, to: picture, stamp: stampMode.text(for: Date())).cropped(to: pictureBounds)
         picture = PrintBorder.apply(border, to: picture, seed: borderSeed, width: borderWidth,
                                     label: SlideLabel(title: stock.name, number: nil, color: stock.color))
