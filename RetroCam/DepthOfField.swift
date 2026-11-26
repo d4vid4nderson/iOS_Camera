@@ -63,7 +63,7 @@ enum DepthOfField {
 
     /// A disparity map as an image of raw numbers (no colour management).
     static func image(from disparity: AVDepthData) -> CIImage? {
-        CIImage(depthData: disparity, options: [.colorSpace: NSNull()])
+        CIImage(depthData: disparity, options: [CIImageOption.colorSpace.rawValue: NSNull()])
     }
 
     /// The disparity around `point` (0...1 across and down the map): the median of a small
