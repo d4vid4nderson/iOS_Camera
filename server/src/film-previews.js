@@ -360,13 +360,13 @@ export const FILM_PREVIEWS = [
   "iso": 500,
   "color": true,
   "tones": [
-   "#050809",
-   "#2a2b2b",
-   "#535251",
-   "#7f7d7a",
-   "#aba8a3",
-   "#d3cfc9",
-   "#f6f2eb"
+   "#030808",
+   "#292c2b",
+   "#515450",
+   "#7d7f7a",
+   "#a8aaa3",
+   "#d0d1c8",
+   "#f4f3e9"
   ]
  },
  {

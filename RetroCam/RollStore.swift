@@ -10,6 +10,7 @@ import UniformTypeIdentifiers
 ///                                 thumb-01.jpg   grid thumbnail (480 px)
 ///                                 roll.json      the roll's number, film, dates, develop mode
 ///                                 films.json     which film each frame was shot on (by film id)
+///                                 settings.json  how each frame was shot (see FrameSettings)
 ///                                 full-01.jpg    full-resolution frame waiting to develop
 ///                                                (deleted once it's in Photos)
 enum RollStore {
@@ -84,7 +85,8 @@ enum RollStore {
     }
 
     /// Keep a copy of a developed frame. Runs off the main thread.
-    static func save(_ jpeg: Data, roll: Roll, frame: Int, filmID: String? = nil) throws {
+    static func save(_ jpeg: Data, roll: Roll, frame: Int, filmID: String? = nil,
+                     settings: FrameSettings? = nil) throws {
         let folder = folder(for: roll.number)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         guard let preview = downsample(jpeg, to: previewSize, quality: 0.85),
@@ -102,6 +104,23 @@ enum RollStore {
                 try? data.write(to: folder.appendingPathComponent("films.json"), options: .atomic)
             }
         }
+        if let settings {
+            var shotWith = self.settings(of: roll.number)
+            shotWith[frame] = settings
+            let named = Dictionary(uniqueKeysWithValues: shotWith.map { (String($0.key), $0.value) })
+            if let data = try? JSONEncoder().encode(named) {
+                try? data.write(to: folder.appendingPathComponent("settings.json"), options: .atomic)
+            }
+        }
+    }
+
+    /// How each frame of a roll was shot (frame number -> settings). Frames shot before
+    /// this was recorded aren't listed.
+    static func settings(of number: Int) -> [Int: FrameSettings] {
+        let url = folder(for: number).appendingPathComponent("settings.json")
+        guard let data = try? Data(contentsOf: url),
+              let named = try? JSONDecoder().decode([String: FrameSettings].self, from: data) else { return [:] }
+        return Dictionary(uniqueKeysWithValues: named.compactMap { key, value in Int(key).map { ($0, value) } })
     }
 
     /// Which film each frame of a roll was shot on (frame number -> film id). Frames shot

@@ -621,7 +621,8 @@ extension FilmStock {
         color: true, strength: 0.7, saturation: 0.92)
 
     /// Motion-picture warmth: gentle contrast, highlights that roll off, a warm balanced
-    /// palette and a little glow around lights.
+    /// palette and a little glow around lights. The warmth leans yellow, with green held
+    /// up and a teal trace in the shadows, so skin and white walls don't go pink indoors.
     static let cine500 = FilmStock(
         id: "cine500", name: "CINE 500", iso: 500,
         blurb: "Warm and gentle, like a film print",
@@ -630,10 +631,10 @@ extension FilmStock {
         grain: 0.24, grainSize: 1.3,
         vignette: 0.3,
         bloom: 0.25,
-        color: true, strength: 0.7, saturation: 0.92, warmth: 0.22, tint: 0.03,
-        shadowHue: 0.55, shadowAmount: 0.1, highlightHue: 0.1, highlightAmount: 0.2,
-        redHighlights: 0.08, blueHighlights: -0.12,
-        halation: 0.25)
+        color: true, strength: 0.7, saturation: 0.92, warmth: 0.2, tint: -0.18,
+        shadowHue: 0.48, shadowAmount: 0.12, highlightHue: 0.13, highlightAmount: 0.2,
+        redShadows: -0.06, greenShadows: 0.04, greenHighlights: 0.06, blueHighlights: -0.12,
+        halation: 0.15)
 
     /// Cool and steely: restrained colour, smooth contrast, shadows opened up, clear
     /// bright lights.
