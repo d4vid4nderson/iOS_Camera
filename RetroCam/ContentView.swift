@@ -423,7 +423,9 @@ struct ContentView: View {
         case .fx:
             let fx = camera.stock.effect
             return fx == .none ? "OFF" : "\(fx.label) · \(Int((camera.stock.effectAmount * 100).rounded()))"
-        case .lens: return camera.lens.map { $0.isNative ? $0.name : "\($0.name) CROP" } ?? ""
+        case .lens:
+            let name = camera.lens.map { $0.isNative ? $0.name : "\($0.name) CROP" } ?? ""
+            return camera.apertureActive ? "\(name) · \(camera.aperture.label)" : name
         case .exposure: return exposureText + " EV"
         case .grain: return grainText
         case .border:
@@ -580,8 +582,48 @@ struct ContentView: View {
 
     // MARK: Panel contents
 
-    /// Lenses this phone can do well (the bar hides the lens item if there's just one).
+    /// Lenses this phone can do well (the bar hides the lens item if there's just one),
+    /// and the aperture for the back cameras.
     private var lensPicker: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            lensRow
+            if !camera.isFrontCamera { aperturePicker }
+        }
+    }
+
+    /// The APERTURE dial: whole stops from wide open to f/16 (everything sharp). Dimmed on
+    /// lenses that can't measure depth.
+    private var aperturePicker: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(Aperture.stops, id: \.self) { stop in
+                        let option = Aperture(fNumber: stop)
+                        chip(option.label, selected: camera.aperture == option) { camera.selectAperture(option) }
+                            .accessibilityLabel(option.isOpen ? "Aperture \(option.label)" : "Aperture \(option.label), everything sharp")
+                    }
+                }
+                .padding(.horizontal, Self.scrollInset)
+            }
+            .edgeFade(Self.scrollInset)
+            .padding(.horizontal, -Self.panelPadding)
+            .disabled(!camera.apertureAvailable)
+            .opacity(camera.apertureAvailable ? 1 : 0.35)
+            Text(apertureNote)
+                .font(.mono(9))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .sensoryFeedback(.selection, trigger: camera.aperture)
+    }
+
+    private var apertureNote: String {
+        if !camera.apertureAvailable { return "APERTURE NEEDS A LENS THAT SEES DEPTH. TRY THE MAIN LENS." }
+        if camera.aperture.isOpen { return "BLURS WHAT'S AWAY FROM THE FOCUS POINT. TAP TO FOCUS. PHOTOS ARE 12 MP." }
+        return "F/16: EVERYTHING SHARP. OPEN UP TO BLUR THE BACKGROUND."
+    }
+
+    private var lensRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 chip("BACK", selected: !camera.isFrontCamera) { if camera.isFrontCamera { camera.flipCamera() } }

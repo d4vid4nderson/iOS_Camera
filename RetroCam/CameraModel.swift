@@ -1,6 +1,7 @@
 import AVFoundation
 import CoreMotion
 import CoreImage
+import ImageIO
 import SwiftUI
 
 /// Owns the capture session. UI state is @Published and only touched on the main thread;
@@ -46,6 +47,7 @@ final class CameraModel: NSObject, ObservableObject {
     }
     private static let grainLevelKey = "grainLevel"
     private static let flashKey = "flash"
+    private static let apertureKey = "aperture"
     private static let stampKey = "stamp"
     private static let borderKey = "border"
     private static let borderWidthKey = "borderWidth"
@@ -148,15 +150,47 @@ final class CameraModel: NSObject, ObservableObject {
     @Published private(set) var lenses: [LensOption] = []
     /// The front (selfie) camera is in use; switched from the LENS panel.
     @Published private(set) var isFrontCamera = false
-    @Published private(set) var lens: LensOption?
+    @Published private(set) var lens: LensOption? {
+        didSet { updateRendererAperture() }
+    }
+    /// The APERTURE dial: how much is blurred away from the focus point (f/16 = nothing).
+    /// It needs the phone's depth map, which only some lenses give: see `apertureAvailable`.
+    @Published private(set) var aperture = Aperture.nearest(
+        UserDefaults.standard.object(forKey: CameraModel.apertureKey) as? Double ?? Aperture.closed) {
+        didSet {
+            UserDefaults.standard.set(aperture.fNumber, forKey: Self.apertureKey)
+            updateRendererAperture()
+            let open = aperture.isOpen
+            sessionQueue.async {
+                self.wantsDepth = open
+                self.refreshDepth()
+            }
+        }
+    }
+    /// Whether the lens in use can measure depth (two back cameras see the scene at once).
+    @Published private(set) var apertureAvailable = false {
+        didSet { updateRendererAperture() }
+    }
+    /// The aperture is open and this lens can draw it.
+    var apertureActive: Bool { aperture.isOpen && apertureAvailable }
+
+    func selectAperture(_ new: Aperture) {
+        if new != aperture { aperture = new }
+    }
+
+    private func updateRendererAperture() {
+        renderer.aperture = apertureActive ? aperture.fNumber : nil
+        renderer.focalLength = Double(lens?.focalLength ?? 26)
+    }
 
     /// Megapixels a frame in `format` comes out at with the current lens: the format's cut
     /// of the camera, capped like the film it's named after. Flash shots use the camera's
-    /// standard size (about 12 MP), since high-resolution capture and flash don't always mix.
+    /// standard size (about 12 MP), since high-resolution capture and flash don't always mix;
+    /// so do shots with the aperture open, since the depth map comes with standard photos.
     func megapixels(for format: FrameFormat) -> Int {
         var sensor = lens?.megapixels ?? 12
         if sensor <= 0 { sensor = 12 }
-        if flash != .off { sensor = min(sensor, 12) }
+        if flash != .off || apertureActive { sensor = min(sensor, 12) }
         return format.megapixels(fromSensor: sensor)
     }
     /// The roll in the camera. Saved on every change, so it survives quitting the app.
@@ -234,8 +268,19 @@ final class CameraModel: NSObject, ObservableObject {
     private let videoQueue = DispatchQueue(label: "retrocam.video", qos: .userInteractive)
     private let videoOutput = AVCaptureVideoDataOutput()
     private let photoOutput = AVCapturePhotoOutput()
+    /// Live depth for the viewfinder's blur. Only in the session while the aperture is open.
+    private let depthOutput = AVCaptureDepthDataOutput()
 
     // Session-queue state.
+    /// The aperture is open (the session queue's copy of `aperture.isOpen`).
+    private var wantsDepth = false
+    /// Photos are being captured with a depth map.
+    private var depthActive = false
+    /// `depthOutput` is in the session.
+    private var depthPreviewAttached = false
+    /// Where the camera was last asked to focus, in sensor coordinates (the centre until
+    /// the viewfinder is tapped).
+    private var focusDevicePoint = CGPoint(x: 0.5, y: 0.5)
     private var isConfigured = false
     private var input: AVCaptureDeviceInput?
     private var position: AVCaptureDevice.Position = .back
@@ -257,6 +302,8 @@ final class CameraModel: NSObject, ObservableObject {
         renderer.borderWidth = borderWidth
         renderer.format = format
         renderer.orientation = orientation
+        wantsDepth = aperture.isOpen
+        updateRendererAperture()
         updateTiltSteering()
         lastPrint = RollStore.latestThumbnail()
     }
@@ -382,7 +429,7 @@ final class CameraModel: NSObject, ObservableObject {
         let options = LensPlanner.lenses(for: Self.physicalCameras(of: device))
         let saved = UserDefaults.standard.object(forKey: Self.lensKey(position)) as? Int
         let chosen = LensPlanner.defaultLens(in: options, preferred: saved)
-        if let chosen { applyZoom(chosen.zoomFactor) }
+        if let chosen { applyLens(chosen.zoomFactor) } else { refreshDepth() }
         DispatchQueue.main.async {
             self.lenses = options
             self.lens = chosen
@@ -398,6 +445,95 @@ final class CameraModel: NSObject, ObservableObject {
             device.videoZoomFactor = zoom
             device.unlockForConfiguration()
         } catch {}
+    }
+
+    // MARK: - Depth (the APERTURE dial)
+
+    /// Whether depth can be measured at this zoom. A multi-camera device only gives depth
+    /// where two of its cameras overlap (the main lens and longer, not the ultra-wide).
+    private static func depthSupported(at zoom: CGFloat, format: AVCaptureDevice.Format) -> Bool {
+        guard !format.supportedDepthDataFormats.isEmpty else { return false }
+        let slack: CGFloat = 0.001
+        if #available(iOS 17.2, *) {
+            let ranges = format.supportedVideoZoomRangesForDepthDataDelivery
+            if !ranges.isEmpty {
+                return ranges.contains { $0.lowerBound - slack <= zoom && zoom <= $0.upperBound + slack }
+            }
+        }
+        return zoom >= format.videoMinZoomFactorForDepthDataDelivery - slack
+            && zoom <= format.videoMaxZoomFactorForDepthDataDelivery + slack
+    }
+
+    /// Session queue only. Change lens. Depth limits which zoom factors the camera
+    /// accepts, so it's switched off before moving to a lens that can't measure it.
+    private func applyLens(_ factor: Double) {
+        if depthActive, let device = input?.device,
+           !Self.depthSupported(at: CGFloat(factor), format: device.activeFormat) {
+            setDepth(false)
+        }
+        applyZoom(factor)
+        refreshDepth()
+    }
+
+    /// Session queue only. Turn depth capture on or off to match the aperture and the
+    /// lens in use, and tell the UI whether this lens can do it.
+    private func refreshDepth() {
+        guard let device = input?.device else { return }
+        let possible = position == .back
+            && Self.depthSupported(at: device.videoZoomFactor, format: device.activeFormat)
+        setDepth(possible && wantsDepth)
+        // Asked for and refused by the photo output: not available after all.
+        let available = possible && (!wantsDepth || depthActive)
+        DispatchQueue.main.async {
+            if self.apertureAvailable != available { self.apertureAvailable = available }
+        }
+    }
+
+    /// Session queue only.
+    private func setDepth(_ on: Bool) {
+        guard on != depthActive else { return }
+        session.beginConfiguration()
+        if on {
+            // Depth comes with standard-size photos: ask for those before asking for depth.
+            applyPhotoDimensions(standard: true)
+            if photoOutput.isDepthDataDeliverySupported {
+                photoOutput.isDepthDataDeliveryEnabled = true
+                depthActive = true
+                if session.canAddOutput(depthOutput) {
+                    session.addOutput(depthOutput)
+                    depthOutput.isFilteringEnabled = true
+                    depthOutput.alwaysDiscardsLateDepthData = true
+                    depthOutput.setDelegate(self, callbackQueue: videoQueue)
+                    depthPreviewAttached = true
+                }
+            } else {
+                applyPhotoDimensions(standard: false)
+            }
+        } else {
+            if depthPreviewAttached {
+                session.removeOutput(depthOutput)
+                depthPreviewAttached = false
+            }
+            photoOutput.isDepthDataDeliveryEnabled = false
+            depthActive = false
+            applyPhotoDimensions(standard: false)
+            renderer.pushDepth(nil)
+        }
+        session.commitConfiguration()
+        // The depth connection only exists once the configuration is committed.
+        if depthPreviewAttached { levelPreview() }
+    }
+
+    /// Session queue only. The largest photos the camera makes, or its standard size
+    /// (about 12 MP) while depth is captured.
+    private func applyPhotoDimensions(standard: Bool) {
+        guard let all = input?.device.activeFormat.supportedMaxPhotoDimensions, !all.isEmpty else { return }
+        func area(_ d: CMVideoDimensions) -> Int { Int(d.width) * Int(d.height) }
+        let largest = all.max { area($0) < area($1) }
+        let chosen = standard
+            ? (all.filter { area($0) <= 12_600_000 }.max { area($0) < area($1) } ?? largest)
+            : largest
+        if let chosen { photoOutput.maxPhotoDimensions = chosen }
     }
 
     // MARK: - Films
@@ -480,19 +616,14 @@ final class CameraModel: NSObject, ObservableObject {
         lens = option
         sessionQueue.async {
             UserDefaults.standard.set(option.focalLength, forKey: Self.lensKey(self.position))
-            self.applyZoom(option.zoomFactor)
+            self.applyLens(option.zoomFactor)
         }
     }
 
     /// Portrait viewfinder; mirror it for selfies. Allow full-resolution photos so cropped
     /// lenses (35mm, 50mm...) keep real detail instead of upscaling a 12 MP frame.
     private func updateConnections() {
-        if let device = input?.device,
-           let largest = device.activeFormat.supportedMaxPhotoDimensions.max(by: {
-               Int($0.width) * Int($0.height) < Int($1.width) * Int($1.height)
-           }) {
-            photoOutput.maxPhotoDimensions = largest
-        }
+        applyPhotoDimensions(standard: depthActive)
         let hasFlash = photoOutput.supportedFlashModes.contains(.on)
         DispatchQueue.main.async { self.flashAvailable = hasFlash }
         guard let connection = videoOutput.connection(with: .video) else { return }
@@ -518,6 +649,11 @@ final class CameraModel: NSObject, ObservableObject {
         previewAngle = angle
         if connection.videoRotationAngle != angle, connection.isVideoRotationAngleSupported(angle) {
             connection.videoRotationAngle = angle
+        }
+        // The live depth map is turned the same way, so it lines up with the frames.
+        if depthPreviewAttached, let depth = depthOutput.connection(with: .depthData),
+           depth.videoRotationAngle != angle, depth.isVideoRotationAngleSupported(angle) {
+            depth.videoRotationAngle = angle
         }
     }
 
@@ -554,6 +690,10 @@ final class CameraModel: NSObject, ObservableObject {
         sessionQueue.async {
             guard self.isConfigured else { return }
             let next: AVCaptureDevice.Position = self.position == .back ? .front : .back
+            // Depth belongs to the camera being left; the new one asks again (refreshLenses).
+            self.setDepth(false)
+            self.focusDevicePoint = CGPoint(x: 0.5, y: 0.5)
+            self.renderer.focusPoint = CGPoint(x: 0.5, y: 0.5)
             self.session.beginConfiguration()
             do {
                 try self.attachCamera(at: next)
@@ -607,12 +747,14 @@ final class CameraModel: NSObject, ObservableObject {
 
     /// `point` is normalised (0...1) in the portrait viewfinder.
     func focus(at point: CGPoint) {
+        renderer.focusPoint = point   // the aperture's blur is measured from here
         sessionQueue.async {
             guard let device = self.input?.device else { return }
             // Sensor coordinates are landscape; rotate (and un-mirror for the front camera).
             let devicePoint = self.position == .front
                 ? CGPoint(x: point.y, y: point.x)
                 : CGPoint(x: point.y, y: 1 - point.x)
+            self.focusDevicePoint = devicePoint
             do {
                 try device.lockForConfiguration()
                 if device.isFocusPointOfInterestSupported, device.isFocusModeSupported(.continuousAutoFocus) {
@@ -832,6 +974,8 @@ final class CameraModel: NSObject, ObservableObject {
         guard status == .running, !rollFinished else { return }
         let stock = self.developedStock
         let flashMode = flashAvailable ? flash.mode : .off
+        let openAperture = apertureActive ? aperture.fNumber : nil
+        let focalLength = Double(lens?.focalLength ?? 26)
         let stampText = stampMode.text(for: Date())
         var finish = PrintFinish(border: border, seed: UInt32.random(in: 0...UInt32.max), width: borderWidth,
                                  format: format, orientation: orientation)
@@ -870,9 +1014,19 @@ final class CameraModel: NSObject, ObservableObject {
                     settings.maxPhotoDimensions = standard
                 }
             }
+            // Aperture open: ask for the depth map with the photo (kept out of the file;
+            // the darkroom uses it and the print is what's saved).
+            var depth: PhotoCaptureProcessor.Depth?
+            if let openAperture, self.depthActive, self.photoOutput.isDepthDataDeliveryEnabled {
+                settings.isDepthDataDeliveryEnabled = true
+                settings.embedsDepthDataInPhoto = false
+                depth = PhotoCaptureProcessor.Depth(fNumber: openAperture, focalLength: focalLength,
+                                                    focusPoint: self.focusDevicePoint)
+            }
             let id = settings.uniqueID
 
-            let processor = PhotoCaptureProcessor(stock: stock, stampText: stampText, finish: finish) { [weak self] result in
+            let processor = PhotoCaptureProcessor(stock: stock, stampText: stampText, finish: finish,
+                                                  depth: depth) { [weak self] result in
                 guard let self else { return }
                 self.sessionQueue.async { self.inFlight[id] = nil }
                 DispatchQueue.main.async { self.finish(result, roll: frameRoll, frame: frameNumber, filmID: filmID) }
@@ -955,25 +1109,56 @@ extension CameraModel: AVCaptureVideoDataOutputSampleBufferDelegate {
     }
 }
 
+// MARK: - Live depth
+
+extension CameraModel: AVCaptureDepthDataOutputDelegate {
+    func depthDataOutput(_ output: AVCaptureDepthDataOutput, didOutput depthData: AVDepthData,
+                         timestamp: CMTime, connection: AVCaptureConnection) {
+        renderer.pushDepth(depthData)
+    }
+}
+
 // MARK: - Still capture
 
 private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelegate {
+    /// The aperture a shot was taken at, and where it was focused (sensor coordinates).
+    struct Depth {
+        var fNumber: Double
+        var focalLength: Double
+        var focusPoint: CGPoint
+    }
+
     private let stock: FilmStock
     private let stampText: String?
     private let finish: PrintFinish
+    private let depth: Depth?
     private let completion: (Result<Darkroom.Print, Error>) -> Void
     private var photoData: Data?
+    private var depthShot: DepthOfField.Shot?
 
-    init(stock: FilmStock, stampText: String?, finish: PrintFinish,
+    init(stock: FilmStock, stampText: String?, finish: PrintFinish, depth: Depth?,
          completion: @escaping (Result<Darkroom.Print, Error>) -> Void) {
         self.stock = stock
         self.stampText = stampText
         self.finish = finish
+        self.depth = depth
         self.completion = completion
     }
 
     func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
-        if error == nil { photoData = photo.fileDataRepresentation() }
+        guard error == nil else { return }
+        photoData = photo.fileDataRepresentation()
+        // The depth map arrives as the sensor saw it (landscape): read the focus distance
+        // there, where the focus point's coordinates apply, then turn it like the photo.
+        // No depth map (the camera couldn't measure one): the frame is simply sharp.
+        guard let depth, let depthData = photo.depthData else { return }
+        let disparity = DepthOfField.disparity(from: depthData)
+        guard let focus = DepthOfField.focusDisparity(in: disparity.depthDataMap, at: depth.focusPoint),
+              let image = DepthOfField.image(from: disparity) else { return }
+        let orientation = (photo.metadata[kCGImagePropertyOrientation as String] as? UInt32)
+            .flatMap { CGImagePropertyOrientation(rawValue: $0) } ?? .up
+        depthShot = DepthOfField.Shot(disparity: image.oriented(orientation), focus: focus,
+                                      fNumber: depth.fNumber, focalLength: depth.focalLength)
     }
 
     func photoOutput(_ output: AVCapturePhotoOutput, didFinishCaptureFor resolvedSettings: AVCaptureResolvedPhotoSettings, error: Error?) {
@@ -988,9 +1173,12 @@ private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelega
         let stock = self.stock
         let stampText = self.stampText
         let finish = self.finish
+        let depthShot = self.depthShot
         let completion = self.completion
         DispatchQueue.global(qos: .userInitiated).async {
-            completion(Result { try Darkroom.develop(data, stock: stock, stampText: stampText, finish: finish) })
+            completion(Result {
+                try Darkroom.develop(data, stock: stock, stampText: stampText, finish: finish, depth: depthShot)
+            })
         }
     }
 }
