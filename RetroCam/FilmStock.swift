@@ -510,7 +510,8 @@ extension FilmStock {
         halation: 0.1)
 
     // More colour films. Original looks again, each a familiar kind of in-camera profile
-    // (natural, vivid, rosy portrait, muted, faded cinema, cold bleach, magenta). They
+    // (natural, vivid, rosy portrait, muted, faded cinema, cold bleach, magenta, flat,
+    // warm cinema, steel, teal, amber). They
     // follow the same rule as the films above: STRENGTH starts at 70.
 
     /// The scene as it was: gentle contrast, honest colour, almost no grain. The film to
@@ -607,6 +608,77 @@ extension FilmStock {
         shadowHue: 0.85, shadowAmount: 0.4, highlightHue: 0.9, highlightAmount: 0.2,
         greenShadows: -0.2, greenHighlights: -0.12)
 
+    /// A light, even base: low contrast, highlights held back, clean colour just under
+    /// natural. Good for flat light, and for building your own film on.
+    static let linen100 = FilmStock(
+        id: "linen100", name: "LINEN 100", iso: 100,
+        blurb: "Light and even, soft highlights",
+        red: 0.33, green: 0.52, blue: 0.15,
+        contrast: 0.08, blackLift: 0.03, whitePoint: 0.95,
+        grain: 0.08, grainSize: 1.0,
+        vignette: 0.1,
+        bloom: 0.05, key: 0.05,
+        color: true, strength: 0.7, saturation: 0.92)
+
+    /// Motion-picture warmth: gentle contrast, highlights that roll off, a warm balanced
+    /// palette and a little glow around lights.
+    static let reel500 = FilmStock(
+        id: "reel500", name: "REEL 500", iso: 500,
+        blurb: "Warm and gentle, like a film print",
+        red: 0.33, green: 0.52, blue: 0.15,
+        contrast: 0.2, blackLift: 0.04, whitePoint: 0.93,
+        grain: 0.24, grainSize: 1.3,
+        vignette: 0.3,
+        bloom: 0.25,
+        color: true, strength: 0.7, saturation: 0.92, warmth: 0.22, tint: 0.03,
+        shadowHue: 0.55, shadowAmount: 0.1, highlightHue: 0.1, highlightAmount: 0.2,
+        redHighlights: 0.08, blueHighlights: -0.12,
+        halation: 0.25)
+
+    /// Cool and steely: restrained colour, smooth contrast, shadows opened up, clear
+    /// bright lights.
+    static let steel400 = FilmStock(
+        id: "steel400", name: "STEEL 400", iso: 400,
+        blurb: "Cool and steely, open shadows",
+        red: 0.33, green: 0.52, blue: 0.15,
+        contrast: 0.25, blackLift: 0.05, whitePoint: 1.0,
+        grain: 0.2, grainSize: 1.2,
+        vignette: 0.3,
+        bloom: 0.1, key: 0.1,
+        color: true, strength: 0.7, saturation: 0.75, warmth: -0.2,
+        shadowHue: 0.6, shadowAmount: 0.2, highlightHue: 0.58, highlightAmount: 0.1,
+        blueShadows: 0.08)
+
+    /// Blue-green all the way through: teal shadows, a cool cast in the light, blues
+    /// pulled toward aqua. Cities and coastlines.
+    static let harbor200 = FilmStock(
+        id: "harbor200", name: "HARBOR 200", iso: 200,
+        blurb: "Cool blue-green, calm and cinematic",
+        red: 0.33, green: 0.52, blue: 0.15,
+        contrast: 0.35, blackLift: 0.02, whitePoint: 0.98,
+        grain: 0.18, grainSize: 1.2,
+        vignette: 0.4,
+        bloom: 0.12,
+        color: true, strength: 0.7, saturation: 0.9, warmth: -0.12, tint: -0.15,
+        shadowHue: 0.5, shadowAmount: 0.5, highlightHue: 0.48, highlightAmount: 0.2,
+        aqua: 0.6, redShadows: -0.2, redHighlights: -0.08, greenShadows: 0.08,
+        blueShadows: 0.1)
+
+    /// A golden glow in the mids and the light, with shadows left alone: brighter and
+    /// lighter than GOLDEN 100.
+    static let amber200 = FilmStock(
+        id: "amber200", name: "AMBER 200", iso: 200,
+        blurb: "A golden glow in the light",
+        red: 0.33, green: 0.52, blue: 0.15,
+        contrast: 0.25, blackLift: 0.03, whitePoint: 0.97,
+        grain: 0.14, grainSize: 1.1,
+        vignette: 0.3,
+        bloom: 0.4, key: 0.12,
+        color: true, strength: 0.7, saturation: 1.05, warmth: 0.4,
+        highlightHue: 0.11, highlightAmount: 0.55,
+        redHighlights: 0.15, blueHighlights: -0.3,
+        halation: 0.3)
+
     static let noir = FilmStock(
         id: "noir", name: "NOIR 400", iso: 400,
         blurb: "Low key: deep shadows, bright highlights",
@@ -636,11 +708,12 @@ extension FilmStock {
     }
 
     /// Built-in films, in picker order (the picker shows black & white and colour films on
-    /// separate shelves: seven black & white, fourteen colour).
+    /// separate shelves: seven black & white, nineteen colour).
     static let all: [FilmStock] = [
         .classic400, .pan50, .silver100, .push3200, .noir, .matte400, .expired,
         .warm400, .golden100, .earth200, .meadow400, .tide200, .dusk800, .north400,
         .true200, .vivid100, .blush160, .slate100, .matinee250, .frost400, .orchid400,
+        .linen100, .reel500, .steel400, .harbor200, .amber200,
     ]
 
     static func builtIn(id: String) -> FilmStock? { all.first { $0.id == id } }

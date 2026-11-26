@@ -336,5 +336,85 @@ export const FILM_PREVIEWS = [
    "#e6d9e4",
    "#fff9ff"
   ]
+ },
+ {
+  "id": "linen100",
+  "name": "LINEN 100",
+  "blurb": "Light and even, soft highlights",
+  "iso": 100,
+  "color": true,
+  "tones": [
+   "#050505",
+   "#2d2d2d",
+   "#565656",
+   "#7f7f7f",
+   "#a9a9a9",
+   "#d0d0d0",
+   "#f6f6f6"
+  ]
+ },
+ {
+  "id": "reel500",
+  "name": "REEL 500",
+  "blurb": "Warm and gentle, like a film print",
+  "iso": 500,
+  "color": true,
+  "tones": [
+   "#050809",
+   "#2a2b2b",
+   "#535251",
+   "#7f7d7a",
+   "#aba8a3",
+   "#d3cfc9",
+   "#f6f2eb"
+  ]
+ },
+ {
+  "id": "steel400",
+  "name": "STEEL 400",
+  "blurb": "Cool and steely, open shadows",
+  "iso": 400,
+  "color": true,
+  "tones": [
+   "#06090f",
+   "#2e3033",
+   "#59595c",
+   "#868789",
+   "#b2b4b6",
+   "#d9dcdf",
+   "#fbffff"
+  ]
+ },
+ {
+  "id": "harbor200",
+  "name": "HARBOR 200",
+  "blurb": "Cool blue-green, calm and cinematic",
+  "iso": 200,
+  "color": true,
+  "tones": [
+   "#000909",
+   "#1a2b2b",
+   "#495252",
+   "#7b8181",
+   "#aab1b1",
+   "#d2dad9",
+   "#f2fefc"
+  ]
+ },
+ {
+  "id": "amber200",
+  "name": "AMBER 200",
+  "blurb": "A golden glow in the light",
+  "iso": 200,
+  "color": true,
+  "tones": [
+   "#050505",
+   "#2d2c2a",
+   "#595652",
+   "#88847c",
+   "#b7b0a4",
+   "#e0d7c5",
+   "#fff9e2"
+  ]
  }
 ];

@@ -539,7 +539,7 @@ export function homeBody(store) {
 
 <section class="section" id="films">
 <p class="eyebrow">The films</p>
-<h2>Seven black &amp; white, fourteen color.</h2>
+<h2>Seven black &amp; white, nineteen color.</h2>
 <p class="muted">Tap a film to see what it does to the same photo.</p>
 <p class="shelf">Black &amp; white</p>
 <div class="films">${bw}</div>

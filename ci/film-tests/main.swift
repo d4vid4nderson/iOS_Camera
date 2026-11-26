@@ -12,7 +12,7 @@ func near(_ a: CGFloat, _ b: CGFloat, _ tol: CGFloat = 1e-6) -> Bool { abs(a - b
 // Built-in films: unique ids, sane values inside the ADJUST panel's ranges.
 let ids = FilmStock.all.map(\.id)
 check(Set(ids).count == ids.count, "film ids are unique")
-check(FilmStock.all.count == 21, "21 built-in films, got \(FilmStock.all.count)")
+check(FilmStock.all.count == 26, "26 built-in films, got \(FilmStock.all.count)")
 check(FilmStock.all.filter { !$0.color }.count == 7, "7 black & white films")
 for f in FilmStock.all {
     check(!f.isCustom, "\(f.id) is not custom")
@@ -280,7 +280,7 @@ check(abs(skin.0 - 0.9) < 1e-9 && abs(skin.1 - 0.6) < 1e-9, "aqua leaves warm co
 check(plain.cubeData(size: 5).count == 5 * 5 * 5 * 4 * MemoryLayout<Float>.size, "colour cube size")
 
 let colorFilms = FilmStock.all.filter(\.color)
-check(colorFilms.count == 14, "fourteen colour films")
+check(colorFilms.count == 19, "nineteen colour films")
 check(FilmStock.all.filter { !$0.color }.count == 7, "seven black & white films")
 for film in colorFilms {
     check(film.shareCaption.hasPrefix("Color"), "\(film.id) reads as colour")

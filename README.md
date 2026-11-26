@@ -13,7 +13,7 @@ Formerly RetroCam / Mono36; the Xcode project, scheme and bundle ID keep the old
 - A roll can be printed as a contact sheet: strips of six frames on dark film base, with sprocket holes and edge print.
 
 ### Films
-Twenty-one built-in films, seven black & white and fourteen color.
+Twenty-six built-in films, seven black & white and nineteen color.
 
 | Black & white | Character |
 |---|---|
@@ -41,6 +41,11 @@ Twenty-one built-in films, seven black & white and fourteen color.
 | MATINEE 250 | Warm and faded, firm contrast |
 | FROST 400 | Drained color, cold blue air |
 | ORCHID 400 | Bold color, a magenta cast |
+| LINEN 100 | Light and even, soft highlights |
+| REEL 500 | Warm and gentle, like a film print |
+| STEEL 400 | Cool and steely, open shadows |
+| HARBOR 200 | Cool blue-green, calm and cinematic |
+| AMBER 200 | A golden glow in the light |
 
 Any film can be adjusted and saved as your own:
 - **Black & white:** a color filter (yellow, orange, red, green, blue, ortho, infrared), the tone curve, and print toning (sepia, cool, selenium, split, gold, platinum, cyanotype, tintype).
