@@ -224,5 +224,197 @@ export const FILM_PREVIEWS = [
    "#dedad5",
    "#fffef3"
   ]
+ },
+ {
+  "id": "standard200",
+  "name": "STANDARD 200",
+  "blurb": "Colors as they were, gentle contrast",
+  "iso": 200,
+  "color": true,
+  "tones": [
+   "#020202",
+   "#292929",
+   "#535353",
+   "#808080",
+   "#aeaeae",
+   "#d8d8d8",
+   "#ffffff"
+  ]
+ },
+ {
+  "id": "vivid100",
+  "name": "VIVID 100",
+  "blurb": "Bold color, strong contrast",
+  "iso": 100,
+  "color": true,
+  "tones": [
+   "#000000",
+   "#212121",
+   "#4a4a4a",
+   "#808080",
+   "#b5b5b5",
+   "#dedede",
+   "#ffffff"
+  ]
+ },
+ {
+  "id": "contemporary160",
+  "name": "CONTEMPORARY 160",
+  "blurb": "Open shadows, a rosy tint",
+  "iso": 160,
+  "color": true,
+  "tones": [
+   "#110709",
+   "#393133",
+   "#635c5d",
+   "#8d8688",
+   "#b5b0b2",
+   "#dad6d8",
+   "#fcf9fb"
+  ]
+ },
+ {
+  "id": "chrome100",
+  "name": "CHROME 100",
+  "blurb": "Muted color, quiet contrast",
+  "iso": 100,
+  "color": true,
+  "tones": [
+   "#000503",
+   "#242827",
+   "#4f504f",
+   "#7f7f7e",
+   "#aeaead",
+   "#d6d6d6",
+   "#fafaf9"
+  ]
+ },
+ {
+  "id": "classic250",
+  "name": "CLASSIC 250",
+  "blurb": "Warm and faded, firm contrast",
+  "iso": 250,
+  "color": true,
+  "tones": [
+   "#110c08",
+   "#2e2a26",
+   "#53504c",
+   "#82807c",
+   "#b3b0aa",
+   "#d8d5cd",
+   "#f6f2e7"
+  ]
+ },
+ {
+  "id": "bleach400",
+  "name": "BLEACH 400",
+  "blurb": "Drained color, cold blue air",
+  "iso": 400,
+  "color": true,
+  "tones": [
+   "#000613",
+   "#222730",
+   "#4c4f54",
+   "#7e8083",
+   "#aeb1b4",
+   "#d5dade",
+   "#f4fbff"
+  ]
+ },
+ {
+  "id": "eternal400",
+  "name": "ETERNAL 400",
+  "blurb": "Bold color, a magenta cast",
+  "iso": 400,
+  "color": true,
+  "tones": [
+   "#0f000d",
+   "#2b1a29",
+   "#50424f",
+   "#837883",
+   "#bcaebb",
+   "#e6d9e4",
+   "#fff9ff"
+  ]
+ },
+ {
+  "id": "pure100",
+  "name": "PURE 100",
+  "blurb": "Light and even, soft highlights",
+  "iso": 100,
+  "color": true,
+  "tones": [
+   "#050505",
+   "#2d2d2d",
+   "#565656",
+   "#7f7f7f",
+   "#a9a9a9",
+   "#d0d0d0",
+   "#f6f6f6"
+  ]
+ },
+ {
+  "id": "cine500",
+  "name": "CINE 500",
+  "blurb": "Warm and gentle, like a film print",
+  "iso": 500,
+  "color": true,
+  "tones": [
+   "#050809",
+   "#2a2b2b",
+   "#535251",
+   "#7f7d7a",
+   "#aba8a3",
+   "#d3cfc9",
+   "#f6f2eb"
+  ]
+ },
+ {
+  "id": "silver400",
+  "name": "SILVER 400",
+  "blurb": "Cool and steely, open shadows",
+  "iso": 400,
+  "color": true,
+  "tones": [
+   "#06090f",
+   "#2e3033",
+   "#59595c",
+   "#868789",
+   "#b2b4b6",
+   "#d9dcdf",
+   "#fbffff"
+  ]
+ },
+ {
+  "id": "teal200",
+  "name": "TEAL 200",
+  "blurb": "Cool blue-green, calm and cinematic",
+  "iso": 200,
+  "color": true,
+  "tones": [
+   "#000909",
+   "#1a2b2b",
+   "#495252",
+   "#7b8181",
+   "#aab1b1",
+   "#d2dad9",
+   "#f2fefc"
+  ]
+ },
+ {
+  "id": "brass200",
+  "name": "BRASS 200",
+  "blurb": "A golden glow in the light",
+  "iso": 200,
+  "color": true,
+  "tones": [
+   "#050505",
+   "#2d2c2a",
+   "#595652",
+   "#88847c",
+   "#b7b0a4",
+   "#e0d7c5",
+   "#fff9e2"
+  ]
  }
 ];
