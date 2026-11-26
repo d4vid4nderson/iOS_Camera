@@ -1001,6 +1001,16 @@ final class CameraModel: NSObject, ObservableObject {
         let frameRoll = roll
         let frameNumber = roll.frames
         finish.label = SlideLabel(title: self.stock.name, number: String(format: "%02d", frameNumber), color: self.stock.color)
+        // How this frame is being shot, to show under it in the roll viewer.
+        let shotWith = FrameSettings(
+            film: self.stock.name, iso: self.stock.iso, filmEdited: isFilmEdited,
+            lens: lens?.focalLength, lensCropped: lens.map { !$0.isNative }, front: isFrontCamera,
+            aperture: openAperture, blades: openAperture == nil ? nil : blades,
+            format: format.label, orientation: orientation.rawValue, megapixels: megapixels(for: format),
+            exposure: Double(exposureBias), flash: flashAvailable ? flash.rawValue : "off",
+            grain: Int((grainLevel * 100).rounded()),
+            border: border.rawValue, borderWidth: border == .none ? nil : Int((borderWidth * 100).rounded()),
+            stamp: stampMode.rawValue, develop: developMode.rawValue, date: Date())
         developing += 1
         shutterBlink = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { self.shutterBlink = false }
@@ -1045,14 +1055,17 @@ final class CameraModel: NSObject, ObservableObject {
                                                   depth: depth) { [weak self] result in
                 guard let self else { return }
                 self.sessionQueue.async { self.inFlight[id] = nil }
-                DispatchQueue.main.async { self.finish(result, roll: frameRoll, frame: frameNumber, filmID: filmID) }
+                DispatchQueue.main.async {
+                    self.finish(result, roll: frameRoll, frame: frameNumber, filmID: filmID, settings: shotWith)
+                }
             }
             self.inFlight[id] = processor
             self.photoOutput.capturePhoto(with: settings, delegate: processor)
         }
     }
 
-    private func finish(_ result: Result<Darkroom.Print, Error>, roll frameRoll: Roll, frame: Int, filmID: String) {
+    private func finish(_ result: Result<Darkroom.Print, Error>, roll frameRoll: Roll, frame: Int, filmID: String,
+                        settings: FrameSettings) {
         switch result {
         case .success(let print):
             let instant = frameRoll.develop == .instant
@@ -1062,7 +1075,7 @@ final class CameraModel: NSObject, ObservableObject {
                 await previous?.value
                 // The app's own read-only copy for the roll viewer, kept whatever Photos allows.
                 do {
-                    try RollStore.save(print.jpeg, roll: frameRoll, frame: frame, filmID: filmID)
+                    try RollStore.save(print.jpeg, roll: frameRoll, frame: frame, filmID: filmID, settings: settings)
                 } catch {
                     await MainActor.run { self.message = "Couldn't keep this frame in your roll: \(error.localizedDescription)" }
                 }

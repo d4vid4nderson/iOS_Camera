@@ -93,7 +93,9 @@ struct RollViewer: View {
         .onChange(of: camera.rollsVersion) { _, _ in reload() }
         .onChange(of: selected) { _, _ in loadFrames() }
         .fullScreenCover(item: $viewing) { ref in
-            FramePager(roll: ref.roll, frames: visibleFrames, start: ref.frame, accent: accent)
+            // Frames shot before settings were recorded still get their film's name.
+            FramePager(roll: ref.roll, frames: visibleFrames, start: ref.frame, accent: accent,
+                       films: RollStore.films(of: ref.roll).compactMapValues { camera.library.current(id: $0)?.name })
         }
         .sheet(item: $sharing) { item in
             ShareSheetView(item: item)
@@ -767,20 +769,62 @@ struct ActivityView: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
 
-/// Full-screen frames, swipe left and right. View and share only.
+/// Full-screen frames, swipe left and right, with how each one was shot underneath.
+/// View and share only.
 private struct FramePager: View {
     let roll: Int
     let frames: [Int]
     let accent: Color
+    /// Film names by frame, for frames shot before their settings were recorded.
+    let films: [Int: String]
     @State private var current: Int
     @State private var sharing: ShareItems?
+    @State private var settings: [Int: FrameSettings] = [:]
+    /// The settings panel is showing (the info button hides it to see the whole frame).
+    @AppStorage("viewer.showsSettings") private var showsSettings = true
     @Environment(\.dismiss) private var dismiss
 
-    init(roll: Int, frames: [Int], start: Int, accent: Color) {
+    init(roll: Int, frames: [Int], start: Int, accent: Color, films: [Int: String] = [:]) {
         self.roll = roll
         self.frames = frames
         self.accent = accent
+        self.films = films
         _current = State(initialValue: start)
+    }
+
+    /// What's known about how the frame on screen was shot.
+    private var rows: [(label: String, value: String)] {
+        if let recorded = settings[current] { return recorded.rows }
+        if let film = films[current] { return [("Film", film)] }
+        return []
+    }
+
+    /// The settings of the frame on screen: two columns of label and value.
+    private var settingsPanel: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if rows.isEmpty {
+                Text("Settings weren't recorded for this frame.")
+                    .font(.system(size: 13)).foregroundStyle(.secondary)
+            } else {
+                LazyVGrid(columns: [GridItem(.flexible(), alignment: .topLeading),
+                                    GridItem(.flexible(), alignment: .topLeading)],
+                          alignment: .leading, spacing: 10) {
+                    ForEach(rows, id: \.label) { row in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(row.label).font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
+                            Text(row.value).font(.system(size: 13, weight: .semibold)).foregroundStyle(.white)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .accessibilityElement(children: .combine)
+                    }
+                }
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 14).fill(.ultraThinMaterial))
+        .padding(.horizontal, 12)
+        .padding(.bottom, 8)
     }
 
     var body: some View {
@@ -801,6 +845,10 @@ private struct FramePager: View {
                     .font(.system(size: 15, weight: .semibold).monospacedDigit()).foregroundStyle(.white)
                     .contentTransition(.numericText())
                 Spacer()
+                roundButton(showsSettings ? "info.circle.fill" : "info.circle",
+                            label: showsSettings ? "Hide settings" : "Show settings") {
+                    withAnimation(.snappy(duration: 0.2)) { showsSettings.toggle() }
+                }
                 roundButton("square.and.arrow.up", label: "Share frame") {
                     if let image = UIImage(contentsOfFile: RollStore.frameURL(roll: roll, frame: current).path) {
                         sharing = ShareItems(items: [SharedPicture(image), ShareCaption.text(.frame, link: RollShare.frameLink(roll: roll, frame: current))])
@@ -810,6 +858,13 @@ private struct FramePager: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
+        }
+        .overlay(alignment: .bottom) {
+            if showsSettings { settingsPanel.transition(.move(edge: .bottom).combined(with: .opacity)) }
+        }
+        .task(id: roll) {
+            let number = roll
+            settings = await Task.detached { RollStore.settings(of: number) }.value
         }
         .preferredColorScheme(.dark)
         .statusBarHidden()
