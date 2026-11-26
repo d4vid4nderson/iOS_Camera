@@ -769,7 +769,8 @@ struct ActivityView: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
 
-/// Full-screen frames, swipe left and right, with how each one was shot over its corner.
+/// Full-screen frames, swipe left and right, pinch or double-tap to zoom, with how each
+/// one was shot over its corner.
 /// View and share only.
 private struct FramePager: View {
     let roll: Int
@@ -830,13 +831,13 @@ private struct FramePager: View {
             Color.black.ignoresSafeArea()
             TabView(selection: $current) {
                 ForEach(frames, id: \.self) { frame in
-                    // The overlay hugs the picture as it's fitted, so it sits in the
-                    // picture's own corner whatever its shape.
-                    LocalImage(url: RollStore.frameURL(roll: roll, frame: frame), fill: false)
-                        .overlay(alignment: .topLeading) {
-                            if showsSettings { settingsOverlay(for: frame) }
-                        }
-                        .padding(.horizontal, 8)
+                    // Pinch or double-tap to zoom. The settings sit in the picture's own
+                    // corner, and step aside while it's zoomed.
+                    ZoomablePage(url: RollStore.frameURL(roll: roll, frame: frame),
+                                 isCurrent: frame == current, showsOverlay: showsSettings) {
+                        settingsOverlay(for: frame)
+                    }
+                    .padding(.horizontal, 8)
                         .tag(frame)
                 }
             }
@@ -883,6 +884,142 @@ private struct FramePager: View {
         }
         .foregroundStyle(.white)
         .accessibilityLabel(label)
+    }
+}
+
+/// One full-screen frame: the picture, zoomable, with an overlay pinned to its top-left
+/// corner (wherever that falls once the picture is fitted to the screen).
+private struct ZoomablePage<Overlay: View>: View {
+    let url: URL
+    /// The page on screen. A page that's swiped away goes back to its fitted size.
+    let isCurrent: Bool
+    let showsOverlay: Bool
+    @ViewBuilder var overlay: () -> Overlay
+    @State private var image: UIImage?
+    @State private var zoomed = false
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .topLeading) {
+                if let image {
+                    ZoomableImage(image: image, isCurrent: isCurrent, zoomed: $zoomed)
+                    if showsOverlay, !zoomed {
+                        let corner = Self.fittedOrigin(of: image.size, in: geo.size)
+                        overlay().offset(x: corner.x, y: corner.y)
+                    }
+                } else {
+                    Rectangle().fill(Color(white: 0.12))
+                }
+            }
+            .animation(.easeOut(duration: 0.15), value: zoomed)
+        }
+        .task(id: url) {
+            let path = url.path
+            image = await Task.detached(priority: .userInitiated) {
+                UIImage(contentsOfFile: path)?.preparingForDisplay()
+            }.value
+        }
+    }
+
+    /// Where the top-left corner of a picture lands when it's fitted, centred, in `box`.
+    private static func fittedOrigin(of picture: CGSize, in box: CGSize) -> CGPoint {
+        guard picture.width > 0, picture.height > 0 else { return .zero }
+        let scale = min(box.width / picture.width, box.height / picture.height)
+        return CGPoint(x: (box.width - picture.width * scale) / 2,
+                       y: (box.height - picture.height * scale) / 2)
+    }
+}
+
+/// A picture you can pinch to zoom, drag around while zoomed, and double-tap to zoom in
+/// on a spot or back out. A scroll view, so at its fitted size a sideways swipe still
+/// turns the page, and when zoomed it turns the page once you reach the picture's edge.
+private struct ZoomableImage: UIViewRepresentable {
+    let image: UIImage
+    let isCurrent: Bool
+    @Binding var zoomed: Bool
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    func makeUIView(context: Context) -> ZoomScrollView {
+        let scroll = ZoomScrollView()
+        scroll.delegate = context.coordinator
+        scroll.imageView.image = image
+        let doubleTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.doubleTapped(_:)))
+        doubleTap.numberOfTapsRequired = 2
+        scroll.addGestureRecognizer(doubleTap)
+        return scroll
+    }
+
+    func updateUIView(_ scroll: ZoomScrollView, context: Context) {
+        context.coordinator.parent = self
+        if scroll.imageView.image !== image {
+            scroll.imageView.image = image
+            scroll.setZoomScale(1, animated: false)
+        }
+        if !isCurrent, scroll.zoomScale != 1 { scroll.setZoomScale(1, animated: false) }
+    }
+
+    final class Coordinator: NSObject, UIScrollViewDelegate {
+        var parent: ZoomableImage
+
+        init(_ parent: ZoomableImage) { self.parent = parent }
+
+        func viewForZooming(in scrollView: UIScrollView) -> UIView? {
+            (scrollView as? ZoomScrollView)?.imageView
+        }
+
+        func scrollViewDidZoom(_ scrollView: UIScrollView) {
+            let zoomed = scrollView.zoomScale > 1.01
+            guard zoomed != parent.zoomed else { return }
+            DispatchQueue.main.async { self.parent.zoomed = zoomed }
+        }
+
+        /// Zoom in on the spot that was tapped, or back out to the whole picture.
+        @objc func doubleTapped(_ gesture: UITapGestureRecognizer) {
+            guard let scroll = gesture.view as? ZoomScrollView else { return }
+            if scroll.zoomScale > 1.01 {
+                scroll.setZoomScale(1, animated: true)
+            } else {
+                let scale = ZoomScrollView.doubleTapScale
+                let point = gesture.location(in: scroll.imageView)
+                let size = CGSize(width: scroll.bounds.width / scale, height: scroll.bounds.height / scale)
+                scroll.zoom(to: CGRect(x: point.x - size.width / 2, y: point.y - size.height / 2,
+                                       width: size.width, height: size.height), animated: true)
+            }
+        }
+    }
+}
+
+/// The scroll view behind `ZoomableImage`: the picture fills it, fitted, at 1×.
+private final class ZoomScrollView: UIScrollView {
+    static let doubleTapScale: CGFloat = 2.5
+    let imageView = UIImageView()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        minimumZoomScale = 1
+        // The roll keeps a screen-sharp copy (2048 px long side): past about 4× there's
+        // nothing more to see.
+        maximumZoomScale = 4
+        showsHorizontalScrollIndicator = false
+        showsVerticalScrollIndicator = false
+        contentInsetAdjustmentBehavior = .never
+        backgroundColor = .clear
+        imageView.contentMode = .scaleAspectFit
+        addSubview(imageView)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        // At 1× the picture's view is exactly the scroll view, so there's nothing to
+        // scroll and a sideways swipe goes to the pager.
+        if zoomScale == minimumZoomScale, imageView.frame.size != bounds.size {
+            imageView.frame = CGRect(origin: .zero, size: bounds.size)
+            contentSize = bounds.size
+        }
     }
 }
 
