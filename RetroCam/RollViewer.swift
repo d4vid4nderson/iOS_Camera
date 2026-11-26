@@ -802,12 +802,12 @@ private struct FramePager: View {
     /// A frame's settings, small, over the top-left corner of the picture: a label and
     /// its value on each line.
     private func settingsOverlay(for frame: Int) -> some View {
-        let rows = rows(for: frame)
+        let lines = rows(for: frame)
         return Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 3) {
-            if rows.isEmpty {
+            if lines.isEmpty {
                 GridRow { Text("Settings weren't recorded").foregroundStyle(.white.opacity(0.75)) }
             }
-            ForEach(rows, id: \.label) { row in
+            ForEach(lines, id: \.label) { row in
                 GridRow {
                     Text(row.label).foregroundStyle(.white.opacity(0.6))
                     Text(row.value).fontWeight(.semibold).foregroundStyle(.white)
