@@ -769,8 +769,7 @@ struct ActivityView: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
 
-/// Full-screen frames, swipe left and right. Tap a print (or the info button) to turn it
-/// over and read how it was shot on its back.
+/// Full-screen frames, swipe left and right, with how each one was shot over its corner.
 /// View and share only.
 private struct FramePager: View {
     let roll: Int
@@ -781,8 +780,8 @@ private struct FramePager: View {
     @State private var current: Int
     @State private var sharing: ShareItems?
     @State private var settings: [Int: FrameSettings] = [:]
-    /// The print on screen is turned over, showing how it was shot on its back.
-    @State private var flipped = false
+    /// The settings overlay is showing (the info button hides it to see the whole frame).
+    @AppStorage("viewer.showsSettings") private var showsSettings = true
     @Environment(\.dismiss) private var dismiss
 
     init(roll: Int, frames: [Int], start: Int, accent: Color, films: [Int: String] = [:]) {
@@ -800,66 +799,30 @@ private struct FramePager: View {
         return []
     }
 
-    /// The back of the print: how the frame was shot, in ink on paper. Laid out in as few
-    /// columns as fit the print's shape (a panorama is short, so it gets more columns).
-    private func printBack(for frame: Int) -> some View {
+    /// A frame's settings, small, over the top-left corner of the picture: a label and
+    /// its value on each line.
+    private func settingsOverlay(for frame: Int) -> some View {
         let lines = rows(for: frame)
-        return ZStack {
-            Color(red: 0.94, green: 0.93, blue: 0.89)
+        return Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 3) {
             if lines.isEmpty {
-                Text("Settings weren't recorded for this frame.")
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(Self.ink.opacity(0.6))
-                    .multilineTextAlignment(.center)
-                    .padding(14)
-            } else {
-                ViewThatFits(in: .vertical) {
-                    backGrid(lines, columns: 1)
-                    backGrid(lines, columns: 2)
-                    backGrid(lines, columns: 3)
-                    backGrid(lines, columns: 4)
-                }
-                .padding(14)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                GridRow { Text("Settings weren't recorded").foregroundStyle(.white.opacity(0.75)) }
             }
-        }
-        .accessibilityElement(children: .combine)
-    }
-
-    private static let ink = Color(white: 0.16)
-
-    /// The settings in `columns` columns: each a small label over its value.
-    private func backGrid(_ lines: [(label: String, value: String)], columns: Int) -> some View {
-        let rowCount = (lines.count + columns - 1) / columns
-        return Grid(alignment: .topLeading, horizontalSpacing: 12, verticalSpacing: 9) {
-            ForEach(0..<rowCount, id: \.self) { row in
+            ForEach(lines, id: \.label) { row in
                 GridRow {
-                    ForEach(0..<columns, id: \.self) { column in
-                        let index = row * columns + column
-                        if index < lines.count {
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(lines[index].label.uppercased())
-                                    .font(.system(size: 9, weight: .medium, design: .monospaced))
-                                    .foregroundStyle(Self.ink.opacity(0.55))
-                                Text(lines[index].value)
-                                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                                    .foregroundStyle(Self.ink)
-                                    .lineLimit(2)
-                                    .minimumScaleFactor(0.75)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        } else {
-                            Color.clear.frame(height: 1)
-                        }
-                    }
+                    Text(row.label).foregroundStyle(.white.opacity(0.6))
+                    Text(row.value).fontWeight(.semibold).foregroundStyle(.white)
                 }
+                .accessibilityElement(children: .combine)
             }
         }
-    }
-
-    private func flip() {
-        withAnimation(.easeInOut(duration: 0.5)) { flipped.toggle() }
+        .font(.system(size: 10.5))
+        .lineLimit(1)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 7)
+        .background(RoundedRectangle(cornerRadius: 8).fill(.black.opacity(0.55)))
+        .padding(10)
+        .allowsHitTesting(false)
+        .transition(.opacity)
     }
 
     var body: some View {
@@ -867,15 +830,12 @@ private struct FramePager: View {
             Color.black.ignoresSafeArea()
             TabView(selection: $current) {
                 ForEach(frames, id: \.self) { frame in
-                    // Tap the print to turn it over: its settings are on the back, the same
-                    // size and shape as the picture. Only the print on screen turns.
+                    // The overlay hugs the picture as it's fitted, so it sits in the
+                    // picture's own corner whatever its shape.
                     LocalImage(url: RollStore.frameURL(roll: roll, frame: frame), fill: false)
-                        .modifier(PrintFlip(angle: flipped && frame == current ? 180 : 0,
-                                            back: printBack(for: frame)))
-                        .contentShape(Rectangle())
-                        .onTapGesture(perform: flip)
-                        .accessibilityAddTraits(.isButton)
-                        .accessibilityHint(flipped ? "Turns the print back over" : "Turns the print over to show its settings")
+                        .overlay(alignment: .topLeading) {
+                            if showsSettings { settingsOverlay(for: frame) }
+                        }
                         .padding(.horizontal, 8)
                         .tag(frame)
                 }
@@ -888,8 +848,10 @@ private struct FramePager: View {
                     .font(.system(size: 15, weight: .semibold).monospacedDigit()).foregroundStyle(.white)
                     .contentTransition(.numericText())
                 Spacer()
-                roundButton(flipped ? "info.circle.fill" : "info.circle",
-                            label: flipped ? "Show the picture" : "Show settings", action: flip)
+                roundButton(showsSettings ? "info.circle.fill" : "info.circle",
+                            label: showsSettings ? "Hide settings" : "Show settings") {
+                    withAnimation(.snappy(duration: 0.2)) { showsSettings.toggle() }
+                }
                 roundButton("square.and.arrow.up", label: "Share frame") {
                     if let image = UIImage(contentsOfFile: RollStore.frameURL(roll: roll, frame: current).path) {
                         sharing = ShareItems(items: [SharedPicture(image), ShareCaption.text(.frame, link: RollShare.frameLink(roll: roll, frame: current))])
@@ -907,9 +869,6 @@ private struct FramePager: View {
         .preferredColorScheme(.dark)
         .statusBarHidden()
         .sensoryFeedback(.selection, trigger: current)
-        .sensoryFeedback(.impact(weight: .light), trigger: flipped)
-        // A new frame arrives picture side up.
-        .onChange(of: current) { _, _ in flipped = false }
         .sheet(item: $sharing) { item in
             ShareSheetView(item: item)
         }
@@ -924,30 +883,6 @@ private struct FramePager: View {
         }
         .foregroundStyle(.white)
         .accessibilityLabel(label)
-    }
-}
-
-/// Turns a print over about its vertical axis. The front shows up to a quarter turn, the
-/// back after it, so neither is ever seen mirrored.
-private struct PrintFlip<Back: View>: ViewModifier, Animatable {
-    /// 0 = picture side up, 180 = turned over.
-    var angle: Double
-    let back: Back
-
-    var animatableData: Double {
-        get { angle }
-        set { angle = newValue }
-    }
-
-    func body(content: Content) -> some View {
-        content
-            .opacity(angle < 90 ? 1 : 0)
-            .overlay {
-                // Drawn turned, so it reads the right way round once the print is over.
-                back.rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
-                    .opacity(angle < 90 ? 0 : 1)
-            }
-            .rotation3DEffect(.degrees(angle), axis: (x: 0, y: 1, z: 0), perspective: 0.4)
     }
 }
 
