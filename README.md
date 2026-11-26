@@ -34,18 +34,18 @@ Twenty-six built-in films, seven black & white and nineteen color.
 | TIDE 200 | Teal water, orange light |
 | DUSK 800 | Teal-green evenings, gold skies |
 | NORTH 400 | Blue shadows, a warm glow |
-| TRUE 200 | Colors as they were, gentle contrast |
+| STANDARD 200 | Colors as they were, gentle contrast |
 | VIVID 100 | Bold color, strong contrast |
-| BLUSH 160 | Open shadows, a rosy tint |
-| SLATE 100 | Muted color, quiet contrast |
-| MATINEE 250 | Warm and faded, firm contrast |
-| FROST 400 | Drained color, cold blue air |
-| ORCHID 400 | Bold color, a magenta cast |
-| LINEN 100 | Light and even, soft highlights |
-| REEL 500 | Warm and gentle, like a film print |
-| STEEL 400 | Cool and steely, open shadows |
-| HARBOR 200 | Cool blue-green, calm and cinematic |
-| AMBER 200 | A golden glow in the light |
+| CONTEMPORARY 160 | Open shadows, a rosy tint |
+| CHROME 100 | Muted color, quiet contrast |
+| CLASSIC 250 | Warm and faded, firm contrast |
+| BLEACH 400 | Drained color, cold blue air |
+| ETERNAL 400 | Bold color, a magenta cast |
+| PURE 100 | Light and even, soft highlights |
+| CINE 500 | Warm and gentle, like a film print |
+| SILVER 400 | Cool and steely, open shadows |
+| TEAL 200 | Cool blue-green, calm and cinematic |
+| BRASS 200 | A golden glow in the light |
 
 Any film can be adjusted and saved as your own:
 - **Black & white:** a color filter (yellow, orange, red, green, blue, ortho, infrared), the tone curve, and print toning (sepia, cool, selenium, split, gold, platinum, cyanotype, tintype).

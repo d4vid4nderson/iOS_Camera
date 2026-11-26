@@ -226,8 +226,8 @@ export const FILM_PREVIEWS = [
   ]
  },
  {
-  "id": "true200",
-  "name": "TRUE 200",
+  "id": "standard200",
+  "name": "STANDARD 200",
   "blurb": "Colors as they were, gentle contrast",
   "iso": 200,
   "color": true,
@@ -258,8 +258,8 @@ export const FILM_PREVIEWS = [
   ]
  },
  {
-  "id": "blush160",
-  "name": "BLUSH 160",
+  "id": "contemporary160",
+  "name": "CONTEMPORARY 160",
   "blurb": "Open shadows, a rosy tint",
   "iso": 160,
   "color": true,
@@ -274,8 +274,8 @@ export const FILM_PREVIEWS = [
   ]
  },
  {
-  "id": "slate100",
-  "name": "SLATE 100",
+  "id": "chrome100",
+  "name": "CHROME 100",
   "blurb": "Muted color, quiet contrast",
   "iso": 100,
   "color": true,
@@ -290,8 +290,8 @@ export const FILM_PREVIEWS = [
   ]
  },
  {
-  "id": "matinee250",
-  "name": "MATINEE 250",
+  "id": "classic250",
+  "name": "CLASSIC 250",
   "blurb": "Warm and faded, firm contrast",
   "iso": 250,
   "color": true,
@@ -306,8 +306,8 @@ export const FILM_PREVIEWS = [
   ]
  },
  {
-  "id": "frost400",
-  "name": "FROST 400",
+  "id": "bleach400",
+  "name": "BLEACH 400",
   "blurb": "Drained color, cold blue air",
   "iso": 400,
   "color": true,
@@ -322,8 +322,8 @@ export const FILM_PREVIEWS = [
   ]
  },
  {
-  "id": "orchid400",
-  "name": "ORCHID 400",
+  "id": "eternal400",
+  "name": "ETERNAL 400",
   "blurb": "Bold color, a magenta cast",
   "iso": 400,
   "color": true,
@@ -338,8 +338,8 @@ export const FILM_PREVIEWS = [
   ]
  },
  {
-  "id": "linen100",
-  "name": "LINEN 100",
+  "id": "pure100",
+  "name": "PURE 100",
   "blurb": "Light and even, soft highlights",
   "iso": 100,
   "color": true,
@@ -354,8 +354,8 @@ export const FILM_PREVIEWS = [
   ]
  },
  {
-  "id": "reel500",
-  "name": "REEL 500",
+  "id": "cine500",
+  "name": "CINE 500",
   "blurb": "Warm and gentle, like a film print",
   "iso": 500,
   "color": true,
@@ -370,8 +370,8 @@ export const FILM_PREVIEWS = [
   ]
  },
  {
-  "id": "steel400",
-  "name": "STEEL 400",
+  "id": "silver400",
+  "name": "SILVER 400",
   "blurb": "Cool and steely, open shadows",
   "iso": 400,
   "color": true,
@@ -386,8 +386,8 @@ export const FILM_PREVIEWS = [
   ]
  },
  {
-  "id": "harbor200",
-  "name": "HARBOR 200",
+  "id": "teal200",
+  "name": "TEAL 200",
   "blurb": "Cool blue-green, calm and cinematic",
   "iso": 200,
   "color": true,
@@ -402,8 +402,8 @@ export const FILM_PREVIEWS = [
   ]
  },
  {
-  "id": "amber200",
-  "name": "AMBER 200",
+  "id": "brass200",
+  "name": "BRASS 200",
   "blurb": "A golden glow in the light",
   "iso": 200,
   "color": true,
